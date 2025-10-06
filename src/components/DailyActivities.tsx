@@ -1,6 +1,6 @@
+import React, { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { CheckCircle2, Circle } from "lucide-react";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface Activity {
