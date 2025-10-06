@@ -1,0 +1,46 @@
+{
+  "nav": {
+    "home": "Home",
+    "calendar": "Calendario",
+    "expenses": "Spese",
+    "assistant": "Assistente",
+    "settings": "Impostazioni"
+  },
+  "home": {
+    "title": "Daily Sync Keeper",
+    "dailyActivities": "Attività Quotidiane",
+    "tasks": "Task",
+    "wellness": "Wellness",
+    "addTask": "Aggiungi Task",
+    "taskTitle": "Titolo task",
+    "priority": "Priorità",
+    "low": "Bassa",
+    "medium": "Media",
+    "high": "Alta",
+    "save": "Salva",
+    "cancel": "Annulla"
+  },
+  "calendar": {
+    "title": "Calendario",
+    "events": "Eventi",
+    "filters": "Filtri"
+  },
+  "expenses": {
+    "title": "Spese",
+    "budget": "Budget",
+    "transactions": "Transazioni"
+  },
+  "assistant": {
+    "title": "Assistente AI",
+    "placeholder": "Chiedimi qualsiasi cosa...",
+    "send": "Invia"
+  },
+  "settings": {
+    "title": "Impostazioni",
+    "language": "Lingua",
+    "theme": "Tema",
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "system": "Sistema"
+  }
+}

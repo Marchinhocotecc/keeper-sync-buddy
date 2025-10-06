@@ -1,0 +1,46 @@
+{
+  "nav": {
+    "home": "Home",
+    "calendar": "Calendar",
+    "expenses": "Expenses",
+    "assistant": "Assistant",
+    "settings": "Settings"
+  },
+  "home": {
+    "title": "Daily Sync Keeper",
+    "dailyActivities": "Daily Activities",
+    "tasks": "Tasks",
+    "wellness": "Wellness",
+    "addTask": "Add Task",
+    "taskTitle": "Task title",
+    "priority": "Priority",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "calendar": {
+    "title": "Calendar",
+    "events": "Events",
+    "filters": "Filters"
+  },
+  "expenses": {
+    "title": "Expenses",
+    "budget": "Budget",
+    "transactions": "Transactions"
+  },
+  "assistant": {
+    "title": "AI Assistant",
+    "placeholder": "Ask me anything...",
+    "send": "Send"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  }
+}

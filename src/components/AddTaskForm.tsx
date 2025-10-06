@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ interface AddTaskFormProps {
 }
 
 export function AddTaskForm({ onAdd, onCancel }: AddTaskFormProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
 
@@ -27,7 +29,7 @@ export function AddTaskForm({ onAdd, onCancel }: AddTaskFormProps) {
     <Card className="p-4 border-2 border-primary/20">
       <form onSubmit={handleSubmit} className="space-y-3">
         <Input
-          placeholder="What needs to be done?"
+          placeholder={t('home.taskTitle')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           autoFocus
@@ -39,9 +41,9 @@ export function AddTaskForm({ onAdd, onCancel }: AddTaskFormProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">Low Priority</SelectItem>
-              <SelectItem value="medium">Medium Priority</SelectItem>
-              <SelectItem value="high">High Priority</SelectItem>
+              <SelectItem value="low">{t('home.low')}</SelectItem>
+              <SelectItem value="medium">{t('home.medium')}</SelectItem>
+              <SelectItem value="high">{t('home.high')}</SelectItem>
             </SelectContent>
           </Select>
           <Button type="submit" size="icon" disabled={!title.trim()}>
