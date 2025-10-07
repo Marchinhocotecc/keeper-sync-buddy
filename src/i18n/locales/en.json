@@ -32,7 +32,7 @@
   },
   "assistant": {
     "title": "AI Assistant",
-    "placeholder": "Ask me anything...",
+    "placeholder": "Type your message here...",
     "send": "Send"
   },
   "settings": {

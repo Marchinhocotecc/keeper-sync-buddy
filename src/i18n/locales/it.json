@@ -32,7 +32,7 @@
   },
   "assistant": {
     "title": "Assistente AI",
-    "placeholder": "Chiedimi qualsiasi cosa...",
+    "placeholder": "Scrivi il tuo messaggio qui...",
     "send": "Invia"
   },
   "settings": {

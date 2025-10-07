@@ -1,138 +1,57 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { TaskCard, Task } from '@/components/TaskCard';
+import { TaskCard } from '@/components/TaskCard';
 import { AddTaskForm } from '@/components/AddTaskForm';
 import { WellnessCard } from '@/components/WellnessCard';
 import { DailyActivities } from '@/components/DailyActivities';
-import { Plus } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { Plus, AlertCircle } from 'lucide-react';
+import { useTasks } from '@/hooks/useTasks';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function HomePage() {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
-  const fetchTasks = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('todos')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      if (data) {
-        setTasks(data.map(todo => ({
-          id: todo.id,
-          title: todo.title,
-          completed: todo.completed,
-          priority: todo.priority || 'medium',
-          dueDate: todo.due_date,
-        })));
-      }
-    } catch (error: any) {
-      console.error('Error fetching tasks:', error);
-      toast({
-        title: 'Error loading tasks',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { tasks, isLoading, isError, error, addTask, toggleTask, deleteTask } = useTasks();
 
   const handleAddTask = async (title: string, priority: 'low' | 'medium' | 'high') => {
-    try {
-      const { data, error } = await supabase
-        .from('todos')
-        .insert([{ title, priority, completed: false }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        const newTask: Task = {
-          id: data.id,
-          title: data.title,
-          completed: data.completed,
-          priority: data.priority || 'medium',
-        };
-        setTasks([newTask, ...tasks]);
-        setShowAddForm(false);
-        toast({
-          title: 'Task added',
-          description: 'Your task has been created successfully',
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: 'Error adding task',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
+    await addTask.mutateAsync({ title, priority });
+    setShowAddForm(false);
   };
 
-  const handleToggleTask = async (id: string) => {
+  const handleToggleTask = (id: string) => {
     const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-
-    try {
-      const { error } = await supabase
-        .from('todos')
-        .update({ completed: !task.completed })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
-    } catch (error: any) {
-      toast({
-        title: 'Error updating task',
-        description: error.message,
-        variant: 'destructive',
-      });
+    if (task) {
+      toggleTask.mutate({ id, completed: task.completed });
     }
   };
 
-  const handleDeleteTask = async (id: string) => {
-    try {
-      const { error } = await supabase.from('todos').delete().eq('id', id);
-
-      if (error) throw error;
-
-      setTasks(tasks.filter((t) => t.id !== id));
-      toast({
-        title: 'Task deleted',
-        description: 'Your task has been removed',
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Error deleting task',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
+  const handleDeleteTask = (id: string) => {
+    deleteTask.mutate(id);
   };
 
-  const activeTasks = tasks.filter((t) => !t.completed);
-  const completedTasks = tasks.filter((t) => t.completed);
+  const activeTasks = Array.isArray(tasks) ? tasks.filter((t) => !t.completed) : [];
+  const completedTasks = Array.isArray(tasks) ? tasks.filter((t) => t.completed) : [];
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <p className="text-center text-muted-foreground">Loading...</p>
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-pulse text-muted-foreground">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {error instanceof Error ? error.message : 'Failed to load tasks'}
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -166,7 +85,13 @@ export default function HomePage() {
               {activeTasks.map((task) => (
                 <TaskCard
                   key={task.id}
-                  task={task}
+                  task={{
+                    id: task.id,
+                    title: task.title,
+                    completed: task.completed,
+                    priority: task.priority,
+                    dueDate: task.due_date,
+                  }}
                   onToggle={handleToggleTask}
                   onDelete={handleDeleteTask}
                 />
@@ -182,7 +107,13 @@ export default function HomePage() {
                   {completedTasks.map((task) => (
                     <TaskCard
                       key={task.id}
-                      task={task}
+                      task={{
+                        id: task.id,
+                        title: task.title,
+                        completed: task.completed,
+                        priority: task.priority,
+                        dueDate: task.due_date,
+                      }}
                       onToggle={handleToggleTask}
                       onDelete={handleDeleteTask}
                     />
