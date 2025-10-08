@@ -179,8 +179,8 @@ export default function ExpensesPage() {
             <div className="space-y-3">
               {expenses.map((expense) => (
                 <div key={expense.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{expense.icon}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{getCategoryIcon(expense.category)}</span>
                     <div>
                       <p className="font-medium">{expense.description || expense.category}</p>
                       <p className="text-sm text-muted-foreground">
