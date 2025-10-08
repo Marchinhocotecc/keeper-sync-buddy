@@ -1,2 +1,5 @@
 [chat]
 verify_jwt = false
+
+[ai-assistant]
+verify_jwt = false
