@@ -19,25 +19,73 @@ export default function AssistantPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id || null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user?.id || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
+    const messageText = input;
     setInput("");
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("chat", {
-        body: { message: input },
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error("Please log in to use the assistant");
+      }
+
+      const { data, error } = await supabase.functions.invoke("assistant-ai", {
+        body: { 
+          message: messageText,
+          user_id: userId 
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
       if (error) throw error;
 
+      const reply = data?.reply;
+      let content = "No response received";
+      
+      if (reply) {
+        if (typeof reply === 'string') {
+          content = reply;
+        } else if (reply.summary) {
+          content = `**Summary:** ${reply.summary}\n\n`;
+          if (reply.wellnessTips?.length > 0) {
+            content += `**Wellness Tips:**\n${reply.wellnessTips.map((tip: string) => `• ${tip}`).join('\n')}\n\n`;
+          }
+          if (reply.budgetAnalysis?.message) {
+            content += `**Budget:** ${reply.budgetAnalysis.message}\n\n`;
+          }
+          if (reply.recommendations?.length > 0) {
+            content += `**Recommendations:**\n${reply.recommendations.map((rec: string) => `• ${rec}`).join('\n')}`;
+          }
+        } else {
+          content = JSON.stringify(reply, null, 2);
+        }
+      }
+
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.reply || "No response received",
+        content,
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error: any) {
@@ -47,6 +95,9 @@ export default function AssistantPanel() {
         description: error.message || "Failed to get response from assistant",
         variant: "destructive",
       });
+      
+      // Remove user message on error
+      setMessages((prev) => prev.slice(0, -1));
     } finally {
       setIsLoading(false);
     }

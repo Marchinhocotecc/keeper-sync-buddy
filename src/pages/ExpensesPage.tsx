@@ -11,8 +11,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function ExpensesPage() {
   const { t } = useTranslation();
-  const { expenses, isLoading, isError, error, addExpense, deleteExpense } = useExpenses();
+  const [userId, setUserId] = React.useState<string | undefined>();
+  const { expenses, isLoading, isError, error, addExpense, deleteExpense } = useExpenses(userId);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  React.useEffect(() => {
+    import('@/integrations/supabase/client').then(({ supabase }) => {
+      supabase.auth.getUser().then(({ data }) => {
+        setUserId(data?.user?.id);
+      });
+    });
+  }, []);
   const [formData, setFormData] = useState({
     amount: '',
     category: 'food',
@@ -27,7 +36,6 @@ export default function ExpensesPage() {
       category: formData.category,
       description: formData.description,
       date: formData.date,
-      icon: getCategoryIcon(formData.category),
     });
     setFormData({
       amount: '',
