@@ -12,7 +12,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 export default function HomePage() {
   const { t } = useTranslation();
   const [showAddForm, setShowAddForm] = useState(false);
-  const { tasks, isLoading, isError, error, addTask, toggleTask, deleteTask } = useTasks();
+  const [userId, setUserId] = useState<string | undefined>();
+  const { tasks, isLoading, isError, error, addTask, toggleTask, deleteTask } = useTasks(userId);
+
+  React.useEffect(() => {
+    import('@/integrations/supabase/client').then(({ supabase }) => {
+      supabase.auth.getUser().then(({ data }) => {
+        setUserId(data?.user?.id);
+      });
+    });
+  }, []);
 
   const handleAddTask = async (title: string, priority: 'low' | 'medium' | 'high') => {
     await addTask.mutateAsync({ title, priority });
@@ -89,7 +98,7 @@ export default function HomePage() {
                     id: task.id,
                     title: task.title,
                     completed: task.completed,
-                    priority: task.priority,
+                    priority: task.priority as "low" | "medium" | "high",
                     dueDate: task.due_date,
                   }}
                   onToggle={handleToggleTask}
@@ -111,7 +120,7 @@ export default function HomePage() {
                         id: task.id,
                         title: task.title,
                         completed: task.completed,
-                        priority: task.priority,
+                        priority: task.priority as "low" | "medium" | "high",
                         dueDate: task.due_date,
                       }}
                       onToggle={handleToggleTask}

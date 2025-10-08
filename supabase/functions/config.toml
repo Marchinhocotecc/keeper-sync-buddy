@@ -1,5 +1,10 @@
+project_id = "rqadcblvckfpgmhduemw"
+
 [chat]
 verify_jwt = false
 
 [ai-assistant]
+verify_jwt = false
+
+[assistant-ai]
 verify_jwt = false

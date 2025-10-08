@@ -12,28 +12,34 @@ export interface Task {
   created_at: string;
 }
 
-export const useTasks = () => {
+export const useTasks = (userId?: string) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["tasks"],
+    queryKey: ["tasks", userId],
     queryFn: async () => {
+      if (!userId) return [];
+      
       const { data, error } = await supabase
         .from("todos")
         .select("*")
+        .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return Array.isArray(data) ? data : [];
     },
+    enabled: !!userId,
   });
 
   const addTask = useMutation({
     mutationFn: async (task: { title: string; priority: "low" | "medium" | "high" }) => {
+      if (!userId) throw new Error("User ID required");
+      
       const { data, error } = await supabase
         .from("todos")
-        .insert([{ ...task, completed: false }])
+        .insert([{ ...task, completed: false, user_id: userId }])
         .select()
         .single();
 
@@ -41,7 +47,7 @@ export const useTasks = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
       toast({ title: "Task added successfully" });
     },
     onError: (error: any) => {
@@ -63,7 +69,7 @@ export const useTasks = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
     },
     onError: (error: any) => {
       toast({ 
@@ -80,7 +86,7 @@ export const useTasks = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
       toast({ title: "Task deleted" });
     },
     onError: (error: any) => {

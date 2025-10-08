@@ -6,12 +6,9 @@ export interface WellnessData {
   id: string;
   user_id: string;
   date: string;
-  steps?: number;
-  sleep_hours?: number;
-  weight?: number;
-  notes?: string;
+  sleep?: number;
+  activity?: string;
   created_at: string;
-  updated_at: string;
 }
 
 export const useWellness = (userId?: string) => {

@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_cache: {
+        Row: {
+          created_at: string | null
+          id: string
+          prompt_hash: string
+          result: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          prompt_hash: string
+          result?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          prompt_hash?: string
+          result?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_requests: {
+        Row: {
+          created_at: string | null
+          endpoint: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          endpoint?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          endpoint?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           amount: number
