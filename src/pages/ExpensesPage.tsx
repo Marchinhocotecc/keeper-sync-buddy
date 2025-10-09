@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,20 +8,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, AlertCircle } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { supabase } from '@/integrations/supabase/client';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658'];
 
 export default function ExpensesPage() {
   const { t } = useTranslation();
   const [userId, setUserId] = React.useState<string | undefined>();
   const { expenses, isLoading, isError, error, addExpense, deleteExpense } = useExpenses(userId);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [period, setPeriod] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   React.useEffect(() => {
-    import('@/integrations/supabase/client').then(({ supabase }) => {
-      supabase.auth.getUser().then(({ data }) => {
-        setUserId(data?.user?.id);
-      });
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data?.user?.id);
     });
   }, []);
+
   const [formData, setFormData] = useState({
     amount: '',
     category: 'food',
@@ -59,15 +65,65 @@ export default function ExpensesPage() {
     return icons[category] || '💰';
   };
 
-  const totalExpenses = Array.isArray(expenses) 
-    ? expenses.reduce((sum, exp) => sum + (parseFloat(String(exp.amount)) || 0), 0)
-    : 0;
+  const filteredExpenses = useMemo(() => {
+    if (!Array.isArray(expenses)) return [];
+    let filtered = expenses;
+    if (startDate) {
+      filtered = filtered.filter(exp => new Date(exp.date) >= new Date(startDate));
+    }
+    if (endDate) {
+      filtered = filtered.filter(exp => new Date(exp.date) <= new Date(endDate));
+    }
+    return filtered;
+  }, [expenses, startDate, endDate]);
+
+  const categoryData = useMemo(() => {
+    const grouped = filteredExpenses.reduce((acc, exp) => {
+      const cat = exp.category || 'other';
+      acc[cat] = (acc[cat] || 0) + parseFloat(String(exp.amount));
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(grouped).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      value: parseFloat(value.toFixed(2))
+    }));
+  }, [filteredExpenses]);
+
+  const periodData = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    
+    filteredExpenses.forEach(exp => {
+      const date = new Date(exp.date);
+      let key = '';
+      
+      if (period === 'weekly') {
+        const week = Math.ceil(date.getDate() / 7);
+        key = `Week ${week}`;
+      } else if (period === 'monthly') {
+        key = date.toLocaleString('default', { month: 'short' });
+      } else {
+        key = date.getFullYear().toString();
+      }
+      
+      grouped[key] = (grouped[key] || 0) + parseFloat(String(exp.amount));
+    });
+
+    return Object.entries(grouped).map(([name, value]) => ({
+      name,
+      value: parseFloat(value.toFixed(2))
+    }));
+  }, [filteredExpenses, period]);
+
+  const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(String(exp.amount)), 0);
+  const monthlyBudget = 1000;
+  const remaining = monthlyBudget - totalExpenses;
 
   if (isLoading) {
     return (
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-pulse text-muted-foreground">Loading expenses...</div>
+          <div className="animate-pulse text-muted-foreground">{t('expenses.loading')}</div>
         </div>
       </main>
     );
@@ -79,7 +135,7 @@ export default function ExpensesPage() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            {error instanceof Error ? error.message : 'Failed to load expenses'}
+            {error instanceof Error ? error.message : t('expenses.errorLoading')}
           </AlertDescription>
         </Alert>
       </main>
@@ -92,18 +148,46 @@ export default function ExpensesPage() {
         <h1 className="text-3xl font-bold">{t('expenses.title')}</h1>
         <Button onClick={() => setShowAddForm(!showAddForm)}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Expense
+          {t('expenses.addExpense')}
         </Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 mb-6">
+        <div>
+          <Label>{t('expenses.startDate')}</Label>
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        </div>
+        <div>
+          <Label>{t('expenses.endDate')}</Label>
+          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3 mb-6">
         <Card>
           <CardHeader>
-            <CardTitle>Total Expenses</CardTitle>
-            <CardDescription>This month</CardDescription>
+            <CardTitle>{t('expenses.totalExpenses')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">€{totalExpenses.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('expenses.budget')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">€{monthlyBudget.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('expenses.remaining')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-3xl font-bold ${remaining < 0 ? 'text-destructive' : 'text-success'}`}>
+              €{remaining.toFixed(2)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -111,13 +195,13 @@ export default function ExpensesPage() {
       {showAddForm && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Add New Expense</CardTitle>
+            <CardTitle>{t('expenses.addNew')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="amount">Amount</Label>
+                  <Label htmlFor="amount">{t('expenses.amount')}</Label>
                   <Input
                     id="amount"
                     type="number"
@@ -128,24 +212,24 @@ export default function ExpensesPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category">{t('expenses.category')}</Label>
                   <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="food">Food</SelectItem>
-                      <SelectItem value="transport">Transport</SelectItem>
-                      <SelectItem value="entertainment">Entertainment</SelectItem>
-                      <SelectItem value="shopping">Shopping</SelectItem>
-                      <SelectItem value="bills">Bills</SelectItem>
-                      <SelectItem value="health">Health</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="food">{t('expenses.food')}</SelectItem>
+                      <SelectItem value="transport">{t('expenses.transport')}</SelectItem>
+                      <SelectItem value="entertainment">{t('expenses.entertainment')}</SelectItem>
+                      <SelectItem value="shopping">{t('expenses.shopping')}</SelectItem>
+                      <SelectItem value="bills">{t('expenses.bills')}</SelectItem>
+                      <SelectItem value="health">{t('expenses.health')}</SelectItem>
+                      <SelectItem value="other">{t('expenses.other')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description">{t('expenses.description')}</Label>
                   <Input
                     id="description"
                     value={formData.description}
@@ -153,7 +237,7 @@ export default function ExpensesPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="date">Date</Label>
+                  <Label htmlFor="date">{t('expenses.date')}</Label>
                   <Input
                     id="date"
                     type="date"
@@ -164,9 +248,9 @@ export default function ExpensesPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button type="submit">Save</Button>
+                <Button type="submit">{t('home.save')}</Button>
                 <Button type="button" variant="outline" onClick={() => setShowAddForm(false)}>
-                  Cancel
+                  {t('home.cancel')}
                 </Button>
               </div>
             </form>
@@ -174,21 +258,85 @@ export default function ExpensesPage() {
         </Card>
       )}
 
+      <div className="grid gap-6 md:grid-cols-2 mb-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('expenses.byCategory')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={categoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-muted-foreground text-center py-8">{t('expenses.noData')}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('expenses.overTime')}</CardTitle>
+            <div className="flex gap-2">
+              <Button variant={period === 'weekly' ? 'default' : 'outline'} size="sm" onClick={() => setPeriod('weekly')}>
+                {t('expenses.weekly')}
+              </Button>
+              <Button variant={period === 'monthly' ? 'default' : 'outline'} size="sm" onClick={() => setPeriod('monthly')}>
+                {t('expenses.monthly')}
+              </Button>
+              <Button variant={period === 'yearly' ? 'default' : 'outline'} size="sm" onClick={() => setPeriod('yearly')}>
+                {t('expenses.yearly')}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {periodData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={periodData}>
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#8884d8" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-muted-foreground text-center py-8">{t('expenses.noData')}</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>{t('expenses.transactions')}</CardTitle>
         </CardHeader>
         <CardContent>
-          {expenses.length === 0 ? (
+          {filteredExpenses.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              No expenses yet. Add your first expense to get started!
+              {t('expenses.noExpenses')}
             </p>
           ) : (
             <div className="space-y-3">
-              {expenses.map((expense) => (
+              {filteredExpenses.map((expense) => (
                 <div key={expense.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{getCategoryIcon(expense.category)}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{getCategoryIcon(expense.category)}</span>
                     <div>
                       <p className="font-medium">{expense.description || expense.category}</p>
                       <p className="text-sm text-muted-foreground">

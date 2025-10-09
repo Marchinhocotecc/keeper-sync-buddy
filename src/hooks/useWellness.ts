@@ -7,6 +7,8 @@ export interface WellnessData {
   user_id: string;
   date: string;
   sleep?: number;
+  steps?: number;
+  meditation_minutes?: number;
   activity?: string;
   created_at: string;
 }

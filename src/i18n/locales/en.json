@@ -1,16 +1,21 @@
 {
+  "common": {
+    "back": "Back"
+  },
   "nav": {
     "home": "Home",
     "calendar": "Calendar",
     "expenses": "Expenses",
     "assistant": "Assistant",
-    "settings": "Settings"
+    "settings": "Settings",
+    "logout": "Logout"
   },
   "home": {
     "title": "Daily Sync Keeper",
     "dailyActivities": "Daily Activities",
+    "todayActivities": "Today's Activities",
     "tasks": "Tasks",
-    "wellness": "Wellness",
+    "wellness": "Daily Wellness",
     "addTask": "Add Task",
     "taskTitle": "Task title",
     "priority": "Priority",
@@ -18,29 +23,123 @@
     "medium": "Medium",
     "high": "High",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "saveWellness": "Save Wellness Data",
+    "steps": "Steps",
+    "sleepHours": "Sleep (hours)",
+    "meditationMinutes": "Meditation (minutes)",
+    "completed": "Completed",
+    "noActiveTasks": "No active tasks. Add one to get started!",
+    "errorLoadingTasks": "Failed to load tasks",
+    "taskReminder": "Task Reminder"
   },
   "calendar": {
     "title": "Calendar",
     "events": "Events",
-    "filters": "Filters"
+    "calendar": "Calendar",
+    "filters": "Filters",
+    "createEvent": "Create Event",
+    "newEvent": "New Event",
+    "eventTitle": "Title",
+    "date": "Date",
+    "time": "Time",
+    "description": "Description",
+    "create": "Create",
+    "noEvents": "No events scheduled for this day.",
+    "selectDate": "Select a date to view events"
   },
   "expenses": {
     "title": "Expenses",
     "budget": "Budget",
-    "transactions": "Transactions"
+    "transactions": "Transactions",
+    "addExpense": "Add Expense",
+    "addNew": "Add New Expense",
+    "amount": "Amount",
+    "category": "Category",
+    "description": "Description",
+    "date": "Date",
+    "food": "Food",
+    "transport": "Transport",
+    "entertainment": "Entertainment",
+    "shopping": "Shopping",
+    "bills": "Bills",
+    "health": "Health",
+    "other": "Other",
+    "totalExpenses": "Total Expenses",
+    "remaining": "Remaining",
+    "byCategory": "By Category",
+    "overTime": "Over Time",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "noData": "No data available",
+    "noExpenses": "No expenses yet. Add your first expense to get started!",
+    "loading": "Loading expenses...",
+    "errorLoading": "Failed to load expenses"
   },
   "assistant": {
     "title": "AI Assistant",
     "placeholder": "Type your message here...",
-    "send": "Send"
+    "send": "Send",
+    "getSuggestion": "Get Suggestion",
+    "suggestionHint": "Click to get AI-powered suggestions for optimizing your day"
   },
   "settings": {
     "title": "Settings",
     "language": "Language",
+    "languageDesc": "Choose your preferred language",
     "theme": "Theme",
+    "themeDesc": "Customize the app appearance",
     "light": "Light",
     "dark": "Dark",
-    "system": "System"
+    "system": "System",
+    "legal": "Legal",
+    "legalDesc": "Terms and Privacy",
+    "terms": "Terms & Conditions",
+    "privacy": "Privacy Policy",
+    "contact": "Contact",
+    "contactDesc": "Get in touch with us",
+    "contactEmail": "Email us at:"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "signInGoogle": "Sign in with Google"
+  },
+  "terms": {
+    "title": "Terms & Conditions",
+    "lastUpdated": "Last updated",
+    "section1Title": "1. Acceptance of Terms",
+    "section1Content": "By accessing and using Daily Sync Keeper, you accept and agree to be bound by the terms and provision of this agreement.",
+    "section2Title": "2. Use License",
+    "section2Content": "Permission is granted to temporarily use Daily Sync Keeper for personal, non-commercial transitory viewing only.",
+    "section3Title": "3. Disclaimer",
+    "section3Content": "The materials on Daily Sync Keeper are provided on an 'as is' basis. Daily Sync Keeper makes no warranties, expressed or implied.",
+    "section4Title": "4. Limitations",
+    "section4Content": "In no event shall Daily Sync Keeper or its suppliers be liable for any damages arising out of the use or inability to use the materials on Daily Sync Keeper.",
+    "section5Title": "5. Modifications",
+    "section5Content": "Daily Sync Keeper may revise these terms of service at any time without notice. By using this app, you are agreeing to be bound by the current version of these terms."
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "lastUpdated": "Last updated",
+    "section1Title": "1. Information We Collect",
+    "section1Content": "We collect information you provide directly to us, including your name, email address, and usage data.",
+    "section2Title": "2. How We Use Your Information",
+    "section2Content": "We use the information we collect to provide, maintain, and improve our services, and to communicate with you.",
+    "section3Title": "3. Information Sharing",
+    "section3Content": "We do not share your personal information with third parties except as described in this privacy policy.",
+    "section4Title": "4. Data Security",
+    "section4Content": "We take reasonable measures to help protect your personal information from loss, theft, misuse, and unauthorized access.",
+    "section5Title": "5. Your Rights",
+    "section5Content": "You have the right to access, update, or delete your personal information at any time through your account settings."
   }
 }

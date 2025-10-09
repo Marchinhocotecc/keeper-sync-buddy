@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from 'next-themes';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
@@ -17,7 +19,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>{t('settings.language')}</CardTitle>
-            <CardDescription>Choose your preferred language</CardDescription>
+            <CardDescription>{t('settings.languageDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <Label htmlFor="language">{t('settings.language')}</Label>
@@ -28,6 +30,15 @@ export default function SettingsPage() {
               <SelectContent>
                 <SelectItem value="en">English</SelectItem>
                 <SelectItem value="it">Italiano</SelectItem>
+                <SelectItem value="es">Español</SelectItem>
+                <SelectItem value="pt">Português</SelectItem>
+                <SelectItem value="de">Deutsch</SelectItem>
+                <SelectItem value="ru">Русский</SelectItem>
+                <SelectItem value="fr">Français</SelectItem>
+                <SelectItem value="zh">中文</SelectItem>
+                <SelectItem value="hi">हिन्दी</SelectItem>
+                <SelectItem value="sv">Svenska</SelectItem>
+                <SelectItem value="no">Norsk</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>
@@ -36,7 +47,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>{t('settings.theme')}</CardTitle>
-            <CardDescription>Customize the app appearance</CardDescription>
+            <CardDescription>{t('settings.themeDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <Label htmlFor="theme">{t('settings.theme')}</Label>
@@ -50,6 +61,36 @@ export default function SettingsPage() {
                 <SelectItem value="system">{t('settings.system')}</SelectItem>
               </SelectContent>
             </Select>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('settings.legal')}</CardTitle>
+            <CardDescription>{t('settings.legalDesc')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Link to="/terms">
+              <Button variant="outline" className="w-full justify-start">
+                {t('settings.terms')}
+              </Button>
+            </Link>
+            <Link to="/privacy">
+              <Button variant="outline" className="w-full justify-start">
+                {t('settings.privacy')}
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('settings.contact')}</CardTitle>
+            <CardDescription>{t('settings.contactDesc')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-2">{t('settings.contactEmail')}</p>
+            <p className="text-sm font-medium">support@dailysynckeeper.com</p>
           </CardContent>
         </Card>
       </div>

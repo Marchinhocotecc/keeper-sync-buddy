@@ -279,7 +279,9 @@ export type Database = {
           created_at: string | null
           date: string
           id: string
+          meditation_minutes: number | null
           sleep: number | null
+          steps: number | null
           user_id: string | null
         }
         Insert: {
@@ -287,7 +289,9 @@ export type Database = {
           created_at?: string | null
           date: string
           id?: string
+          meditation_minutes?: number | null
           sleep?: number | null
+          steps?: number | null
           user_id?: string | null
         }
         Update: {
@@ -295,7 +299,9 @@ export type Database = {
           created_at?: string | null
           date?: string
           id?: string
+          meditation_minutes?: number | null
           sleep?: number | null
+          steps?: number | null
           user_id?: string | null
         }
         Relationships: []
