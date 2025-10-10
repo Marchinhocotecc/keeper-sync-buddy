@@ -80,34 +80,11 @@ serve(async (req) => {
     const completedTasks = userData.todos.filter((t: any) => t.completed).length;
     const totalTasks = userData.todos.length;
 
-    const HUGGINGFACE_API_KEY = Deno.env.get("HUGGINGFACE_API_KEY");
-    const DEV_MODE = Deno.env.get("DEVELOPMENT_MODE") === "true";
+    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
 
-    if (!HUGGINGFACE_API_KEY) {
-      if (DEV_MODE) {
-        // Fallback response
-        const fallbackResponse = {
-          summary: `Echo (dev mode): ${message}. Tasks: ${completedTasks}/${totalTasks}, Budget: €${totalExpenses.toFixed(2)}/€${monthlyBudget}`,
-          wellnessTips: ["Stay hydrated", "Get 8 hours of sleep", "Exercise regularly"],
-          budgetAnalysis: {
-            total: totalExpenses,
-            budget: monthlyBudget,
-            status: totalExpenses > monthlyBudget ? "over" : "within"
-          },
-          recommendations: ["Complete your pending tasks", "Review your spending"]
-        };
-
-        // Log request
-        await supabase.from("ai_requests").insert({ user_id: effectiveUserId });
-
-        return new Response(
-          JSON.stringify({ reply: fallbackResponse, source: "fallback-echo" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
+    if (!MISTRAL_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "HUGGINGFACE_API_KEY not configured" }),
+        JSON.stringify({ error: "MISTRAL_API_KEY not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -136,44 +113,35 @@ Respond ONLY with valid JSON in this exact format:
   "recommendations": ["recommendation1", "recommendation2"]
 }`;
 
-    const response = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3", {
+    const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
+        Authorization: `Bearer ${MISTRAL_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        inputs: systemPrompt,
-        parameters: {
-          max_new_tokens: 800,
-          temperature: 0.7,
-          top_p: 0.95,
-          return_full_text: false,
-        },
+        model: "open-mistral-7b",
+        messages: [
+          { role: "system", content: "You are a helpful AI assistant. Always respond with valid JSON." },
+          { role: "user", content: systemPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Hugging Face API error:", response.status, errorText);
-      
-      if (response.status === 503) {
-        return new Response(
-          JSON.stringify({ error: "Model is loading. Please try again in a moment." }),
-          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      console.error("Mistral API error:", response.status, errorText);
       
       return new Response(
-        JSON.stringify({ error: "AI service error" }),
+        JSON.stringify({ error: `Mistral API error: ${response.status}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const aiData = await response.json();
-    let aiResponse = Array.isArray(aiData) && aiData[0]?.generated_text 
-      ? aiData[0].generated_text 
-      : typeof aiData === "string" ? aiData : JSON.stringify(aiData);
+    const aiResponse = aiData.choices?.[0]?.message?.content || "";
 
     // Try to parse AI response as JSON
     let parsedReply;
