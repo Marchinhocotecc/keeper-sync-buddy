@@ -43,45 +43,15 @@ export default function AssistantPanel() {
     setIsLoading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error("Please log in to use the assistant");
-      }
-
       const { data, error } = await supabase.functions.invoke("assistant-ai", {
-        body: { 
-          message: messageText,
-          user_id: userId 
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        body: { prompt: messageText },
       });
 
-      if (error) throw error;
-
-      const reply = data?.reply;
-      let content = "No response received";
-      
-      if (reply) {
-        if (typeof reply === 'string') {
-          content = reply;
-        } else if (reply.summary) {
-          content = `**Summary:** ${reply.summary}\n\n`;
-          if (reply.wellnessTips?.length > 0) {
-            content += `**Wellness Tips:**\n${reply.wellnessTips.map((tip: string) => `• ${tip}`).join('\n')}\n\n`;
-          }
-          if (reply.budgetAnalysis?.message) {
-            content += `**Budget:** ${reply.budgetAnalysis.message}\n\n`;
-          }
-          if (reply.recommendations?.length > 0) {
-            content += `**Recommendations:**\n${reply.recommendations.map((rec: string) => `• ${rec}`).join('\n')}`;
-          }
-        } else {
-          content = JSON.stringify(reply, null, 2);
-        }
+      if (error) {
+        throw new Error(error.message || "Failed to get response from assistant");
       }
+
+      const content = data?.result || data?.error || "No response received";
 
       const assistantMessage: Message = {
         role: "assistant",
@@ -91,8 +61,8 @@ export default function AssistantPanel() {
     } catch (error: any) {
       console.error("Assistant error:", error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to get response from assistant",
+        title: "Errore",
+        description: error.message || "Impossibile ottenere una risposta dall'assistente",
         variant: "destructive",
       });
       
