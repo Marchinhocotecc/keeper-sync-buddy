@@ -44,7 +44,7 @@ export default function AssistantPanel() {
 
     try {
       const { data, error } = await supabase.functions.invoke("assistant-ai", {
-        body: { prompt: messageText },
+        body: { prompt: messageText, userId },
       });
 
       if (error) {
