@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Plus, Trash2, AlertCircle, Settings } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
+import { useSettings } from '@/hooks/useSettings';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,7 +19,10 @@ export default function ExpensesPage() {
   const { t } = useTranslation();
   const [userId, setUserId] = React.useState<string | undefined>();
   const { expenses, isLoading, isError, error, addExpense, deleteExpense } = useExpenses(userId);
+  const { settings, updateSettings } = useSettings(userId);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showBudgetDialog, setShowBudgetDialog] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
   const [period, setPeriod] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -116,8 +121,18 @@ export default function ExpensesPage() {
   }, [filteredExpenses, period]);
 
   const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(String(exp.amount)), 0);
-  const monthlyBudget = 1000;
+  const monthlyBudget = settings?.monthly_budget || 1000;
   const remaining = monthlyBudget - totalExpenses;
+
+  const handleBudgetUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const budget = parseFloat(budgetInput);
+    if (budget > 0) {
+      await updateSettings.mutateAsync({ monthly_budget: budget });
+      setShowBudgetDialog(false);
+      setBudgetInput('');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -173,8 +188,34 @@ export default function ExpensesPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle>{t('expenses.budget')}</CardTitle>
+            <Dialog open={showBudgetDialog} onOpenChange={setShowBudgetDialog}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setBudgetInput(monthlyBudget.toString())}>
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Imposta Budget Mensile</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleBudgetUpdate} className="space-y-4">
+                  <div>
+                    <Label htmlFor="budget">Budget (€)</Label>
+                    <Input
+                      id="budget"
+                      type="number"
+                      step="0.01"
+                      value={budgetInput}
+                      onChange={(e) => setBudgetInput(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full">Salva Budget</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">€{monthlyBudget.toFixed(2)}</p>

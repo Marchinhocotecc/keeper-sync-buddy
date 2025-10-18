@@ -34,7 +34,7 @@ export const useTasks = (userId?: string) => {
   });
 
   const addTask = useMutation({
-    mutationFn: async (task: { title: string; priority: "low" | "medium" | "high" }) => {
+    mutationFn: async (task: { title: string; priority: "low" | "medium" | "high"; due_date?: string }) => {
       if (!userId) throw new Error("User ID required");
       
       const { data, error } = await supabase

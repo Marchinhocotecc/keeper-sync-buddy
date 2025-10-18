@@ -38,6 +38,7 @@ export default function CalendarPage() {
     await addTask.mutateAsync({
       title: newEvent.title,
       priority: 'medium',
+      due_date: dueDate,
     });
     setOpen(false);
     setNewEvent({
