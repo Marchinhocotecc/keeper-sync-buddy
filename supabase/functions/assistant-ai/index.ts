@@ -5,6 +5,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Rate limiting: Map<identifier, lastRequestTimestamp>
+const rateLimitMap = new Map<string, number>();
+const RATE_LIMIT_WINDOW = 2000; // 2 seconds minimum between requests per user/IP
+const CLEANUP_INTERVAL = 10000; // Cleanup old entries every 10 seconds
+
+// Periodic cleanup to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of rateLimitMap.entries()) {
+    if (now - timestamp > RATE_LIMIT_WINDOW * 3) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, CLEANUP_INTERVAL);
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -12,6 +27,32 @@ serve(async (req) => {
 
   try {
     const { prompt, userId } = await req.json();
+    
+    // Rate limiting by userId or IP
+    const identifier = userId || req.headers.get("x-forwarded-for") || "anonymous";
+    const now = Date.now();
+    const lastRequest = rateLimitMap.get(identifier) || 0;
+
+    if (now - lastRequest < RATE_LIMIT_WINDOW) {
+      console.log(`Rate limit exceeded for: ${identifier}`);
+      return new Response(
+        JSON.stringify({ 
+          error: "Too many requests", 
+          retryAfter: Math.ceil((RATE_LIMIT_WINDOW - (now - lastRequest)) / 1000) 
+        }), 
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil((RATE_LIMIT_WINDOW - (now - lastRequest)) / 1000))
+          } 
+        }
+      );
+    }
+
+    rateLimitMap.set(identifier, now);
+
     const deepSeekKey = Deno.env.get("DEEP_SEEK_R1_FREE");
 
     if (!deepSeekKey) {
@@ -28,7 +69,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Calling DeepSeek R1 via OpenRouter for user:", userId);
+    console.log("Calling DeepSeek R1 via OpenRouter for user:", identifier);
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",

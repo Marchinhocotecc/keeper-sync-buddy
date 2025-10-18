@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ export default function AssistantPanel() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const lastCallRef = useRef<number>(0);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -33,8 +35,38 @@ export default function AssistantPanel() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const sendMessage = async () => {
+  const invokeAssistant = useCallback(async (messageText: string, retryCount = 0): Promise<any> => {
+    const { data, error } = await supabase.functions.invoke("assistant-ai", {
+      body: { prompt: messageText, userId },
+    });
+
+    if (error) {
+      // Handle 429 rate limit with exponential backoff
+      if (error.message.includes("429") && retryCount < 3) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return invokeAssistant(messageText, retryCount + 1);
+      }
+      throw error;
+    }
+
+    return data;
+  }, [userId]);
+
+  const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading) return;
+
+    // Prevent spam: minimum 1.5s between requests
+    const now = Date.now();
+    if (now - lastCallRef.current < 1500) {
+      toast({
+        title: "Attendi",
+        description: "Per favore attendi prima di inviare un altro messaggio",
+        variant: "default",
+      });
+      return;
+    }
+    lastCallRef.current = now;
 
     const userMessage: Message = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
@@ -43,14 +75,7 @@ export default function AssistantPanel() {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("assistant-ai", {
-        body: { prompt: messageText, userId },
-      });
-
-      if (error) {
-        throw new Error(error.message || "Failed to get response from assistant");
-      }
-
+      const data = await invokeAssistant(messageText);
       const content = data?.result || data?.error || "No response received";
 
       const assistantMessage: Message = {
@@ -71,14 +96,30 @@ export default function AssistantPanel() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [input, isLoading, userId, toast, invokeAssistant]);
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey && !isLoading) {
       e.preventDefault();
-      sendMessage();
+      
+      // Debounce keyboard input
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      
+      debounceTimerRef.current = setTimeout(() => {
+        sendMessage();
+      }, 300);
     }
-  };
+  }, [isLoading, sendMessage]);
+
+  React.useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <Card className="flex flex-col h-[calc(100vh-12rem)]">
@@ -87,7 +128,7 @@ export default function AssistantPanel() {
           {messages.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>{t("assistant.placeholder")}</p>
+              <p>{isLoading ? "Assistente in elaborazione..." : t("assistant.placeholder")}</p>
             </div>
           )}
           {messages.map((msg, idx) => (
