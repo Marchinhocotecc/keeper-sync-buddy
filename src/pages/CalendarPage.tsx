@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus } from 'lucide-react';
+import { Plus, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { useTasks } from '@/hooks/useTasks';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +19,7 @@ export default function CalendarPage() {
   const [userId, setUserId] = React.useState<string | undefined>();
   const { tasks, addTask } = useTasks(userId);
   const [open, setOpen] = useState(false);
+  const [eventStatus, setEventStatus] = useState<Record<string, 'normal' | 'completed' | 'cancelled'>>({});
   const [newEvent, setNewEvent] = useState({
     title: '',
     date: new Date().toISOString().split('T')[0],
@@ -136,14 +137,45 @@ export default function CalendarPage() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {todayEvents.map((event) => (
-                    <Card key={event.id} className="p-4">
-                      <h4 className="font-medium">{event.title}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {event.due_date && format(new Date(event.due_date), 'HH:mm')}
-                      </p>
-                    </Card>
-                  ))}
+                  {todayEvents.map((event) => {
+                    const status = eventStatus[event.id] || 'normal';
+                    return (
+                      <Card 
+                        key={event.id} 
+                        className={`p-4 transition-colors ${
+                          status === 'completed' ? 'bg-green-500/10 border-green-500/30' : 
+                          status === 'cancelled' ? 'bg-red-500/10 border-red-500/30' : ''
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <h4 className="font-medium">{event.title}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {event.due_date && format(new Date(event.due_date), 'HH:mm')}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-500/20"
+                              onClick={() => setEventStatus(prev => ({ ...prev, [event.id]: 'completed' }))}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-500/20"
+                              onClick={() => setEventStatus(prev => ({ ...prev, [event.id]: 'cancelled' }))}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </div>
