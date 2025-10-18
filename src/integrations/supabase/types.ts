@@ -186,6 +186,7 @@ export type Database = {
           created_at: string | null
           id: string
           language: string | null
+          monthly_budget: number | null
           notifications_enabled: boolean | null
           theme: string | null
           user_id: string | null
@@ -194,6 +195,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           language?: string | null
+          monthly_budget?: number | null
           notifications_enabled?: boolean | null
           theme?: string | null
           user_id?: string | null
@@ -202,6 +204,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           language?: string | null
+          monthly_budget?: number | null
           notifications_enabled?: boolean | null
           theme?: string | null
           user_id?: string | null

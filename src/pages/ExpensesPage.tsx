@@ -121,14 +121,14 @@ export default function ExpensesPage() {
   }, [filteredExpenses, period]);
 
   const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(String(exp.amount)), 0);
-  const monthlyBudget = settings?.monthly_budget || 1000;
+  const monthlyBudget = (settings as any)?.monthly_budget || 1000;
   const remaining = monthlyBudget - totalExpenses;
 
   const handleBudgetUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     const budget = parseFloat(budgetInput);
     if (budget > 0) {
-      await updateSettings.mutateAsync({ monthly_budget: budget });
+      await updateSettings.mutateAsync({ monthly_budget: budget } as any);
       setShowBudgetDialog(false);
       setBudgetInput('');
     }
