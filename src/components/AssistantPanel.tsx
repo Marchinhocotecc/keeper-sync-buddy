@@ -36,24 +36,48 @@ export default function AssistantPanel() {
   }, []);
 
   const invokeAssistant = useCallback(async (messageText: string, retryCount = 0): Promise<any> => {
-    const { data, error } = await supabase.functions.invoke("assistant-ai", {
-      body: { prompt: messageText, userId },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke("assistant-ai", {
+        body: { prompt: messageText, userId },
+      });
 
-    if (error) {
-      console.error(`Assistant API error (attempt ${retryCount + 1}):`, error);
-      
-      // Handle 429 rate limit with exponential backoff
-      if ((error.message?.includes("429") || error.message?.includes("Too many requests")) && retryCount < 3) {
-        const delay = Math.min(1000 * Math.pow(2, retryCount), 4000);
-        console.warn(`Rate limited. Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return invokeAssistant(messageText, retryCount + 1);
+      // Check for Supabase client errors (network, etc.)
+      if (error) {
+        console.error(`Assistant API error (attempt ${retryCount + 1}):`, error);
+        
+        // Handle 429 rate limit with exponential backoff
+        if ((error.message?.includes("429") || error.message?.includes("Too many requests")) && retryCount < 3) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 4000);
+          console.warn(`Rate limited. Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return invokeAssistant(messageText, retryCount + 1);
+        }
+        
+        throw new Error(error.message || "Errore di connessione");
       }
-      throw error;
-    }
 
-    return data;
+      // Check for application-level errors in the response
+      if (data?.error) {
+        console.error("Assistant returned error:", data.error, data.message);
+        
+        // Handle service unavailable (AI provider rate limit)
+        if (data.error.includes("Rate limit") || data.error.includes("rate limit")) {
+          if (retryCount < 2) {
+            const delay = 3000 + (retryCount * 2000);
+            console.warn(`AI service rate limited. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return invokeAssistant(messageText, retryCount + 1);
+          }
+        }
+        
+        throw new Error(data.message || data.error || "Si è verificato un errore");
+      }
+
+      return data;
+    } catch (err) {
+      console.error("invokeAssistant error:", err);
+      throw err;
+    }
   }, [userId]);
 
   const sendMessage = useCallback(async () => {
@@ -79,18 +103,31 @@ export default function AssistantPanel() {
 
     try {
       const data = await invokeAssistant(messageText);
-      const content = data?.result || data?.error || "No response received";
-
-      const assistantMessage: Message = {
-        role: "assistant",
-        content,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Handle successful response
+      if (data?.result) {
+        const assistantMessage: Message = {
+          role: "assistant",
+          content: data.result,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      } else {
+        // Unexpected response format
+        console.warn("Unexpected response format:", data);
+        const assistantMessage: Message = {
+          role: "assistant",
+          content: "Risposta ricevuta ma in formato non previsto. Riprova.",
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
     } catch (error: any) {
       console.error("Assistant error:", error);
+      
+      const errorMessage = error.message || "Impossibile ottenere una risposta dall'assistente";
+      
       toast({
         title: "Errore",
-        description: error.message || "Impossibile ottenere una risposta dall'assistente",
+        description: errorMessage,
         variant: "destructive",
       });
       
