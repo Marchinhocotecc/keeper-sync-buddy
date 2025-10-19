@@ -41,9 +41,12 @@ export default function AssistantPanel() {
     });
 
     if (error) {
+      console.error(`Assistant API error (attempt ${retryCount + 1}):`, error);
+      
       // Handle 429 rate limit with exponential backoff
-      if (error.message.includes("429") && retryCount < 3) {
-        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+      if ((error.message?.includes("429") || error.message?.includes("Too many requests")) && retryCount < 3) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 4000);
+        console.warn(`Rate limited. Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return invokeAssistant(messageText, retryCount + 1);
       }
@@ -56,9 +59,9 @@ export default function AssistantPanel() {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading) return;
 
-    // Prevent spam: minimum 1.5s between requests
+    // Prevent spam: minimum 1s between requests (aligned with backend)
     const now = Date.now();
-    if (now - lastCallRef.current < 1500) {
+    if (now - lastCallRef.current < 1000) {
       toast({
         title: "Attendi",
         description: "Per favore attendi prima di inviare un altro messaggio",

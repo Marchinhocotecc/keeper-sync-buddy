@@ -7,7 +7,7 @@ const corsHeaders = {
 
 // Rate limiting: Map<identifier, lastRequestTimestamp>
 const rateLimitMap = new Map<string, number>();
-const RATE_LIMIT_WINDOW = 2000; // 2 seconds minimum between requests per user/IP
+const RATE_LIMIT_WINDOW = 1000; // 1 second minimum between requests per user/IP
 const CLEANUP_INTERVAL = 10000; // Cleanup old entries every 10 seconds
 
 // Periodic cleanup to prevent memory leaks
