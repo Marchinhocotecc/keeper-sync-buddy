@@ -181,6 +181,42 @@ export type Database = {
         }
         Relationships: []
       }
+      requests_log: {
+        Row: {
+          cached: boolean | null
+          endpoint: string | null
+          error_message: string | null
+          id: string
+          prompt: string
+          response_time: number | null
+          status_code: number
+          timestamp: string | null
+          user_id: string | null
+        }
+        Insert: {
+          cached?: boolean | null
+          endpoint?: string | null
+          error_message?: string | null
+          id?: string
+          prompt: string
+          response_time?: number | null
+          status_code: number
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          cached?: boolean | null
+          endpoint?: string | null
+          error_message?: string | null
+          id?: string
+          prompt?: string
+          response_time?: number | null
+          status_code?: number
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           created_at: string | null

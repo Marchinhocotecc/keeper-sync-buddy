@@ -44,33 +44,17 @@ export default function AssistantPanel() {
       // Check for Supabase client errors (network, etc.)
       if (error) {
         console.error(`Assistant API error (attempt ${retryCount + 1}):`, error);
-        
-        // Handle 429 rate limit with exponential backoff
-        if ((error.message?.includes("429") || error.message?.includes("Too many requests")) && retryCount < 3) {
-          const delay = Math.min(1000 * Math.pow(2, retryCount), 4000);
-          console.warn(`Rate limited. Retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return invokeAssistant(messageText, retryCount + 1);
-        }
-        
         throw new Error(error.message || "Errore di connessione");
       }
 
-      // Check for application-level errors in the response
-      if (data?.error) {
-        console.error("Assistant returned error:", data.error, data.message);
-        
-        // Handle service unavailable (AI provider rate limit)
-        if (data.error.includes("Rate limit") || data.error.includes("rate limit")) {
-          if (retryCount < 2) {
-            const delay = 3000 + (retryCount * 2000);
-            console.warn(`AI service rate limited. Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return invokeAssistant(messageText, retryCount + 1);
-          }
-        }
-        
-        throw new Error(data.message || data.error || "Si è verificato un errore");
+      // New response format: always { success, message, timestamp, cached }
+      if (!data) {
+        throw new Error("Nessuna risposta dal server");
+      }
+
+      // Log cache status
+      if (data.cached) {
+        devLog("Response from cache");
       }
 
       return data;
@@ -79,6 +63,13 @@ export default function AssistantPanel() {
       throw err;
     }
   }, [userId]);
+
+  const devLog = (...args: any[]) => {
+    // Only log in development
+    if (import.meta.env.DEV) {
+      console.log(...args);
+    }
+  };
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading) return;
@@ -104,21 +95,30 @@ export default function AssistantPanel() {
     try {
       const data = await invokeAssistant(messageText);
       
-      // Handle successful response
-      if (data?.result) {
+      // New response format: { success, message, timestamp, cached }
+      if (data?.success) {
         const assistantMessage: Message = {
           role: "assistant",
-          content: data.result,
+          content: data.message,
         };
         setMessages((prev) => [...prev, assistantMessage]);
+        
+        // Show cache indicator if response was cached
+        if (data.cached) {
+          devLog("✓ Risposta dalla cache");
+        }
       } else {
-        // Unexpected response format
-        console.warn("Unexpected response format:", data);
-        const assistantMessage: Message = {
-          role: "assistant",
-          content: "Risposta ricevuta ma in formato non previsto. Riprova.",
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
+        // Handle failure responses (still status 200 but success: false)
+        console.warn("Assistant returned failure:", data);
+        
+        toast({
+          title: "Attenzione",
+          description: data?.message || "Impossibile ottenere una risposta",
+          variant: "default",
+        });
+        
+        // Remove user message on failure
+        setMessages((prev) => prev.slice(0, -1));
       }
     } catch (error: any) {
       console.error("Assistant error:", error);

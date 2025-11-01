@@ -1,92 +1,279 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Rate limiting: Map<identifier, lastRequestTimestamp>
-const rateLimitMap = new Map<string, number>();
-const RATE_LIMIT_WINDOW = 1000; // 1 second minimum between requests per user/IP
-const CLEANUP_INTERVAL = 10000; // Cleanup old entries every 10 seconds
+// ========== CONFIGURATION ==========
+const RATE_LIMIT_MAX_REQUESTS = 3; // Max 3 requests per second per user
+const RATE_LIMIT_WINDOW = 1000; // 1 second window
+const CACHE_TTL = 60000; // Cache responses for 60 seconds
+const REQUEST_TIMEOUT = 20000; // 20 second timeout for external calls
+const MAX_RETRIES = 3; // Max 3 retry attempts
+const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
+const CLEANUP_INTERVAL = 30000; // Cleanup every 30 seconds
+const DEV_MODE = false; // Set to true for verbose logging
+
+// ========== IN-MEMORY STORAGE ==========
+interface RateLimitEntry {
+  timestamps: number[];
+}
+
+interface CacheEntry {
+  response: any;
+  timestamp: number;
+}
+
+const rateLimitMap = new Map<string, RateLimitEntry>();
+const responseCache = new Map<string, CacheEntry>();
+
+// ========== UTILITIES ==========
+const devLog = (...args: any[]) => {
+  if (DEV_MODE) console.log(...args);
+};
+
+const hashPrompt = async (prompt: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(prompt.trim().toLowerCase());
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
 
 // Periodic cleanup to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
-  for (const [key, timestamp] of rateLimitMap.entries()) {
-    if (now - timestamp > RATE_LIMIT_WINDOW * 3) {
+  
+  // Cleanup rate limit map
+  for (const [key, entry] of rateLimitMap.entries()) {
+    entry.timestamps = entry.timestamps.filter(ts => now - ts < RATE_LIMIT_WINDOW * 2);
+    if (entry.timestamps.length === 0) {
       rateLimitMap.delete(key);
     }
   }
+  
+  // Cleanup cache
+  for (const [key, entry] of responseCache.entries()) {
+    if (now - entry.timestamp > CACHE_TTL) {
+      responseCache.delete(key);
+    }
+  }
+  
+  devLog(`Cleanup: RateLimit entries: ${rateLimitMap.size}, Cache entries: ${responseCache.size}`);
 }, CLEANUP_INTERVAL);
 
+// ========== RETRY WITH EXPONENTIAL BACKOFF ==========
+const fetchWithRetry = async (url: string, options: RequestInit, attempt = 0): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (attempt < MAX_RETRIES - 1) {
+      const delay = RETRY_DELAYS[attempt];
+      devLog(`Retry attempt ${attempt + 1} after ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(url, options, attempt + 1);
+    }
+    
+    throw error;
+  }
+};
+
+// ========== LOGGING TO DATABASE ==========
+const logRequest = async (supabase: any, logData: {
+  user_id: string | null;
+  prompt: string;
+  response_time: number;
+  status_code: number;
+  error_message?: string;
+  cached: boolean;
+}) => {
+  try {
+    await supabase.from('requests_log').insert(logData);
+  } catch (error) {
+    console.error('Failed to log request:', error);
+  }
+};
+
+// ========== MAIN HANDLER ==========
 serve(async (req) => {
+  const startTime = Date.now();
+  
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Initialize Supabase client for logging
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabase = supabaseUrl && supabaseServiceKey 
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : null;
+
+  let userId: string | null = null;
+  let prompt: string = "";
+
   try {
-    // Rate limiting by userId or IP
+    // ========== RATE LIMITING (3 req/sec per user) ==========
     const identifier = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "anonymous";
     const now = Date.now();
-    const lastRequest = rateLimitMap.get(identifier) || 0;
-
-    if (now - lastRequest < RATE_LIMIT_WINDOW) {
-      console.log(`Rate limit exceeded for: ${identifier}`);
+    
+    const entry = rateLimitMap.get(identifier) || { timestamps: [] };
+    entry.timestamps = entry.timestamps.filter(ts => now - ts < RATE_LIMIT_WINDOW);
+    
+    if (entry.timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+      devLog(`Rate limit exceeded for: ${identifier}`);
+      
       return new Response(
         JSON.stringify({ 
-          error: "Too many requests", 
-          message: "Per favore attendi prima di inviare un altro messaggio",
-          retryAfter: Math.ceil((RATE_LIMIT_WINDOW - (now - lastRequest)) / 1000) 
+          success: false,
+          message: "Rate limit exceeded, try again in a few seconds.",
+          timestamp: new Date().toISOString(),
+          cached: false
         }), 
         { 
-          status: 429, 
-          headers: { 
-            ...corsHeaders, 
-            "Content-Type": "application/json",
-            "Retry-After": String(Math.ceil((RATE_LIMIT_WINDOW - (now - lastRequest)) / 1000))
-          } 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         }
       );
     }
+    
+    entry.timestamps.push(now);
+    rateLimitMap.set(identifier, entry);
 
-    rateLimitMap.set(identifier, now);
-
-    // Parse request body
+    // ========== PARSE REQUEST BODY ==========
     let body;
     try {
       body = await req.json();
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
+      
+      const responseTime = Date.now() - startTime;
+      if (supabase) {
+        await logRequest(supabase, {
+          user_id: null,
+          prompt: "",
+          response_time: responseTime,
+          status_code: 400,
+          error_message: "Invalid request body",
+          cached: false
+        });
+      }
+      
       return new Response(
-        JSON.stringify({ error: "Invalid request body", message: "Il formato della richiesta non è valido" }), 
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ 
+          success: false,
+          message: "Il formato della richiesta non è valido",
+          timestamp: new Date().toISOString(),
+          cached: false
+        }), 
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { prompt, userId } = body;
+    prompt = body.prompt;
+    userId = body.userId || null;
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
+      const responseTime = Date.now() - startTime;
+      if (supabase) {
+        await logRequest(supabase, {
+          user_id: userId,
+          prompt: "",
+          response_time: responseTime,
+          status_code: 400,
+          error_message: "Missing or invalid prompt",
+          cached: false
+        });
+      }
+      
       return new Response(
-        JSON.stringify({ error: "Missing or invalid prompt", message: "Messaggio mancante o non valido" }), 
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ 
+          success: false,
+          message: "Messaggio mancante o non valido",
+          timestamp: new Date().toISOString(),
+          cached: false
+        }), 
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // ========== CHECK CACHE (60s TTL) ==========
+    const promptHash = await hashPrompt(prompt);
+    const cachedEntry = responseCache.get(promptHash);
+    
+    if (cachedEntry && (now - cachedEntry.timestamp < CACHE_TTL)) {
+      devLog(`Cache HIT for prompt hash: ${promptHash.substring(0, 8)}`);
+      
+      const responseTime = Date.now() - startTime;
+      if (supabase) {
+        await logRequest(supabase, {
+          user_id: userId,
+          prompt: prompt.substring(0, 200), // Limit prompt length in logs
+          response_time: responseTime,
+          status_code: 200,
+          cached: true
+        });
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: cachedEntry.response,
+          timestamp: new Date().toISOString(),
+          cached: true
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    devLog(`Cache MISS for prompt hash: ${promptHash.substring(0, 8)}`);
+
+    // ========== VALIDATE API KEY ==========
     const deepSeekKey = Deno.env.get("DEEP_SEEK_R1_FREE");
 
     if (!deepSeekKey) {
       console.error("Missing DEEP_SEEK_R1_FREE API key in environment");
+      
+      const responseTime = Date.now() - startTime;
+      if (supabase) {
+        await logRequest(supabase, {
+          user_id: userId,
+          prompt: prompt.substring(0, 200),
+          response_time: responseTime,
+          status_code: 500,
+          error_message: "Missing API key",
+          cached: false
+        });
+      }
+      
       return new Response(
-        JSON.stringify({ error: "Configuration error", message: "Configurazione API non disponibile" }), 
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ 
+          success: false,
+          message: "Configurazione API non disponibile",
+          timestamp: new Date().toISOString(),
+          cached: false
+        }), 
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Calling DeepSeek R1 via OpenRouter for identifier:", identifier);
+    devLog("Calling DeepSeek R1 via OpenRouter for identifier:", identifier);
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    // ========== CALL AI WITH RETRY & TIMEOUT ==========
+    const response = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -106,49 +293,69 @@ serve(async (req) => {
       }),
     });
 
+    // ========== HANDLE AI RESPONSE ERRORS ==========
     if (!response.ok) {
       const errorText = await response.text();
       console.error("OpenRouter API error:", response.status, errorText);
       
-      // Handle specific error cases
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ 
-            error: "Rate limit exceeded", 
-            message: "Il servizio AI è temporaneamente sovraccarico. Riprova tra qualche secondo.",
-            details: errorText 
-          }), 
-          {
-            status: 503, // Service Unavailable instead of 429 to avoid confusion with our rate limit
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
+      const responseTime = Date.now() - startTime;
+      const errorMessage = response.status === 429 
+        ? "AI service rate limited"
+        : "AI service error";
+      
+      if (supabase) {
+        await logRequest(supabase, {
+          user_id: userId,
+          prompt: prompt.substring(0, 200),
+          response_time: responseTime,
+          status_code: response.status,
+          error_message: `${errorMessage}: ${errorText.substring(0, 200)}`,
+          cached: false
+        });
       }
+      
+      const userMessage = response.status === 429
+        ? "Il servizio AI è temporaneamente sovraccarico. Riprova tra qualche secondo."
+        : "Impossibile contattare il servizio AI. Riprova più tardi.";
       
       return new Response(
         JSON.stringify({ 
-          error: "AI service error", 
-          message: "Impossibile contattare il servizio AI. Riprova più tardi.",
-          details: errorText 
+          success: false,
+          message: userMessage,
+          timestamp: new Date().toISOString(),
+          cached: false
         }), 
-        {
-          status: response.status >= 500 ? 503 : response.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // ========== PARSE AI RESPONSE ==========
     let data;
     try {
       data = await response.json();
     } catch (jsonError) {
       console.error("Failed to parse AI response:", jsonError);
+      
+      const responseTime = Date.now() - startTime;
+      if (supabase) {
+        await logRequest(supabase, {
+          user_id: userId,
+          prompt: prompt.substring(0, 200),
+          response_time: responseTime,
+          status_code: 502,
+          error_message: "Invalid AI response JSON",
+          cached: false
+        });
+      }
+      
       return new Response(
         JSON.stringify({ 
-          error: "Invalid AI response", 
-          message: "Risposta del servizio AI non valida" 
+          success: false,
+          message: "Risposta del servizio AI non valida",
+          timestamp: new Date().toISOString(),
+          cached: false
         }), 
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -156,31 +363,88 @@ serve(async (req) => {
     
     if (!result) {
       console.error("No content in AI response:", data);
+      
+      const responseTime = Date.now() - startTime;
+      if (supabase) {
+        await logRequest(supabase, {
+          user_id: userId,
+          prompt: prompt.substring(0, 200),
+          response_time: responseTime,
+          status_code: 200,
+          error_message: "Empty AI response content",
+          cached: false
+        });
+      }
+      
       return new Response(
         JSON.stringify({ 
-          error: "Empty AI response", 
-          message: "Il servizio AI non ha fornito una risposta",
-          result: "Nessuna risposta disponibile al momento. Riprova."
+          success: false,
+          message: "Nessuna risposta disponibile al momento. Riprova.",
+          timestamp: new Date().toISOString(),
+          cached: false
         }), 
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
-    console.log("DeepSeek R1 response received successfully");
+    // ========== CACHE SUCCESSFUL RESPONSE ==========
+    responseCache.set(promptHash, {
+      response: result,
+      timestamp: Date.now()
+    });
+    
+    devLog("DeepSeek R1 response received and cached successfully");
+    
+    // ========== LOG SUCCESS ==========
+    const responseTime = Date.now() - startTime;
+    if (supabase) {
+      await logRequest(supabase, {
+        user_id: userId,
+        prompt: prompt.substring(0, 200),
+        response_time: responseTime,
+        status_code: 200,
+        cached: false
+      });
+    }
     
     return new Response(
-      JSON.stringify({ result }),
+      JSON.stringify({ 
+        success: true,
+        message: result,
+        timestamp: new Date().toISOString(),
+        cached: false
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("Edge function unexpected error:", e);
+    
+    // ========== LOG UNEXPECTED ERRORS ==========
+    const responseTime = Date.now() - startTime;
+    if (supabase) {
+      await logRequest(supabase, {
+        user_id: userId,
+        prompt: prompt ? prompt.substring(0, 200) : "",
+        response_time: responseTime,
+        status_code: 500,
+        error_message: e instanceof Error ? e.message : "Unknown error",
+        cached: false
+      });
+    }
+    
+    // Check if it's a timeout error
+    const isTimeout = e instanceof Error && (e.name === "AbortError" || e.message.includes("timeout"));
+    
     return new Response(
       JSON.stringify({ 
-        error: "Internal server error", 
-        message: "Si è verificato un errore interno. Riprova.",
-        details: e instanceof Error ? e.message : "Unknown error" 
+        success: false,
+        message: isTimeout 
+          ? "Timeout: il servizio AI non ha risposto in tempo. Riprova."
+          : "Si è verificato un errore interno. Riprova.",
+        timestamp: new Date().toISOString(),
+        cached: false
       }), 
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
