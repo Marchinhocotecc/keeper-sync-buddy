@@ -10,9 +10,9 @@ const corsHeaders = {
 const RATE_LIMIT_MAX_REQUESTS = 3; // Max 3 requests per second per user
 const RATE_LIMIT_WINDOW = 1000; // 1 second window
 const CACHE_TTL = 60000; // Cache responses for 60 seconds
-const REQUEST_TIMEOUT = 20000; // 20 second timeout for external calls
-const MAX_RETRIES = 3; // Max 3 retry attempts
-const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
+const REQUEST_TIMEOUT = 30000; // 30 second timeout for external calls
+const MAX_RETRIES = 2; // Max 2 retry attempts (3 total attempts including first)
+const RETRY_DELAYS = [1000, 2000]; // Delays between retries: 1s, 2s
 const CLEANUP_INTERVAL = 30000; // Cleanup every 30 seconds
 const DEV_MODE = false; // Set to true for verbose logging
 
@@ -242,10 +242,10 @@ serve(async (req) => {
     devLog(`Cache MISS for prompt hash: ${promptHash.substring(0, 8)}`);
 
     // ========== VALIDATE API KEY ==========
-    const deepSeekKey = Deno.env.get("DEEP_SEEK_R1_FREE");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
 
-    if (!deepSeekKey) {
-      console.error("Missing DEEP_SEEK_R1_FREE API key in environment");
+    if (!OPENROUTER_API_KEY) {
+      console.error("Missing OPENROUTER_API_KEY in environment variables");
       
       const responseTime = Date.now() - startTime;
       if (supabase) {
@@ -262,7 +262,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false,
-          message: "Configurazione API non disponibile",
+          error: "Missing API key",
+          message: "OpenRouter API key is not configured. Please add OPENROUTER_API_KEY to environment variables.",
           timestamp: new Date().toISOString(),
           cached: false
         }), 
@@ -270,38 +271,87 @@ serve(async (req) => {
       );
     }
 
-    devLog("Calling DeepSeek R1 via OpenRouter for identifier:", identifier);
+    devLog("Calling AI model via OpenRouter for identifier:", identifier);
 
     // ========== CALL AI WITH RETRY & TIMEOUT ==========
-    const response = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${deepSeekKey}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek/deepseek-r1:free",
-        messages: [
-          { 
-            role: "system", 
-            content: "Sei un assistente personale utile, empatico e preciso. Aiuta l'utente a gestire attività, spese e benessere." 
-          },
-          { role: "user", content: prompt }
-        ],
-        max_tokens: 400,
-        temperature: 0.7,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "HTTP-Referer": "https://lovable.dev",
+          "X-Title": "Lovable Assistant"
+        },
+        body: JSON.stringify({
+          model: "deepseek/deepseek-r1:free",
+          messages: [
+            { 
+              role: "system", 
+              content: "Sei un assistente personale utile, empatico e preciso. Aiuta l'utente a gestire attività, spese e benessere." 
+            },
+            { role: "user", content: prompt }
+          ],
+          max_tokens: 400,
+          temperature: 0.7,
+        }),
+      });
+    } catch (fetchError) {
+      console.error("Failed to fetch from OpenRouter after retries:", fetchError);
+      
+      const responseTime = Date.now() - startTime;
+      if (supabase) {
+        await logRequest(supabase, {
+          user_id: userId,
+          prompt: prompt.substring(0, 200),
+          response_time: responseTime,
+          status_code: 503,
+          error_message: `Network error: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`,
+          cached: false
+        });
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "Network error",
+          message: "Impossibile contattare il servizio AI. Verifica la tua connessione e riprova.",
+          timestamp: new Date().toISOString(),
+          cached: false
+        }), 
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // ========== HANDLE AI RESPONSE ERRORS ==========
     if (!response.ok) {
-      const errorText = await response.text();
+      let errorText = "";
+      let errorData: any = null;
+      
+      try {
+        errorText = await response.text();
+        errorData = JSON.parse(errorText);
+      } catch {
+        // If parsing fails, use raw text
+      }
+      
       console.error("OpenRouter API error:", response.status, errorText);
       
       const responseTime = Date.now() - startTime;
-      const errorMessage = response.status === 429 
-        ? "AI service rate limited"
-        : "AI service error";
+      let errorMessage = "AI service error";
+      let userMessage = "Impossibile contattare il servizio AI. Riprova più tardi.";
+      
+      if (response.status === 429) {
+        errorMessage = "AI service rate limited";
+        userMessage = "Il servizio AI è temporaneamente sovraccarico. Riprova tra qualche secondo.";
+      } else if (response.status === 401 || response.status === 403) {
+        errorMessage = "Invalid API key";
+        userMessage = "Errore di autenticazione con il servizio AI. Verifica la configurazione.";
+      } else if (response.status >= 500) {
+        errorMessage = "AI service unavailable";
+        userMessage = "Il servizio AI è temporaneamente non disponibile. Riprova più tardi.";
+      }
       
       if (supabase) {
         await logRequest(supabase, {
@@ -314,14 +364,12 @@ serve(async (req) => {
         });
       }
       
-      const userMessage = response.status === 429
-        ? "Il servizio AI è temporaneamente sovraccarico. Riprova tra qualche secondo."
-        : "Impossibile contattare il servizio AI. Riprova più tardi.";
-      
       return new Response(
         JSON.stringify({ 
           success: false,
+          error: errorMessage,
           message: userMessage,
+          details: errorData?.error?.message || errorText.substring(0, 100),
           timestamp: new Date().toISOString(),
           cached: false
         }), 
@@ -393,7 +441,7 @@ serve(async (req) => {
       timestamp: Date.now()
     });
     
-    devLog("DeepSeek R1 response received and cached successfully");
+    devLog("AI response received and cached successfully");
     
     // ========== LOG SUCCESS ==========
     const responseTime = Date.now() - startTime;
