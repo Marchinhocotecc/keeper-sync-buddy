@@ -4,95 +4,75 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from 'next-themes';
-import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { Globe, Moon } from 'lucide-react';
 
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
   const { theme, setTheme } = useTheme();
 
   return (
-    <main className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">{t('settings.title')}</h1>
-      
-      <div className="grid gap-6 max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('settings.language')}</CardTitle>
-            <CardDescription>{t('settings.languageDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Label htmlFor="language">{t('settings.language')}</Label>
-            <Select value={i18n.language} onValueChange={(value) => i18n.changeLanguage(value)}>
-              <SelectTrigger id="language" className="mt-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="it">Italiano</SelectItem>
-                <SelectItem value="es">Español</SelectItem>
-                <SelectItem value="pt">Português</SelectItem>
-                <SelectItem value="de">Deutsch</SelectItem>
-                <SelectItem value="ru">Русский</SelectItem>
-                <SelectItem value="fr">Français</SelectItem>
-                <SelectItem value="zh">中文</SelectItem>
-                <SelectItem value="hi">हिन्दी</SelectItem>
-                <SelectItem value="sv">Svenska</SelectItem>
-                <SelectItem value="no">Norsk</SelectItem>
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+    <main className="min-h-screen bg-muted/30">
+      <div className="container mx-auto px-6 py-8 max-w-screen-xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">{t('settings.title')}</h1>
+          <p className="text-muted-foreground">Personalizza la tua esperienza</p>
+        </div>
+        
+        <div className="grid gap-6 max-w-2xl">
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader className="border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Globe className="h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle>{t('settings.language')}</CardTitle>
+                  <CardDescription className="mt-1">{t('settings.languageDesc')}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-2">
+                <Label htmlFor="language">Seleziona lingua</Label>
+                <Select value={i18n.language} onValueChange={(value) => i18n.changeLanguage(value)}>
+                  <SelectTrigger id="language" className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="it">Italiano</SelectItem>
+                    <SelectItem value="es">Español</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('settings.theme')}</CardTitle>
-            <CardDescription>{t('settings.themeDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Label htmlFor="theme">{t('settings.theme')}</Label>
-            <Select value={theme} onValueChange={setTheme}>
-              <SelectTrigger id="theme" className="mt-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="light">{t('settings.light')}</SelectItem>
-                <SelectItem value="dark">{t('settings.dark')}</SelectItem>
-                <SelectItem value="system">{t('settings.system')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('settings.legal')}</CardTitle>
-            <CardDescription>{t('settings.legalDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Link to="/terms">
-              <Button variant="outline" className="w-full justify-start">
-                {t('settings.terms')}
-              </Button>
-            </Link>
-            <Link to="/privacy">
-              <Button variant="outline" className="w-full justify-start">
-                {t('settings.privacy')}
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('settings.contact')}</CardTitle>
-            <CardDescription>{t('settings.contactDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-2">{t('settings.contactEmail')}</p>
-            <p className="text-sm font-medium">support@dailysynckeeper.com</p>
-          </CardContent>
-        </Card>
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader className="border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Moon className="h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle>{t('settings.theme')}</CardTitle>
+                  <CardDescription className="mt-1">{t('settings.themeDesc')}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-2">
+                <Label htmlFor="theme">Seleziona tema</Label>
+                <Select value={theme} onValueChange={setTheme}>
+                  <SelectTrigger id="theme" className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">{t('settings.light')}</SelectItem>
+                    <SelectItem value="dark">{t('settings.dark')}</SelectItem>
+                    <SelectItem value="system">{t('settings.system')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </main>
   );
