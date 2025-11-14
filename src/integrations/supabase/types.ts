@@ -312,6 +312,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_context: {
+        Row: {
+          id: string
+          last_action: Json | null
+          last_intent: string | null
+          mood_tag: string | null
+          suggestion_history: Json | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          last_action?: Json | null
+          last_intent?: string | null
+          mood_tag?: string | null
+          suggestion_history?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          last_action?: Json | null
+          last_intent?: string | null
+          mood_tag?: string | null
+          suggestion_history?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       wellness_data: {
         Row: {
           activity: string | null
