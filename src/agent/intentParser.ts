@@ -6,30 +6,40 @@ export type Intent =
   | { type: 'create_event'; data: { title: string; date?: string; time?: string } }
   | { type: 'create_expense'; data: { amount: number; category: string; description?: string } }
   | { type: 'create_task'; data: { title: string; priority?: 'low' | 'medium' | 'high'; dueDate?: string } }
+  | { type: 'create_note'; data: { content: string; category?: string } }
   | { type: 'read_summary'; data: { scope: 'today' | 'week' | 'month' } }
   | { type: 'read_expenses'; data: { period?: string } }
   | { type: 'read_tasks'; data: { filter?: 'all' | 'pending' | 'completed' } }
+  | { type: 'read_notes'; data: {} }
   | { type: 'update_wellness'; data: { sleep?: number; steps?: number; meditation?: number } }
   | { type: 'coaching_request'; data: { sentiment: string; context: string } }
   | { type: 'navigation'; data: { page: string } }
   | { type: 'generic_question'; data: { question: string } }
+  | { type: 'contextual_follow_up'; data: { message: string; lastAction?: any } }
   | { type: 'unknown'; data: { message: string } };
 
 const INTENT_PATTERNS = {
   create_event: [
-    /(?:crea|aggiungi|nuovo)\s+(?:un\s+)?(?:evento|appuntamento|incontro)/i,
+    /(?:crea|aggiungi|nuovo|metti)\s+(?:un\s+)?(?:evento|appuntamento|incontro|meeting|impegno)/i,
     /(?:metti|inserisci)\s+(?:in\s+)?(?:agenda|calendario)/i,
-    /(?:domani|oggi|dopodomani|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica).*(?:alle|ore)/i
+    /(?:domani|oggi|dopodomani|stasera|più\s+tardi|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica).*(?:alle|ore|h)/i,
+    /(?:vederci|incontrare|incontro).*(?:alle|ore|domani|oggi)/i
   ],
   create_expense: [
-    /(?:ho\s+)?(?:speso|pagato|comprato)/i,
-    /(?:aggiungi|inserisci|registra)\s+(?:una\s+)?spesa/i,
-    /(?:costo|prezzo).*(?:€|euro)/i
+    /(?:ho\s+)?(?:speso|pagato|comprato|costo|uscita)/i,
+    /(?:aggiungi|inserisci|registra)\s+(?:una\s+)?(?:spesa|pagamento)/i,
+    /(?:\d+)\s*(?:€|euro|eur)/i
   ],
   create_task: [
     /(?:aggiungi|crea|nuovo)\s+(?:un\s+)?(?:task|compito|attività)/i,
-    /(?:devo|ricordami|ricorda)/i,
-    /(?:todo|to-do|da\s+fare)/i
+    /(?:devo|ricordami|ricorda|sistema)/i,
+    /(?:todo|to-do|da\s+fare)/i,
+    /(?:fare|completare|finire)\s+(?:di|il|la)/i
+  ],
+  create_note: [
+    /(?:nota|prendi\s+nota|scrivi|appunta|annota|segna)/i,
+    /(?:ricordati|ricorda\s+che|tieni\s+presente)/i,
+    /(?:memo|memorandum)/i
   ],
   read_summary: [
     /(?:mostra|fammi\s+vedere|dimmi)\s+(?:il\s+)?(?:riepilogo|riassunto|sommario)/i,
@@ -43,6 +53,10 @@ const INTENT_PATTERNS = {
   read_tasks: [
     /(?:mostra|vedi|elenca)\s+(?:i\s+)?(?:task|compiti|attività)/i,
     /(?:cosa|quali)\s+(?:devo\s+fare|task\s+ho)/i
+  ],
+  read_notes: [
+    /(?:mostra|vedi|elenca|leggi)\s+(?:le\s+)?(?:note|appunti)/i,
+    /(?:cosa|quali)\s+(?:note\s+ho|ho\s+scritto)/i
   ],
   update_wellness: [
     /(?:ho\s+)?dormito.*(?:ore|h)/i,
@@ -60,8 +74,16 @@ const INTENT_PATTERNS = {
   ]
 };
 
-export function parseIntent(message: string): Intent {
+export function parseIntent(message: string, lastAction?: any): Intent {
   const msg = message.toLowerCase().trim();
+
+  // Check for contextual follow-up (memory)
+  if (isContextualFollowUp(msg) && lastAction) {
+    return {
+      type: 'contextual_follow_up',
+      data: { message, lastAction }
+    };
+  }
 
   // Check coaching requests first (high priority for user wellbeing)
   for (const pattern of INTENT_PATTERNS.coaching_request) {
@@ -103,6 +125,16 @@ export function parseIntent(message: string): Intent {
     }
   }
 
+  // Check create note
+  for (const pattern of INTENT_PATTERNS.create_note) {
+    if (pattern.test(msg)) {
+      return {
+        type: 'create_note',
+        data: extractNoteData(message)
+      };
+    }
+  }
+
   // Check read summary
   for (const pattern of INTENT_PATTERNS.read_summary) {
     if (pattern.test(msg)) {
@@ -129,6 +161,16 @@ export function parseIntent(message: string): Intent {
       return {
         type: 'read_tasks',
         data: { filter: extractTaskFilter(msg) }
+      };
+    }
+  }
+
+  // Check read notes
+  for (const pattern of INTENT_PATTERNS.read_notes) {
+    if (pattern.test(msg)) {
+      return {
+        type: 'read_notes',
+        data: {}
       };
     }
   }
@@ -268,4 +310,29 @@ function extractPage(msg: string): string {
 function isComplexQuestion(msg: string): boolean {
   const questionWords = ['perché', 'come mai', 'cos\'è', 'cosa significa', 'spiegami', 'come funziona'];
   return questionWords.some(word => msg.includes(word)) && msg.length > 20;
+}
+
+function extractNoteData(msg: string): { content: string; category?: string } {
+  let content = msg.replace(/(?:nota|prendi\s+nota|scrivi|appunta|annota|segna|ricordati|ricorda\s+che|tieni\s+presente|memo)/gi, '').trim();
+  content = content.replace(/^[:;,.\-!?]\s*/, '').trim();
+  
+  const categories = ['lavoro', 'personale', 'casa', 'finanza', 'salute', 'studio'];
+  let category = undefined;
+  for (const cat of categories) {
+    if (msg.toLowerCase().includes(cat)) {
+      category = cat;
+      break;
+    }
+  }
+  
+  return { content: content || 'Nuova nota', category };
+}
+
+function isContextualFollowUp(msg: string): boolean {
+  const followUpPatterns = [
+    /^(?:anche|pure|inoltre|e|aggiungi anche|metti anche)/i,
+    /^(?:lo stesso|uguale|simile)/i,
+    /^(?:\d+|domani|oggi|ieri)/i
+  ];
+  return followUpPatterns.some(p => p.test(msg)) || msg.length < 15;
 }
