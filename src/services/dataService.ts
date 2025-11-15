@@ -93,6 +93,29 @@ export async function createEvent(
   }
 }
 
+export async function createNote(
+  userId: string,
+  content: string,
+  category?: string
+): Promise<DataServiceResponse<any>> {
+  try {
+    const { data, error } = await supabase
+      .from('notes')
+      .insert({
+        user_id: userId,
+        content,
+        category
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function updateWellness(
   userId: string,
   date: string,
@@ -245,6 +268,21 @@ export async function getUserSettings(userId: string): Promise<DataServiceRespon
 
     if (error) throw error;
     return { success: true, data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getNotes(userId: string): Promise<DataServiceResponse<any[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { success: true, data: data || [] };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

@@ -27,6 +27,7 @@ export default function AssistantPanel() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<Array<{ text: string; priority: string }>>([]);
   const lastCallRef = useRef<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
