@@ -147,49 +147,56 @@ async function handleIntent(
     }
 
     case 'create_event': {
-      // Parse dates and times properly
-      const now = new Date();
-      let startTime = now.toISOString();
+      const { title, rawMessage } = intent.data;
       
-      if (intent.data.date) {
-        // Simple date parsing (can be improved)
-        const dateStr = intent.data.date.toLowerCase();
-        if (dateStr === 'oggi') {
-          startTime = now.toISOString();
-        } else if (dateStr === 'domani') {
-          now.setDate(now.getDate() + 1);
-          startTime = now.toISOString();
-        }
-        
-        if (intent.data.time) {
-          const [hours, minutes = '0'] = intent.data.time.split(':');
-          now.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-          startTime = now.toISOString();
-        }
+      // Import date parser
+      const { parseNaturalDate, calculateEndTime, formatEventDate, formatEventTime } = await import('@/utils/dateParser');
+      
+      const parsedDate = parseNaturalDate(rawMessage);
+      
+      if (!parsedDate) {
+        return {
+          success: false,
+          message: "🤔 Non ho capito bene la data. Vuoi dire oggi, domani o un altro giorno specifico?",
+          source: 'local'
+        };
       }
       
-      const endTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString();
+      const startTime = parsedDate.date;
+      const endTime = new Date(calculateEndTime(startTime, parsedDate.isAllDay));
       
       const result = await dataService.createEvent(
         userId,
-        intent.data.title,
-        startTime,
-        endTime
+        title,
+        startTime.toISOString(),
+        endTime.toISOString(),
+        'event'
       );
       
       const lastActionData = {
         type: 'create_event',
-        data: intent.data
+        data: { title, startTime: startTime.toISOString(), endTime: endTime.toISOString() }
       };
 
+      if (result.success) {
+        const formattedDate = formatEventDate(startTime);
+        const formattedTime = parsedDate.isAllDay 
+          ? 'tutto il giorno' 
+          : `alle ${formatEventTime(startTime)}`;
+        
+        return {
+          success: true,
+          message: `✅ Perfetto! Ti ricordo *${title}* ${formattedDate} ${formattedTime} 👍`,
+          data: result.data,
+          source: 'local',
+          lastAction: lastActionData
+        };
+      }
+      
       return {
-        success: result.success,
-        message: result.success 
-          ? `📅 Evento aggiunto con successo: "${intent.data.title}" 🎯 Stai pianificando alla grande!` 
-          : `⚠️ Sto avendo difficoltà: ${result.error}. Riproviamo tra un attimo? ⏳`,
-        data: result.data,
-        source: 'local',
-        lastAction: result.success ? lastActionData : undefined
+        success: false,
+        message: "⚠️ Ho avuto un piccolo problema a salvare l'evento. Riprovo subito!",
+        source: 'local'
       };
     }
 
