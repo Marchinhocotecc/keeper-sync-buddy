@@ -3,7 +3,7 @@
  */
 
 export type Intent = 
-  | { type: 'create_event'; data: { title: string; date?: string; time?: string } }
+  | { type: 'create_event'; data: { title: string; rawMessage: string } }
   | { type: 'create_expense'; data: { amount: number; category: string; description?: string } }
   | { type: 'create_task'; data: { title: string; priority?: 'low' | 'medium' | 'high'; dueDate?: string } }
   | { type: 'create_note'; data: { content: string; category?: string } }
@@ -217,18 +217,23 @@ function detectSentiment(msg: string): string {
   return 'neutral';
 }
 
-function extractEventData(msg: string): { title: string; date?: string; time?: string } {
-  const timeMatch = msg.match(/(?:alle|ore)\s+(\d{1,2}(?::\d{2})?)/);
-  const dateMatch = msg.match(/(?:domani|oggi|dopodomani|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)/i);
+function extractEventData(msg: string) {
+  // Extract title - remove date/time keywords but keep the essence
+  const title = msg
+    .replace(/domani|dopodomani|oggi|tra\s+\d+\s+giorn[oi]/gi, '')
+    .replace(/lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica/gi, '')
+    .replace(/lunedi|martedi|mercoledi|giovedi|venerdi/gi, '')
+    .replace(/alle?\s+\d{1,2}(?:[:\.]\d{2})?/gi, '')
+    .replace(/mattina|pomeriggio|sera|notte/gi, '')
+    .replace(/il\s+\d{1,2}\s+\w+/gi, '')
+    .replace(/\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?/g, '')
+    .replace(/crea|aggiungi|nuovo|metti|inserisci|in|agenda|calendario|evento|appuntamento|impegno|meeting/gi, '')
+    .trim();
   
-  let title = msg.replace(/(?:crea|aggiungi|nuovo|metti|inserisci|in|agenda|calendario|evento|appuntamento)/gi, '').trim();
-  if (timeMatch) title = title.replace(timeMatch[0], '').trim();
-  if (dateMatch) title = title.replace(dateMatch[0], '').trim();
-  
-  return {
-    title: title || 'Nuovo evento',
-    date: dateMatch ? dateMatch[0] : undefined,
-    time: timeMatch ? timeMatch[1] : undefined
+  // Note: actual date parsing will be done in the agent using dateParser utility
+  return { 
+    title: title || 'Evento',
+    rawMessage: msg 
   };
 }
 
