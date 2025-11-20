@@ -11,91 +11,50 @@ export interface CoachingResponse {
 const COACHING_TEMPLATES = {
   stressed: [
     {
-      message: "Capisco che ti senti stressato. Ricorda: una cosa alla volta. Prova a fare tre respiri profondi ora.",
+      message: "Capisco. Respira un attimo. Facciamo un passo alla volta, ci sono 💛",
       suggestions: [
-        "Fai una pausa di 5 minuti",
-        "Scrivi le tue priorità per oggi",
-        "Prova una meditazione guidata breve"
-      ],
-      type: 'advice' as const
-    },
-    {
-      message: "Lo stress è normale, ma gestibile. Concentrati su ciò che puoi controllare adesso.",
-      suggestions: [
-        "Identifica la causa principale dello stress",
-        "Delega o rimanda ciò che non è urgente",
-        "Fai una breve camminata"
+        "Mostrami i task urgenti",
+        "Aiutami a prioritizzare"
       ],
       type: 'advice' as const
     }
   ],
   tired: [
     {
-      message: "La stanchezza è un segnale del tuo corpo. Ascoltalo. Hai bisogno di riposo.",
+      message: "Ti capisco. Prenditi una pausa, ne hai bisogno",
       suggestions: [
-        "Prenditi una pausa vera",
-        "Controlla le tue ore di sonno",
-        "Bevi acqua e fai stretching"
-      ],
-      type: 'advice' as const
-    },
-    {
-      message: "Essere stanchi non significa essere deboli. Riposare è produttivo.",
-      suggestions: [
-        "Pianifica un riposo di qualità stasera",
-        "Riduci gli impegni non essenziali",
-        "Chiedi aiuto se ne hai bisogno"
+        "Registra ore di sonno",
+        "Mostra il mio benessere"
       ],
       type: 'advice' as const
     }
   ],
   unmotivated: [
     {
-      message: "La motivazione va e viene, ma la disciplina resta. Inizia con un piccolo passo.",
+      message: "Lo so, capita. Inizia da una cosa piccola, vedrai che aiuta",
       suggestions: [
-        "Scegli un'attività semplice da completare",
-        "Celebra anche i piccoli progressi",
-        "Ricorda perché hai iniziato"
-      ],
-      type: 'encouragement' as const
-    },
-    {
-      message: "Non devi sentirti motivato per iniziare. Inizia e la motivazione arriverà.",
-      suggestions: [
-        "Dedica solo 10 minuti a un compito",
-        "Cambia ambiente di lavoro",
-        "Parla con qualcuno di fidato"
+        "Mostra task più semplici",
+        "Vedi i miei progressi"
       ],
       type: 'encouragement' as const
     }
   ],
   struggling: [
     {
-      message: "Lottare è umano. Non sei solo. Ogni problema ha una soluzione, anche se non è subito visibile.",
+      message: "È normale sentirsi così. Dividi in pezzi piccoli, vai un passo alla volta",
       suggestions: [
-        "Scomponi il problema in parti più piccole",
-        "Chiedi supporto a chi può aiutarti",
-        "Prenditi tempo per riflettere"
-      ],
-      type: 'advice' as const
-    },
-    {
-      message: "Le difficoltà sono temporanee. Stai facendo del tuo meglio, e questo conta.",
-      suggestions: [
-        "Scrivi cosa ti blocca",
-        "Prova un approccio diverso",
-        "Ricordati dei problemi che hai già risolto"
+        "Mostra cosa ho completato oggi",
+        "Aiutami a organizzarmi"
       ],
       type: 'advice' as const
     }
   ],
   neutral: [
     {
-      message: "Sono qui per aiutarti. Come posso supportarti oggi?",
+      message: "Ti capisco. Sono qui per aiutarti. Dimmi cosa serve",
       suggestions: [
-        "Organizza la tua giornata",
-        "Rivedi i tuoi obiettivi",
-        "Prenditi cura del tuo benessere"
+        "Mostra la mia giornata",
+        "Aiutami a organizzarmi"
       ],
       type: 'advice' as const
     }
@@ -113,18 +72,7 @@ const GENERAL_TIPS = [
 
 export function getCoachingResponse(sentiment: string, context: string): CoachingResponse {
   const templates = COACHING_TEMPLATES[sentiment as keyof typeof COACHING_TEMPLATES] || COACHING_TEMPLATES.neutral;
-  const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
-  
-  // Add a general tip occasionally
-  if (Math.random() > 0.7) {
-    const tip = GENERAL_TIPS[Math.floor(Math.random() * GENERAL_TIPS.length)];
-    return {
-      ...randomTemplate,
-      message: `${randomTemplate.message}\n\n💡 ${tip}`
-    };
-  }
-  
-  return randomTemplate;
+  return templates[0];
 }
 
 export function getQuickTip(): string {

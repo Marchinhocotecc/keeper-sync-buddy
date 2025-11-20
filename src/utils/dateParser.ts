@@ -23,10 +23,53 @@ export function parseNaturalDate(text: string): ParsedEventDate | null {
   }
 
   // "Tra X giorni"
-  const traMatch = lowerText.match(/tra\s+(\d+)\s+giorn[oi]/);
-  if (traMatch) {
-    const days = parseInt(traMatch[1]);
+  const traGiorniMatch = lowerText.match(/tra\s+(\d+)\s+giorn[oi]/);
+  if (traGiorniMatch) {
+    const days = parseInt(traGiorniMatch[1]);
     return extractTimeContext(lowerText, addDays(now, days));
+  }
+
+  // "Tra X ore"
+  const traOreMatch = lowerText.match(/tra\s+(\d+)\s+or[ea]/);
+  if (traOreMatch) {
+    const hours = parseInt(traOreMatch[1]);
+    const targetDate = new Date(now);
+    targetDate.setHours(now.getHours() + hours);
+    return {
+      date: targetDate,
+      hasSpecificTime: true,
+    };
+  }
+
+  // "Tra X minuti"
+  const traMinutiMatch = lowerText.match(/tra\s+(\d+)\s+minut[oi]/);
+  if (traMinutiMatch) {
+    const minutes = parseInt(traMinutiMatch[1]);
+    const targetDate = new Date(now);
+    targetDate.setMinutes(now.getMinutes() + minutes);
+    return {
+      date: targetDate,
+      hasSpecificTime: true,
+    };
+  }
+
+  // "Tra poco" - default +1 ora
+  if (lowerText.includes('tra poco')) {
+    const targetDate = new Date(now);
+    targetDate.setHours(now.getHours() + 1);
+    return {
+      date: targetDate,
+      hasSpecificTime: true,
+    };
+  }
+
+  // "Stasera"
+  if (lowerText.includes('stasera')) {
+    return {
+      date: setHours(now, 21),
+      hasSpecificTime: false,
+      timeOfDay: 'sera',
+    };
   }
 
   // Weekday names
@@ -108,12 +151,19 @@ function extractTimeContext(text: string, baseDate: Date): ParsedEventDate {
     }
   }
 
-  // Time of day keywords
+  // Time of day keywords with smart defaults
   if (lowerText.includes('mattina')) {
     return {
       date: setHours(baseDate, 9),
       hasSpecificTime: false,
       timeOfDay: 'mattina',
+    };
+  }
+  if (lowerText.includes('pranzo')) {
+    return {
+      date: setHours(baseDate, 13),
+      hasSpecificTime: false,
+      timeOfDay: 'pomeriggio',
     };
   }
   if (lowerText.includes('pomeriggio')) {

@@ -22,8 +22,9 @@ const INTENT_PATTERNS = {
   create_event: [
     /(?:crea|aggiungi|nuovo|metti)\s+(?:un\s+)?(?:evento|appuntamento|incontro|meeting|impegno)/i,
     /(?:metti|inserisci)\s+(?:in\s+)?(?:agenda|calendario)/i,
-    /(?:domani|oggi|dopodomani|stasera|più\s+tardi|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica).*(?:alle|ore|h)/i,
-    /(?:vederci|incontrare|incontro).*(?:alle|ore|domani|oggi)/i
+    /(?:domani|oggi|dopodomani|stasera|tra\s+poco|tra\s+\d+\s+(?:ore|minuti|giorni)|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica).*(?:alle|ore|h|mattina|pomeriggio|sera|pranzo|ho|devo)/i,
+    /(?:vederci|incontrare|incontro|revisione|dentista|medico|riunione|palestra).*(?:alle|ore|domani|oggi|stasera|pomeriggio|mattina|sera)/i,
+    /(?:giovedì|lunedì|martedì|mercoledì|venerdì|sabato|domenica)\s+(?:mattina|pomeriggio|sera|pranzo)/i
   ],
   create_expense: [
     /(?:ho\s+)?(?:speso|pagato|comprato|costo|uscita)/i,
@@ -32,9 +33,9 @@ const INTENT_PATTERNS = {
   ],
   create_task: [
     /(?:aggiungi|crea|nuovo)\s+(?:un\s+)?(?:task|compito|attività)/i,
-    /(?:devo|ricordami|ricorda|sistema)/i,
+    /(?:ricordami|ricorda)\s+(?:di|che)/i,
     /(?:todo|to-do|da\s+fare)/i,
-    /(?:fare|completare|finire)\s+(?:di|il|la)/i
+    /(?:comprare|chiamare|inviare|mandare|preparare|organizzare|controllare)/i
   ],
   create_note: [
     /(?:nota|prendi\s+nota|scrivi|appunta|annota|segna)/i,
@@ -64,9 +65,9 @@ const INTENT_PATTERNS = {
     /(?:ho\s+)?meditato/i
   ],
   coaching_request: [
-    /(?:sono|mi\s+sento)\s+(?:stressato|stanco|ansioso|preoccupato|demotivato)/i,
-    /non\s+riesco\s+a\s+(?:concentrarmi|dormire|rilassarmi)/i,
-    /(?:aiuto|consiglio|suggerimento)/i,
+    /(?:sono|mi\s+sento)\s+(?:stressato|stanco|ansioso|preoccupato|demotivato|sovraccarico|esausto)/i,
+    /non\s+(?:riesco|ce\s+la\s+faccio)\s+(?:a|più)/i,
+    /(?:troppo|tanto)\s+(?:stress|lavoro|carico)/i,
     /come\s+posso\s+(?:migliorare|fare|gestire)/i
   ],
   navigation: [
@@ -220,14 +221,14 @@ function detectSentiment(msg: string): string {
 function extractEventData(msg: string) {
   // Extract title - remove date/time keywords but keep the essence
   const title = msg
-    .replace(/domani|dopodomani|oggi|tra\s+\d+\s+giorn[oi]/gi, '')
+    .replace(/domani|dopodomani|oggi|stasera|tra\s+poco|tra\s+\d+\s+(?:ore|minuti|giorn[oi])/gi, '')
     .replace(/lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica/gi, '')
     .replace(/lunedi|martedi|mercoledi|giovedi|venerdi/gi, '')
     .replace(/alle?\s+\d{1,2}(?:[:\.]\d{2})?/gi, '')
-    .replace(/mattina|pomeriggio|sera|notte/gi, '')
+    .replace(/mattina|pomeriggio|sera|notte|pranzo/gi, '')
     .replace(/il\s+\d{1,2}\s+\w+/gi, '')
     .replace(/\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?/g, '')
-    .replace(/crea|aggiungi|nuovo|metti|inserisci|in|agenda|calendario|evento|appuntamento|impegno|meeting/gi, '')
+    .replace(/crea|aggiungi|nuovo|metti|inserisci|in|agenda|calendario|evento|appuntamento|impegno|meeting|ho|devo/gi, '')
     .trim();
   
   // Note: actual date parsing will be done in the agent using dateParser utility
@@ -256,7 +257,7 @@ function extractExpenseData(msg: string): { amount: number; category: string; de
 }
 
 function extractTaskData(msg: string): { title: string; priority?: 'low' | 'medium' | 'high'; dueDate?: string } {
-  let title = msg.replace(/(?:aggiungi|crea|nuovo|task|compito|attività|devo|ricordami|ricorda|todo|to-do|da\s+fare)/gi, '').trim();
+  let title = msg.replace(/(?:aggiungi|crea|nuovo|task|compito|attività|ricordami|ricorda|todo|to-do|da\s+fare|di|che)/gi, '').trim();
   
   let priority: 'low' | 'medium' | 'high' | undefined = 'medium';
   if (/urgente|importante|priorità\s+alta/i.test(msg)) priority = 'high';

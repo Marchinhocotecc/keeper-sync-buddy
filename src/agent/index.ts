@@ -91,8 +91,8 @@ async function handleIntent(
       return {
         success: result.success,
         message: result.success 
-          ? `✅ Perfetto! Task creato: "${intent.data.title}" 💪` 
-          : `⚠️ Ops, ho avuto un intoppo: ${result.error}. Riproviamo? 🤖`,
+          ? `Fatto! Ho aggiunto "${intent.data.title}" alla tua lista ✔️` 
+          : `Ops, problema tecnico. Riprova 🔄`,
         data: result.data,
         source: 'local',
         lastAction: result.success ? lastActionData : undefined
@@ -115,8 +115,8 @@ async function handleIntent(
       return {
         success: result.success,
         message: result.success 
-          ? `💰 Fatto! Spesa registrata: €${intent.data.amount.toFixed(2)} 📊 Ottima gestione!` 
-          : `⚠️ Quasi fatto... ${result.error}. Ci riprovo! 🔄`,
+          ? `Registrato! Hai speso €${intent.data.amount.toFixed(2)} per ${intent.data.category} 💸` 
+          : `Errore nel salvare la spesa. Riprova 🔄`,
         data: result.data,
         source: 'local',
         lastAction: result.success ? lastActionData : undefined
@@ -138,8 +138,8 @@ async function handleIntent(
       return {
         success: result.success,
         message: result.success 
-          ? `📝 Annotato! La tua nota è al sicuro ✨` 
-          : `⚠️ C'è stato un problema: ${result.error}. Riproviamo? 🔄`,
+          ? `Ok! Ho salvato la nota 📝` 
+          : `Errore nel salvare. Riprova 🔄`,
         data: result.data,
         source: 'local',
         lastAction: result.success ? lastActionData : undefined
@@ -186,7 +186,7 @@ async function handleIntent(
         
         return {
           success: true,
-          message: `✅ Perfetto! Ti ricordo *${title}* ${formattedDate} ${formattedTime} 👍`,
+          message: `Perfetto! Ti ricordo ${title} ${formattedDate} ${formattedTime}. Segnato sul calendario 👍`,
           data: result.data,
           source: 'local',
           lastAction: lastActionData
@@ -195,7 +195,7 @@ async function handleIntent(
       
       return {
         success: false,
-        message: "⚠️ Ho avuto un piccolo problema a salvare l'evento. Riprovo subito!",
+        message: "Errore nel salvare l'evento. Riprova 🔄",
         source: 'local'
       };
     }
@@ -216,8 +216,8 @@ async function handleIntent(
       return {
         success: result.success,
         message: result.success 
-          ? `✨ Benessere aggiornato: ${updates.join(', ')} 💪 Continua così!` 
-          : `⚠️ Ho avuto un problema: ${result.error} Riproviamo? 🔄`,
+          ? `Benessere aggiornato: ${updates.join(', ')} 💪` 
+          : `Errore nell'aggiornamento. Riprova 🔄`,
         data: result.data,
         source: 'local'
       };
@@ -229,7 +229,7 @@ async function handleIntent(
       if (!result.success) {
         return {
           success: false,
-          message: `⚠️ Sto avendo difficoltà a recuperare i task: ${result.error}. Riproviamo? 🔄`,
+          message: `Errore nel recuperare i task. Riprova 🔄`,
           source: 'local'
         };
       }
@@ -238,7 +238,7 @@ async function handleIntent(
       if (tasks.length === 0) {
         return {
           success: true,
-          message: "📝 Ottimo! Non hai task al momento. Vuoi crearne uno? ✨",
+          message: "Nessun task al momento ✨",
           data: tasks,
           source: 'local'
         };
@@ -249,7 +249,7 @@ async function handleIntent(
       
       return {
         success: true,
-        message: `📋 Hai ${pending.length} task in sospeso e ${completed.length} completati. 💪 Stai andando alla grande!`,
+        message: `Hai ${pending.length} task da fare e ${completed.length} completati`,
         data: tasks,
         source: 'local'
       };
@@ -261,7 +261,7 @@ async function handleIntent(
       if (!result.success) {
         return {
           success: false,
-          message: `⚠️ Sto avendo difficoltà a recuperare le note: ${result.error}. Riproviamo? 🔄`,
+          message: `Errore nel recuperare le note. Riprova 🔄`,
           source: 'local'
         };
       }
@@ -270,7 +270,7 @@ async function handleIntent(
       if (notes.length === 0) {
         return {
           success: true,
-          message: "📝 Non hai ancora note salvate. Vuoi aggiungerne una? ✨",
+          message: "Nessuna nota salvata 📝",
           data: notes,
           source: 'local'
         };
@@ -278,7 +278,7 @@ async function handleIntent(
       
       return {
         success: true,
-        message: `📚 Hai ${notes.length} note salvate. Ecco le tue annotazioni! 💡`,
+        message: `Hai ${notes.length} note salvate`,
         data: notes,
         source: 'local'
       };
@@ -290,7 +290,7 @@ async function handleIntent(
       if (!result.success) {
         return {
           success: false,
-          message: `⚠️ Sto avendo difficoltà a recuperare le spese: ${result.error}. Riproviamo? 🔄`,
+          message: `Errore nel recuperare le spese. Riprova 🔄`,
           source: 'local'
         };
       }
@@ -305,7 +305,7 @@ async function handleIntent(
       
       return {
         success: true,
-        message: `💰 Hai speso €${total.toFixed(2)} ${periodText} (${expenses.length} spese). 📊 Ottima gestione!`,
+        message: `Hai speso €${total.toFixed(2)} ${periodText}`,
         data: expenses,
         source: 'local'
       };
@@ -331,11 +331,7 @@ async function handleIntent(
       
       return {
         success: true,
-        message: `📊 Riepilogo ${scopeText}:\n\n` +
-          `📋 ${pendingTasks} task da completare\n` +
-          `💰 €${totalExpenses.toFixed(2)} spesi\n` +
-          `📅 ${events.length} eventi in calendario\n\n` +
-          `💪 Stai gestendo tutto alla grande! Continua così! ✨`,
+        message: `Riepilogo ${scopeText}:\n${pendingTasks} task da fare, €${totalExpenses.toFixed(2)} spesi, ${events.length} eventi in calendario`,
         data: { tasks, expenses, events },
         source: 'local'
       };
@@ -383,12 +379,7 @@ async function handleIntent(
       
       return {
         success: true,
-        message: "🤔 Non ho capito bene, ma sono qui per aiutarti! Prova a chiedermi di:\n\n" +
-          "✅ Creare task, eventi, note o registrare spese\n" +
-          "📊 Mostrare riepiloghi o dati\n" +
-          "✨ Aggiornare il tuo benessere\n" +
-          "💬 Fare domande generali\n\n" +
-          "Sono qui per te! 💪",
+        message: "Non ho capito. Prova con: eventi, task, note o spese",
         suggestions,
         source: 'local'
       };
