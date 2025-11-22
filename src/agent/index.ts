@@ -1,11 +1,14 @@
 /**
- * AI Agent - Entry point dell'agente assistente ibrido
- * Coordina intent parsing, routing, coaching e data operations
+ * AI Agent - Assistente locale intelligente con NLP avanzato
+ * Versione completamente riscritta con context management e parsing migliorato
  */
 
-import { parseIntent, Intent } from './intentParser';
+import { classifyIntent, isDateTimePresent } from './nlp/intentClassifier';
+import { parseDateTime, calculateEndTime, formatDateForDisplay, formatTimeForDisplay } from './nlp/dateTimeParser';
+import { extractEntities } from './nlp/entityExtractor';
+import { contextManager } from './contextManager';
+import { generateResponse, generateClarificationQuestion } from './responseGenerator';
 import { getCoachingResponse } from './miniCoaching';
-import { generateAdaptiveSuggestions, shouldShowSuggestions, UserContext } from './adaptiveSuggestions';
 import { callExternalAI, shouldUseExternalAI } from '@/services/aiService';
 import * as dataService from '@/services/dataService';
 
@@ -19,17 +22,45 @@ export interface AgentResponse {
     type: string;
     data: any;
   };
+  needsClarification?: boolean;
+  clarificationQuestion?: string;
 }
 
 export async function processMessage(
   message: string,
   userId: string,
-  userContext?: UserContext,
+  userContext?: any,
   lastAction?: any
 ): Promise<AgentResponse> {
   
-  // Step 1: Check if we should use external AI
-  if (shouldUseExternalAI(message)) {
+  // Step 1: Check for contextual follow-up
+  const canInfer = contextManager.canInferFromContext(userId, message);
+  if (canInfer) {
+    const inferred = contextManager.inferFromContext(userId, message);
+    if (inferred) {
+      return await executeAction(inferred.type, inferred.data, userId);
+    }
+  }
+
+  // Step 2: Classify intent using advanced NLP
+  const classification = classifyIntent(message);
+  
+  // Handle ambiguous intents
+  if (classification.type === 'ambiguous') {
+    return {
+      success: false,
+      message: generateResponse({
+        intent: 'ambiguous',
+        success: false,
+        alternatives: classification.alternatives
+      }),
+      source: 'local',
+      needsClarification: true
+    };
+  }
+
+  // Step 3: Check if external AI is needed for generic questions
+  if (classification.type === 'generic_question' || shouldUseExternalAI(message)) {
     const aiResponse = await callExternalAI(message, userId);
     
     if (aiResponse.success) {
@@ -39,398 +70,304 @@ export async function processMessage(
         source: 'external'
       };
     }
-    
-    // If external AI fails, try local processing as fallback
-    console.warn('External AI failed, falling back to local processing');
   }
 
-  // Step 2: Parse intent locally with context
-  const intent = parseIntent(message, lastAction);
+  // Step 4: Handle emotional support locally
+  if (classification.type === 'emotional_support') {
+    const sentiment = detectSentiment(message);
+    const coaching = getCoachingResponse(sentiment, message);
+    
+    return {
+      success: true,
+      message: generateResponse({
+        intent: 'emotional_support',
+        success: true,
+        data: { sentiment }
+      }),
+      suggestions: coaching.suggestions?.map(s => ({ text: s, priority: 'medium' })),
+      source: 'local'
+    };
+  }
 
-  // Step 3: Process based on intent type
-  return await handleIntent(intent, userId, userContext, lastAction);
+  // Step 5: Extract entities from message
+  const entities = extractEntities(message, classification.type);
+  
+  // Step 6: Parse date/time if needed
+  let parsedDateTime = null;
+  if (classification.type === 'create_event' || classification.type === 'create_task') {
+    parsedDateTime = parseDateTime(message);
+    
+    // If no date found and it's an event, ask for clarification
+    if (classification.type === 'create_event' && !parsedDateTime && !isDateTimePresent(message)) {
+      return {
+        success: false,
+        message: generateClarificationQuestion('create_event', 'date'),
+        source: 'local',
+        needsClarification: true,
+        clarificationQuestion: "Quando vuoi questo evento?"
+      };
+    }
+  }
+
+  // Step 7: Build action data
+  const actionData = buildActionData(classification.type, entities, parsedDateTime);
+  
+  // Step 8: Execute action
+  const result = await executeAction(classification.type, actionData, userId);
+  
+  // Step 9: Update context
+  if (result.success) {
+    contextManager.updateLastAction(userId, {
+      type: classification.type,
+      data: actionData
+    });
+    contextManager.setContext(userId, {
+      lastMessage: message,
+      lastIntent: classification.type
+    });
+  }
+  
+  return result;
 }
 
-async function handleIntent(
-  intent: Intent,
-  userId: string,
-  userContext?: UserContext,
-  lastAction?: any
-): Promise<AgentResponse> {
-  
-  switch (intent.type) {
-    case 'contextual_follow_up': {
-      // Handle contextual memory-based requests
-      if (!lastAction) {
+function detectSentiment(msg: string): string {
+  if (/stressato|ansioso|preoccupato/i.test(msg)) return 'stressed';
+  if (/stanco|esausto|affaticato/i.test(msg)) return 'tired';
+  if (/demotivato|sfiduciato/i.test(msg)) return 'unmotivated';
+  if (/non\s+riesco/i.test(msg)) return 'struggling';
+  return 'neutral';
+}
+
+function buildActionData(intentType: string, entities: any, parsedDateTime: any): any {
+  const data: any = {
+    title: entities.title,
+    description: entities.description,
+    category: entities.category,
+    rawText: entities.rawText
+  };
+
+  if (parsedDateTime) {
+    data.startTime = parsedDateTime.date.toISOString();
+    data.isAllDay = parsedDateTime.isAllDay || false;
+    data.endTime = calculateEndTime(
+      parsedDateTime.date, 
+      parsedDateTime.isAllDay || false
+    ).toISOString();
+  }
+
+  if (entities.amount) {
+    data.amount = entities.amount;
+  }
+
+  return data;
+}
+
+async function executeAction(intentType: string, actionData: any, userId: string): Promise<AgentResponse> {
+  try {
+    switch (intentType) {
+      case 'create_event': {
+        const result = await dataService.createEvent(
+          userId,
+          actionData.title,
+          actionData.startTime,
+          actionData.endTime,
+          actionData.category || 'event'
+        );
+        
         return {
-          success: true,
-          message: "Non ho abbastanza contesto. Cosa vuoi fare? 🤔",
+          success: result.success,
+          message: generateResponse({
+            intent: 'create_event',
+            success: result.success,
+            data: actionData
+          }),
+          data: result.data,
+          source: 'local',
+          lastAction: result.success ? { type: intentType, data: actionData } : undefined
+        };
+      }
+
+      case 'create_task': {
+        const result = await dataService.createTask(
+          userId,
+          actionData.title,
+          'medium',
+          actionData.startTime
+        );
+        
+        return {
+          success: result.success,
+          message: generateResponse({
+            intent: 'create_task',
+            success: result.success,
+            data: actionData
+          }),
+          data: result.data,
+          source: 'local',
+          lastAction: result.success ? { type: intentType, data: actionData } : undefined
+        };
+      }
+
+      case 'create_note': {
+        const result = await dataService.createNote(
+          userId,
+          actionData.title || actionData.rawText,
+          actionData.category
+        );
+        
+        return {
+          success: result.success,
+          message: generateResponse({
+            intent: 'create_note',
+            success: result.success,
+            data: actionData
+          }),
+          data: result.data,
+          source: 'local',
+          lastAction: result.success ? { type: intentType, data: actionData } : undefined
+        };
+      }
+
+      case 'create_expense': {
+        if (!actionData.amount) {
+          return {
+            success: false,
+            message: generateClarificationQuestion('create_expense', 'amount'),
+            source: 'local',
+            needsClarification: true
+          };
+        }
+
+        const result = await dataService.createExpense(
+          userId,
+          actionData.amount,
+          actionData.category || 'altro',
+          actionData.title
+        );
+        
+        return {
+          success: result.success,
+          message: generateResponse({
+            intent: 'create_expense',
+            success: result.success,
+            data: actionData
+          }),
+          data: result.data,
+          source: 'local',
+          lastAction: result.success ? { type: intentType, data: actionData } : undefined
+        };
+      }
+
+      case 'read_tasks': {
+        const result = await dataService.getTasks(userId, 'all');
+        
+        return {
+          success: result.success,
+          message: generateResponse({
+            intent: 'read_tasks',
+            success: result.success,
+            data: result.data
+          }),
+          data: result.data,
           source: 'local'
         };
       }
 
-      // Re-execute last action with modified data
-      const modifiedData = { ...lastAction.data, ...extractContextualModifications(intent.data.message) };
-      const newIntent = { type: lastAction.type, data: modifiedData };
-      return await handleIntent(newIntent as Intent, userId, userContext, lastAction);
-    }
-
-    case 'create_task': {
-      const result = await dataService.createTask(
-        userId,
-        intent.data.title,
-        intent.data.priority,
-        intent.data.dueDate
-      );
-      
-      const lastActionData = {
-        type: 'create_task',
-        data: intent.data
-      };
-
-      return {
-        success: result.success,
-        message: result.success 
-          ? `Fatto! Ho aggiunto "${intent.data.title}" alla tua lista ✔️` 
-          : `Ops, problema tecnico. Riprova 🔄`,
-        data: result.data,
-        source: 'local',
-        lastAction: result.success ? lastActionData : undefined
-      };
-    }
-
-    case 'create_expense': {
-      const result = await dataService.createExpense(
-        userId,
-        intent.data.amount,
-        intent.data.category,
-        intent.data.description
-      );
-      
-      const lastActionData = {
-        type: 'create_expense',
-        data: intent.data
-      };
-
-      return {
-        success: result.success,
-        message: result.success 
-          ? `Registrato! Hai speso €${intent.data.amount.toFixed(2)} per ${intent.data.category} 💸` 
-          : `Errore nel salvare la spesa. Riprova 🔄`,
-        data: result.data,
-        source: 'local',
-        lastAction: result.success ? lastActionData : undefined
-      };
-    }
-
-    case 'create_note': {
-      const result = await dataService.createNote(
-        userId,
-        intent.data.content,
-        intent.data.category
-      );
-      
-      const lastActionData = {
-        type: 'create_note',
-        data: intent.data
-      };
-
-      return {
-        success: result.success,
-        message: result.success 
-          ? `Ok! Ho salvato la nota 📝` 
-          : `Errore nel salvare. Riprova 🔄`,
-        data: result.data,
-        source: 'local',
-        lastAction: result.success ? lastActionData : undefined
-      };
-    }
-
-    case 'create_event': {
-      const { title, rawMessage } = intent.data;
-      
-      // Import date parser
-      const { parseNaturalDate, calculateEndTime, formatEventDate, formatEventTime } = await import('@/utils/dateParser');
-      
-      const parsedDate = parseNaturalDate(rawMessage);
-      
-      if (!parsedDate) {
+      case 'read_notes': {
+        const result = await dataService.getNotes(userId);
+        
         return {
-          success: false,
-          message: "🤔 Non ho capito bene la data. Vuoi dire oggi, domani o un altro giorno specifico?",
+          success: result.success,
+          message: generateResponse({
+            intent: 'read_notes',
+            success: result.success,
+            data: result.data
+          }),
+          data: result.data,
           source: 'local'
         };
       }
-      
-      const startTime = parsedDate.date;
-      const endTime = new Date(calculateEndTime(startTime, parsedDate.isAllDay));
-      
-      const result = await dataService.createEvent(
-        userId,
-        title,
-        startTime.toISOString(),
-        endTime.toISOString(),
-        'event'
-      );
-      
-      const lastActionData = {
-        type: 'create_event',
-        data: { title, startTime: startTime.toISOString(), endTime: endTime.toISOString() }
-      };
 
-      if (result.success) {
-        const formattedDate = formatEventDate(startTime);
-        const formattedTime = parsedDate.isAllDay 
-          ? 'tutto il giorno' 
-          : `alle ${formatEventTime(startTime)}`;
+      case 'read_expenses': {
+        const result = await dataService.getExpenses(userId, 'month');
+        const total = (result.data || []).reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+        
+        return {
+          success: result.success,
+          message: generateResponse({
+            intent: 'read_expenses',
+            success: result.success,
+            data: { expenses: result.data, total, period: 'questo mese' }
+          }),
+          data: result.data,
+          source: 'local'
+        };
+      }
+
+      case 'read_calendar': {
+        const result = await dataService.getEvents(userId, 'week');
+        
+        return {
+          success: result.success,
+          message: generateResponse({
+            intent: 'read_calendar',
+            success: result.success,
+            data: result.data
+          }),
+          data: result.data,
+          source: 'local'
+        };
+      }
+
+      case 'read_summary': {
+        const [tasksResult, expensesResult, eventsResult] = await Promise.all([
+          dataService.getTasks(userId, 'all'),
+          dataService.getExpenses(userId, 'week'),
+          dataService.getEvents(userId, 'week')
+        ]);
         
         return {
           success: true,
-          message: `Perfetto! Ti ricordo ${title} ${formattedDate} ${formattedTime}. Segnato sul calendario 👍`,
-          data: result.data,
-          source: 'local',
-          lastAction: lastActionData
+          message: generateResponse({
+            intent: 'read_summary',
+            success: true,
+            data: {
+              tasks: tasksResult.data,
+              expenses: expensesResult.data,
+              events: eventsResult.data,
+              scope: 'week'
+            }
+          }),
+          source: 'local'
         };
       }
-      
-      return {
+
+      default:
+        return {
+          success: false,
+          message: "Non ho capito. Prova a riformulare 🤔",
+          source: 'local'
+        };
+    }
+  } catch (error) {
+    console.error('Error executing action:', error);
+    return {
+      success: false,
+      message: generateResponse({
+        intent: intentType,
         success: false,
-        message: "Errore nel salvare l'evento. Riprova 🔄",
-        source: 'local'
-      };
-    }
-
-    case 'update_wellness': {
-      const today = new Date().toISOString().split('T')[0];
-      const result = await dataService.updateWellness(userId, today, {
-        sleep: intent.data.sleep,
-        steps: intent.data.steps,
-        meditation_minutes: intent.data.meditation
-      });
-      
-      const updates: string[] = [];
-      if (intent.data.sleep) updates.push(`${intent.data.sleep}h di sonno`);
-      if (intent.data.steps) updates.push(`${intent.data.steps} passi`);
-      if (intent.data.meditation) updates.push(`${intent.data.meditation} min meditazione`);
-      
-      return {
-        success: result.success,
-        message: result.success 
-          ? `Benessere aggiornato: ${updates.join(', ')} 💪` 
-          : `Errore nell'aggiornamento. Riprova 🔄`,
-        data: result.data,
-        source: 'local'
-      };
-    }
-
-    case 'read_tasks': {
-      const result = await dataService.getTasks(userId, intent.data.filter);
-      
-      if (!result.success) {
-        return {
-          success: false,
-          message: `Errore nel recuperare i task. Riprova 🔄`,
-          source: 'local'
-        };
-      }
-      
-      const tasks = result.data || [];
-      if (tasks.length === 0) {
-        return {
-          success: true,
-          message: "Nessun task al momento ✨",
-          data: tasks,
-          source: 'local'
-        };
-      }
-      
-      const pending = tasks.filter((t: any) => !t.completed);
-      const completed = tasks.filter((t: any) => t.completed);
-      
-      return {
-        success: true,
-        message: `Hai ${pending.length} task da fare e ${completed.length} completati`,
-        data: tasks,
-        source: 'local'
-      };
-    }
-
-    case 'read_notes': {
-      const result = await dataService.getNotes(userId);
-      
-      if (!result.success) {
-        return {
-          success: false,
-          message: `Errore nel recuperare le note. Riprova 🔄`,
-          source: 'local'
-        };
-      }
-      
-      const notes = result.data || [];
-      if (notes.length === 0) {
-        return {
-          success: true,
-          message: "Nessuna nota salvata 📝",
-          data: notes,
-          source: 'local'
-        };
-      }
-      
-      return {
-        success: true,
-        message: `Hai ${notes.length} note salvate`,
-        data: notes,
-        source: 'local'
-      };
-    }
-
-    case 'read_expenses': {
-      const result = await dataService.getExpenses(userId, intent.data.period as any);
-      
-      if (!result.success) {
-        return {
-          success: false,
-          message: `Errore nel recuperare le spese. Riprova 🔄`,
-          source: 'local'
-        };
-      }
-      
-      const expenses = result.data || [];
-      const total = expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
-      
-      const periodText = intent.data.period === 'today' ? 'oggi' 
-        : intent.data.period === 'week' ? 'questa settimana' 
-        : intent.data.period === 'month' ? 'questo mese' 
-        : 'in totale';
-      
-      return {
-        success: true,
-        message: `Hai speso €${total.toFixed(2)} ${periodText}`,
-        data: expenses,
-        source: 'local'
-      };
-    }
-
-    case 'read_summary': {
-      const [tasksResult, expensesResult, eventsResult] = await Promise.all([
-        dataService.getTasks(userId, 'all'),
-        dataService.getExpenses(userId, intent.data.scope),
-        dataService.getEvents(userId, intent.data.scope)
-      ]);
-      
-      const tasks = tasksResult.data || [];
-      const expenses = expensesResult.data || [];
-      const events = eventsResult.data || [];
-      
-      const pendingTasks = tasks.filter((t: any) => !t.completed).length;
-      const totalExpenses = expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
-      
-      const scopeText = intent.data.scope === 'today' ? 'oggi' 
-        : intent.data.scope === 'week' ? 'questa settimana' 
-        : 'questo mese';
-      
-      return {
-        success: true,
-        message: `Riepilogo ${scopeText}:\n${pendingTasks} task da fare, €${totalExpenses.toFixed(2)} spesi, ${events.length} eventi in calendario`,
-        data: { tasks, expenses, events },
-        source: 'local'
-      };
-    }
-
-    case 'coaching_request': {
-      const coaching = getCoachingResponse(intent.data.sentiment, intent.data.context);
-      
-      return {
-        success: true,
-        message: coaching.message,
-        suggestions: coaching.suggestions?.map(s => ({ text: s, priority: 'medium' })),
-        source: 'local'
-      };
-    }
-
-    case 'navigation': {
-      return {
-        success: true,
-        message: `🔄 Vai alla pagina: ${intent.data.page}`,
-        data: { navigateTo: intent.data.page },
-        source: 'local'
-      };
-    }
-
-    case 'generic_question': {
-      // Fallback to external AI for generic questions
-      const aiResponse = await callExternalAI(intent.data.question, userId);
-      
-      return {
-        success: aiResponse.success,
-        message: aiResponse.message || aiResponse.error || 'Nessuna risposta disponibile',
-        source: 'external'
-      };
-    }
-
-    case 'unknown':
-    default: {
-      // Generate adaptive suggestions
-      let suggestions;
-      if (userContext && shouldShowSuggestions(null)) {
-        const adaptiveSugs = generateAdaptiveSuggestions(userContext);
-        suggestions = adaptiveSugs.map(s => ({ text: s.text, priority: s.priority }));
-      }
-      
-      return {
-        success: true,
-        message: "Non ho capito. Prova con: eventi, task, note o spese",
-        suggestions,
-        source: 'local'
-      };
-    }
+        error: String(error)
+      }),
+      source: 'local'
+    };
   }
-}
-
-function extractContextualModifications(msg: string): any {
-  const modifications: any = {};
-  
-  // Extract amount if present
-  const amountMatch = msg.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euro)?/);
-  if (amountMatch) {
-    modifications.amount = parseFloat(amountMatch[1].replace(',', '.'));
-  }
-  
-  // Extract date references
-  if (/domani/i.test(msg)) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    modifications.date = 'domani';
-  }
-  if (/oggi/i.test(msg)) {
-    modifications.date = 'oggi';
-  }
-  
-  return modifications;
 }
 
 export async function getAdaptiveSuggestionsForUser(userId: string): Promise<Array<{ text: string; priority: string }>> {
-  try {
-    const [tasks, expenses, events, settings] = await Promise.all([
-      dataService.getTasks(userId, 'all'),
-      dataService.getExpenses(userId, 'month'),
-      dataService.getEvents(userId, 'week'),
-      dataService.getUserSettings(userId)
-    ]);
-
-    const context: UserContext = {
-      recentTasks: tasks.data || [],
-      recentExpenses: expenses.data || [],
-      recentEvents: events.data || [],
-      settings: settings.data
-    };
-
-    return generateAdaptiveSuggestions(context).map(s => ({
-      text: s.text,
-      priority: s.priority
-    }));
-  } catch (error) {
-    console.error('Error generating suggestions:', error);
-    return [];
-  }
+  return [
+    { text: "Crea un nuovo evento", priority: "medium" },
+    { text: "Aggiungi un task", priority: "medium" },
+    { text: "Mostra il calendario", priority: "low" }
+  ];
 }
+
