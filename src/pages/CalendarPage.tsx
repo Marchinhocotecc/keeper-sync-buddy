@@ -5,24 +5,25 @@ import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Calendar as CalendarIcon, Clock, Tag, Edit, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Plus, Calendar as CalendarIcon, Clock, Tag, Edit, Trash2, AlertCircle } from 'lucide-react';
+import { format, isValid, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 export default function CalendarPage() {
   const { t } = useTranslation();
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const { toast } = useToast();
+  const [date, setDate] = useState<Date>(new Date());
   const [userId, setUserId] = useState<string | undefined>();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [daySheetOpen, setDaySheetOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -41,9 +42,10 @@ export default function CalendarPage() {
     title: '',
     description: '',
     start_date: format(new Date(), 'yyyy-MM-dd'),
-    start_time: '09:00',
-    end_time: '10:00',
-    category: 'work'
+    start_time: '',
+    end_time: '',
+    category: 'personal',
+    isAllDay: false
   });
 
   useEffect(() => {
@@ -53,66 +55,165 @@ export default function CalendarPage() {
   }, []);
 
   const daysWithEvents = getDaysWithEvents();
+  const dayEvents = getEventsForDate(date);
 
   const handleDateSelect = (selectedDate: Date | undefined) => {
-    setDate(selectedDate);
     if (selectedDate) {
-      setDaySheetOpen(true);
+      setDate(selectedDate);
+    }
+  };
+
+  const getCategoryColor = (category?: string): string => {
+    switch (category) {
+      case 'work': return 'bg-primary/10 text-primary border-primary/20';
+      case 'personal': return 'bg-success/10 text-success border-success/20';
+      case 'health': return 'bg-warning/10 text-warning border-warning/20';
+      case 'social': return 'bg-accent/10 text-accent border-accent/20';
+      case 'low_priority': return 'bg-muted text-muted-foreground border-border';
+      default: return 'bg-muted text-muted-foreground border-border';
+    }
+  };
+
+  const getCategoryDotColor = (category?: string): string => {
+    switch (category) {
+      case 'work': return 'bg-primary';
+      case 'personal': return 'bg-success';
+      case 'health': return 'bg-warning';
+      case 'social': return 'bg-accent';
+      case 'low_priority': return 'bg-muted-foreground/50';
+      default: return 'bg-primary';
+    }
+  };
+
+  const getEventTimeDisplay = (event: CalendarEvent): string => {
+    if (!event.start_time || !event.end_time) {
+      return t('calendar.allDay');
+    }
+    
+    try {
+      const start = parseISO(event.start_time);
+      const end = parseISO(event.end_time);
+      
+      if (!isValid(start) || !isValid(end)) {
+        return t('calendar.noTimeSet');
+      }
+      
+      return `${format(start, 'HH:mm')} - ${format(end, 'HH:mm')}`;
+    } catch {
+      return t('calendar.noTimeSet');
     }
   };
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const startDateTime = `${formData.start_date}T${formData.start_time}:00`;
-    const endDateTime = `${formData.start_date}T${formData.end_time}:00`;
-
-    if (new Date(endDateTime) <= new Date(startDateTime)) {
+    if (!formData.title.trim()) {
+      toast({
+        title: "Errore",
+        description: "Il titolo è obbligatorio",
+        variant: "destructive"
+      });
       return;
     }
 
-    await addEvent.mutateAsync({
-      title: formData.title,
-      description: formData.description,
-      start_time: startDateTime,
-      end_time: endDateTime,
-      category: formData.category,
-    });
+    try {
+      let startDateTime: string;
+      let endDateTime: string;
 
-    setCreateDialogOpen(false);
-    resetForm();
+      if (formData.isAllDay || !formData.start_time) {
+        // All-day event or no time specified
+        startDateTime = `${formData.start_date}T00:00:00`;
+        endDateTime = `${formData.start_date}T23:59:59`;
+      } else {
+        startDateTime = `${formData.start_date}T${formData.start_time}:00`;
+        endDateTime = `${formData.start_date}T${formData.end_time || formData.start_time}:00`;
+
+        if (new Date(endDateTime) <= new Date(startDateTime)) {
+          toast({
+            title: "Errore",
+            description: "L'ora di fine deve essere successiva all'ora di inizio",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      await addEvent.mutateAsync({
+        title: formData.title,
+        description: formData.description,
+        start_time: startDateTime,
+        end_time: endDateTime,
+        category: formData.category,
+      });
+
+      setCreateDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error creating event:', error);
+    }
   };
 
   const handleUpdateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEvent) return;
 
-    const startDateTime = `${formData.start_date}T${formData.start_time}:00`;
-    const endDateTime = `${formData.start_date}T${formData.end_time}:00`;
-
-    if (new Date(endDateTime) <= new Date(startDateTime)) {
+    if (!formData.title.trim()) {
+      toast({
+        title: "Errore",
+        description: "Il titolo è obbligatorio",
+        variant: "destructive"
+      });
       return;
     }
 
-    await updateEvent.mutateAsync({
-      id: selectedEvent.id,
-      title: formData.title,
-      description: formData.description,
-      start_time: startDateTime,
-      end_time: endDateTime,
-      category: formData.category,
-    });
+    try {
+      let startDateTime: string;
+      let endDateTime: string;
 
-    setIsEditing(false);
-    setDetailDialogOpen(false);
-    setSelectedEvent(null);
+      if (formData.isAllDay || !formData.start_time) {
+        startDateTime = `${formData.start_date}T00:00:00`;
+        endDateTime = `${formData.start_date}T23:59:59`;
+      } else {
+        startDateTime = `${formData.start_date}T${formData.start_time}:00`;
+        endDateTime = `${formData.start_date}T${formData.end_time || formData.start_time}:00`;
+
+        if (new Date(endDateTime) <= new Date(startDateTime)) {
+          toast({
+            title: "Errore",
+            description: "L'ora di fine deve essere successiva all'ora di inizio",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      await updateEvent.mutateAsync({
+        id: selectedEvent.id,
+        title: formData.title,
+        description: formData.description,
+        start_time: startDateTime,
+        end_time: endDateTime,
+        category: formData.category,
+      });
+
+      setIsEditing(false);
+      setDetailDialogOpen(false);
+      setSelectedEvent(null);
+    } catch (error) {
+      console.error('Error updating event:', error);
+    }
   };
 
   const handleDeleteEvent = async () => {
     if (!selectedEvent) return;
-    await deleteEvent.mutateAsync(selectedEvent.id);
-    setDetailDialogOpen(false);
-    setSelectedEvent(null);
+    
+    try {
+      await deleteEvent.mutateAsync(selectedEvent.id);
+      setDetailDialogOpen(false);
+      setSelectedEvent(null);
+    } catch (error) {
+      console.error('Error deleting event:', error);
+    }
   };
 
   const openDetailModal = (event: CalendarEvent) => {
@@ -123,17 +224,36 @@ export default function CalendarPage() {
 
   const startEditing = () => {
     if (!selectedEvent) return;
-    const startDate = new Date(selectedEvent.start_time);
-    const endDate = new Date(selectedEvent.end_time);
     
-    setFormData({
-      title: selectedEvent.title,
-      description: selectedEvent.description || '',
-      start_date: format(startDate, 'yyyy-MM-dd'),
-      start_time: format(startDate, 'HH:mm'),
-      end_time: format(endDate, 'HH:mm'),
-      category: selectedEvent.category || 'work'
-    });
+    try {
+      const startDate = parseISO(selectedEvent.start_time);
+      const endDate = parseISO(selectedEvent.end_time);
+      
+      const isAllDayEvent = !selectedEvent.start_time || 
+                           !selectedEvent.end_time || 
+                           (format(startDate, 'HH:mm') === '00:00' && format(endDate, 'HH:mm') === '23:59');
+      
+      setFormData({
+        title: selectedEvent.title,
+        description: selectedEvent.description || '',
+        start_date: isValid(startDate) ? format(startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+        start_time: !isAllDayEvent && isValid(startDate) ? format(startDate, 'HH:mm') : '',
+        end_time: !isAllDayEvent && isValid(endDate) ? format(endDate, 'HH:mm') : '',
+        category: selectedEvent.category || 'personal',
+        isAllDay: isAllDayEvent
+      });
+    } catch {
+      setFormData({
+        title: selectedEvent.title,
+        description: selectedEvent.description || '',
+        start_date: format(new Date(), 'yyyy-MM-dd'),
+        start_time: '',
+        end_time: '',
+        category: selectedEvent.category || 'personal',
+        isAllDay: true
+      });
+    }
+    
     setIsEditing(true);
   };
 
@@ -141,10 +261,11 @@ export default function CalendarPage() {
     setFormData({
       title: '',
       description: '',
-      start_date: date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-      start_time: '09:00',
-      end_time: '10:00',
-      category: 'work'
+      start_date: format(date, 'yyyy-MM-dd'),
+      start_time: '',
+      end_time: '',
+      category: 'personal',
+      isAllDay: false
     });
   };
 
@@ -153,22 +274,11 @@ export default function CalendarPage() {
     setCreateDialogOpen(true);
   };
 
-  const dayEvents = date ? getEventsForDate(date) : [];
-
-  const getCategoryColor = (category?: string) => {
-    switch (category) {
-      case 'work': return 'bg-primary/10 text-primary border-primary/20';
-      case 'personal': return 'bg-success/10 text-success border-success/20';
-      case 'health': return 'bg-warning/10 text-warning border-warning/20';
-      case 'social': return 'bg-accent/10 text-accent border-accent/20';
-      default: return 'bg-muted text-muted-foreground border-border';
-    }
-  };
-
   return (
     <main className="min-h-screen bg-muted/30">
       <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-screen-xl">
-        <div className="mb-6 sm:mb-8">
+        {/* Header */}
+        <div className="mb-6 sm:mb-8 animate-fade-in">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
             📅 {t('calendar.title')}
           </h1>
@@ -177,79 +287,117 @@ export default function CalendarPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-1">
-          <Card className="border-border/50 shadow-sm">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex flex-col items-center">
+        {/* Calendar Card */}
+        <Card className="border-border/50 shadow-sm mb-6 animate-fade-in">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col items-center">
+              {isLoading ? (
+                <div className="w-full max-w-sm space-y-4">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              ) : (
                 <Calendar
                   mode="single"
                   selected={date}
                   onSelect={handleDateSelect}
                   className="rounded-md border-0"
                   modifiers={{
-                    hasEvents: (date) => daysWithEvents.has(date.toDateString())
+                    hasEvents: (checkDate) => {
+                      const dayEventsList = getEventsForDate(checkDate);
+                      return dayEventsList.length > 0;
+                    }
                   }}
                   modifiersClassNames={{
-                    hasEvents: "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-primary after:rounded-full"
+                    hasEvents: "relative"
+                  }}
+                  components={{
+                    Day: ({ date: dayDate, ...props }) => {
+                      const dayEventsList = getEventsForDate(dayDate);
+                      const hasEvents = dayEventsList.length > 0;
+                      
+                      return (
+                        <div className="relative">
+                          <button {...props as any} />
+                          {hasEvents && (
+                            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                              {dayEventsList.slice(0, 3).map((evt, idx) => (
+                                <div
+                                  key={idx}
+                                  className={cn(
+                                    "w-1 h-1 rounded-full",
+                                    getCategoryDotColor(evt.category)
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
                   }}
                 />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Floating Action Button */}
-      <Button
-        onClick={openCreateDialog}
-        size="lg"
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-      >
-        <Plus className="h-6 w-6" />
-      </Button>
+        {/* Daily Events Section */}
+        <div className="animate-fade-in">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5 text-primary" />
+              {format(date, 'EEEE, d MMMM yyyy', { locale: it })}
+            </h2>
+          </div>
 
-      {/* Day Events Bottom Sheet */}
-      <Sheet open={daySheetOpen} onOpenChange={setDaySheetOpen}>
-        <SheetContent side="bottom" className="h-[80vh] sm:h-[70vh]">
-          <SheetHeader>
-            <SheetTitle className="text-xl flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              {date && format(date, 'EEEE, d MMMM yyyy', { locale: it })}
-            </SheetTitle>
-          </SheetHeader>
-          
-          <div className="mt-6 space-y-3 overflow-y-auto max-h-[calc(80vh-120px)]">
-            {dayEvents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <CalendarIcon className="h-16 w-16 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground mb-4">Nessun evento per questo giorno</p>
+          {isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : dayEvents.length === 0 ? (
+            <Card className="border-dashed border-2 border-border/50">
+              <CardContent className="p-8 text-center">
+                <CalendarIcon className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground mb-4">{t('calendar.noEvents')}</p>
                 <Button onClick={openCreateDialog} variant="outline" className="gap-2">
                   <Plus className="h-4 w-4" />
-                  Crea evento
+                  {t('calendar.createEvent')}
                 </Button>
-              </div>
-            ) : (
-              dayEvents.map((event) => (
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {dayEvents.map((event) => (
                 <Card
                   key={event.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow border-border/50"
+                  className="cursor-pointer hover:shadow-md transition-all duration-200 border-border/50 hover:border-primary/20 group"
                   onClick={() => openDetailModal(event)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground mb-2 truncate">
+                        <h3 className="font-semibold text-foreground mb-2 truncate group-hover:text-primary transition-colors">
                           {event.title}
                         </h3>
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1.5">
+                        {event.description && (
+                          <p className="text-sm text-muted-foreground mb-2 line-clamp-1">
+                            {event.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-3 text-sm">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
                             <Clock className="h-3.5 w-3.5" />
-                            {format(new Date(event.start_time), 'HH:mm')} - {format(new Date(event.end_time), 'HH:mm')}
+                            {getEventTimeDisplay(event)}
                           </span>
                           {event.category && (
-                            <Badge variant="outline" className={cn("text-xs", getCategoryColor(event.category))}>
+                            <Badge 
+                              variant="outline" 
+                              className={cn("text-xs", getCategoryColor(event.category))}
+                            >
                               <Tag className="h-3 w-3 mr-1" />
-                              {event.category}
+                              {t(`calendar.${event.category}`)}
                             </Badge>
                           )}
                         </div>
@@ -257,18 +405,27 @@ export default function CalendarPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ))
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Floating Action Button */}
+      <Button
+        onClick={openCreateDialog}
+        size="lg"
+        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-110 z-50"
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
 
       {/* Event Detail Modal */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between pr-8">
-              {isEditing ? 'Modifica Evento' : 'Dettagli Evento'}
+            <DialogTitle>
+              {isEditing ? t('calendar.edit') : 'Dettagli Evento'}
             </DialogTitle>
           </DialogHeader>
 
@@ -288,19 +445,19 @@ export default function CalendarPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <CalendarIcon className="h-4 w-4" />
-                  <span>{format(new Date(selectedEvent.start_time), 'EEEE, d MMMM yyyy', { locale: it })}</span>
+                  <span>
+                    {format(parseISO(selectedEvent.start_time), 'EEEE, d MMMM yyyy', { locale: it })}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Clock className="h-4 w-4" />
-                  <span>
-                    {format(new Date(selectedEvent.start_time), 'HH:mm')} - {format(new Date(selectedEvent.end_time), 'HH:mm')}
-                  </span>
+                  <span>{getEventTimeDisplay(selectedEvent)}</span>
                 </div>
                 {selectedEvent.category && (
                   <div className="flex items-center gap-2">
                     <Tag className="h-4 w-4 text-muted-foreground" />
                     <Badge variant="outline" className={getCategoryColor(selectedEvent.category)}>
-                      {selectedEvent.category}
+                      {t(`calendar.${selectedEvent.category}`)}
                     </Badge>
                   </div>
                 )}
@@ -309,11 +466,11 @@ export default function CalendarPage() {
               <div className="flex gap-2 pt-4">
                 <Button onClick={startEditing} variant="outline" className="flex-1 gap-2">
                   <Edit className="h-4 w-4" />
-                  Modifica
+                  {t('calendar.edit')}
                 </Button>
                 <Button onClick={handleDeleteEvent} variant="destructive" className="flex-1 gap-2">
                   <Trash2 className="h-4 w-4" />
-                  Elimina
+                  {t('calendar.delete')}
                 </Button>
               </div>
             </div>
@@ -352,50 +509,65 @@ export default function CalendarPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-start-time">Inizio *</Label>
-                  <Input
-                    id="edit-start-time"
-                    type="time"
-                    value={formData.start_time}
-                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                    required
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-all-day"
+                    checked={formData.isAllDay}
+                    onChange={(e) => setFormData({ ...formData, isAllDay: e.target.checked })}
+                    className="rounded"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-end-time">Fine *</Label>
-                  <Input
-                    id="edit-end-time"
-                    type="time"
-                    value={formData.end_time}
-                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                    required
-                  />
+                  <Label htmlFor="edit-all-day" className="cursor-pointer">
+                    {t('calendar.allDay')}
+                  </Label>
                 </div>
               </div>
 
+              {!formData.isAllDay && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-start-time">Inizio</Label>
+                    <Input
+                      id="edit-start-time"
+                      type="time"
+                      value={formData.start_time}
+                      onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-end-time">Fine</Label>
+                    <Input
+                      id="edit-end-time"
+                      type="time"
+                      value={formData.end_time}
+                      onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
-                <Label htmlFor="edit-category">Categoria</Label>
+                <Label htmlFor="edit-category">{t('calendar.category')}</Label>
                 <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                   <SelectTrigger id="edit-category">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="work">Lavoro</SelectItem>
-                    <SelectItem value="personal">Personale</SelectItem>
-                    <SelectItem value="health">Salute</SelectItem>
-                    <SelectItem value="social">Sociale</SelectItem>
+                    <SelectItem value="work">{t('calendar.work')}</SelectItem>
+                    <SelectItem value="personal">{t('calendar.personal')}</SelectItem>
+                    <SelectItem value="health">{t('calendar.health')}</SelectItem>
+                    <SelectItem value="social">{t('calendar.social')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
-                  Annulla
+                  {t('calendar.cancel')}
                 </Button>
                 <Button type="submit" disabled={updateEvent.isPending}>
-                  {updateEvent.isPending ? 'Salvataggio...' : 'Salva'}
+                  {updateEvent.isPending ? t('calendar.saving') : t('calendar.save')}
                 </Button>
               </DialogFooter>
             </form>
@@ -407,7 +579,7 @@ export default function CalendarPage() {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Nuovo Evento</DialogTitle>
+            <DialogTitle>{t('calendar.newEvent')}</DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleCreateEvent} className="space-y-4 py-4">
@@ -444,50 +616,65 @@ export default function CalendarPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="start-time">Inizio *</Label>
-                <Input
-                  id="start-time"
-                  type="time"
-                  value={formData.start_time}
-                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  required
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="all-day"
+                  checked={formData.isAllDay}
+                  onChange={(e) => setFormData({ ...formData, isAllDay: e.target.checked })}
+                  className="rounded"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="end-time">Fine *</Label>
-                <Input
-                  id="end-time"
-                  type="time"
-                  value={formData.end_time}
-                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                  required
-                />
+                <Label htmlFor="all-day" className="cursor-pointer">
+                  {t('calendar.allDay')}
+                </Label>
               </div>
             </div>
 
+            {!formData.isAllDay && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="start-time">Inizio</Label>
+                  <Input
+                    id="start-time"
+                    type="time"
+                    value={formData.start_time}
+                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="end-time">Fine</Label>
+                  <Input
+                    id="end-time"
+                    type="time"
+                    value={formData.end_time}
+                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="category">Categoria</Label>
+              <Label htmlFor="category">{t('calendar.category')}</Label>
               <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                 <SelectTrigger id="category">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="work">Lavoro</SelectItem>
-                  <SelectItem value="personal">Personale</SelectItem>
-                  <SelectItem value="health">Salute</SelectItem>
-                  <SelectItem value="social">Sociale</SelectItem>
+                  <SelectItem value="work">{t('calendar.work')}</SelectItem>
+                  <SelectItem value="personal">{t('calendar.personal')}</SelectItem>
+                  <SelectItem value="health">{t('calendar.health')}</SelectItem>
+                  <SelectItem value="social">{t('calendar.social')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0">
               <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                Annulla
+                {t('calendar.cancel')}
               </Button>
               <Button type="submit" disabled={addEvent.isPending}>
-                {addEvent.isPending ? 'Creazione...' : 'Crea Evento'}
+                {addEvent.isPending ? t('calendar.saving') : t('calendar.create')}
               </Button>
             </DialogFooter>
           </form>

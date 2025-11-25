@@ -37,6 +37,7 @@
   },
   "calendar": {
     "title": "Calendario",
+    "subtitle": "Gestisci il tuo tempo",
     "events": "Eventi",
     "calendar": "Calendario",
     "filters": "Filtri",
@@ -48,7 +49,21 @@
     "description": "Descrizione",
     "create": "Crea",
     "noEvents": "Nessun evento programmato per questo giorno.",
-    "selectDate": "Seleziona una data per vedere gli eventi"
+    "selectDate": "Seleziona una data per vedere gli eventi",
+    "allDay": "Tutto il giorno",
+    "noTimeSet": "Orario non definito",
+    "eventsForDay": "Eventi del giorno",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "saving": "Salvataggio...",
+    "category": "Categoria",
+    "work": "Lavoro",
+    "personal": "Personale",
+    "health": "Salute",
+    "social": "Sociale",
+    "low_priority": "Bassa priorità"
   },
   "expenses": {
     "title": "Spese",
