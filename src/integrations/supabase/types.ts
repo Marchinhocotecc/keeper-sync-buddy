@@ -374,6 +374,7 @@ export type Database = {
           activity: string | null
           created_at: string | null
           date: string
+          heart_rate: number | null
           id: string
           meditation_minutes: number | null
           sleep: number | null
@@ -384,6 +385,7 @@ export type Database = {
           activity?: string | null
           created_at?: string | null
           date: string
+          heart_rate?: number | null
           id?: string
           meditation_minutes?: number | null
           sleep?: number | null
@@ -394,6 +396,7 @@ export type Database = {
           activity?: string | null
           created_at?: string | null
           date?: string
+          heart_rate?: number | null
           id?: string
           meditation_minutes?: number | null
           sleep?: number | null

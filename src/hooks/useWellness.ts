@@ -9,6 +9,7 @@ export interface WellnessData {
   sleep?: number;
   steps?: number;
   meditation_minutes?: number;
+  heart_rate?: number;
   activity?: string;
   created_at: string;
 }
