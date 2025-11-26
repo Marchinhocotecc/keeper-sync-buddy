@@ -12,11 +12,13 @@ import { useSettings } from '@/hooks/useSettings';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#f43f5e'];
 
 export default function ExpensesPage() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [userId, setUserId] = React.useState<string | undefined>();
   const { expenses, isLoading, isError, error, addExpense, deleteExpense } = useExpenses(userId);
   const { settings, updateSettings } = useSettings(userId);
@@ -39,11 +41,35 @@ export default function ExpensesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const amount = parseFloat(formData.amount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: "Errore",
+        description: "L'importo deve essere maggiore di zero",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!formData.category) {
+      toast({
+        title: "Errore", 
+        description: "Seleziona una categoria",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Convert local date to UTC
+    const localDate = new Date(formData.date + 'T00:00:00');
+    const utcDate = localDate.toISOString().split('T')[0];
+    
     await addExpense.mutateAsync({
-      amount: parseFloat(formData.amount),
+      amount,
       category: formData.category,
       description: formData.description,
-      date: formData.date,
+      date: utcDate,
     });
     setFormData({
       amount: '',
@@ -54,9 +80,46 @@ export default function ExpensesPage() {
     setShowAddForm(false);
   };
 
+  const handleBudgetSave = async () => {
+    const budget = parseFloat(budgetInput);
+    if (isNaN(budget) || budget < 0) {
+      toast({
+        title: "Errore",
+        description: "Il budget deve essere un numero positivo",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    await updateSettings.mutateAsync({
+      monthly_budget: budget
+    });
+    setShowBudgetDialog(false);
+    setBudgetInput('');
+  };
+
+  React.useEffect(() => {
+    if (showBudgetDialog && settings) {
+      setBudgetInput(String((settings as any)?.monthly_budget || 0));
+    }
+  }, [showBudgetDialog, settings]);
+
   const filteredExpenses = Array.isArray(expenses) ? expenses : [];
+  
+  // Calculate current month expenses only
+  const currentMonthExpenses = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    return filteredExpenses.filter(exp => {
+      const expDate = new Date(exp.date);
+      return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
+    });
+  }, [filteredExpenses]);
+
   const categoryData = useMemo(() => {
-    const grouped = filteredExpenses.reduce((acc, exp) => {
+    const grouped = currentMonthExpenses.reduce((acc, exp) => {
       const cat = exp.category || 'other';
       acc[cat] = (acc[cat] || 0) + parseFloat(String(exp.amount));
       return acc;
@@ -66,11 +129,12 @@ export default function ExpensesPage() {
       name: name.charAt(0).toUpperCase() + name.slice(1),
       value: parseFloat(value.toFixed(2))
     }));
-  }, [filteredExpenses]);
+  }, [currentMonthExpenses]);
 
-  const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(String(exp.amount)), 0);
-  const monthlyBudget = (settings as any)?.monthly_budget || 1000;
+  const totalExpenses = currentMonthExpenses.reduce((sum, exp) => sum + parseFloat(String(exp.amount)), 0);
+  const monthlyBudget = (settings as any)?.monthly_budget || 0;
   const remaining = monthlyBudget - totalExpenses;
+  const budgetProgress = monthlyBudget > 0 ? (totalExpenses / monthlyBudget) * 100 : 0;
 
   if (isLoading) {
     return (
@@ -115,6 +179,14 @@ export default function ExpensesPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Budget</CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => setShowBudgetDialog(true)}
+                >
+                  <Settings className="h-3 w-3" />
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -155,7 +227,11 @@ export default function ExpensesPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{expense.description || 'Nessuna descrizione'}</p>
                         <p className="text-sm text-muted-foreground">
-                          {new Date(expense.date).toLocaleDateString()}
+                          {new Date(expense.date + 'T00:00:00').toLocaleDateString('it-IT', {
+                            day: '2-digit',
+                            month: '2-digit', 
+                            year: 'numeric'
+                          })}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -208,6 +284,102 @@ export default function ExpensesPage() {
           </Card>
         </div>
       </div>
+
+      {/* Add Expense Dialog */}
+      <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('expenses.addExpense')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="amount">Importo (€) *</Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                required
+                min="0.01"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="category">Categoria *</Label>
+              <Select 
+                value={formData.category} 
+                onValueChange={(value) => setFormData({ ...formData, category: value })}
+              >
+                <SelectTrigger id="category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="food">Cibo</SelectItem>
+                  <SelectItem value="transport">Trasporti</SelectItem>
+                  <SelectItem value="entertainment">Intrattenimento</SelectItem>
+                  <SelectItem value="shopping">Shopping</SelectItem>
+                  <SelectItem value="health">Salute</SelectItem>
+                  <SelectItem value="bills">Bollette</SelectItem>
+                  <SelectItem value="other">Altro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="date">Data *</Label>
+              <Input
+                id="date"
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Note</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                maxLength={200}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" className="flex-1">Salva</Button>
+              <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} className="flex-1">
+                Annulla
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Budget Edit Dialog */}
+      <Dialog open={showBudgetDialog} onOpenChange={setShowBudgetDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifica Budget Mensile</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="budget">Budget Mensile (€)</Label>
+              <Input
+                id="budget"
+                type="number"
+                step="0.01"
+                value={budgetInput}
+                onChange={(e) => setBudgetInput(e.target.value)}
+                min="0"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleBudgetSave} className="flex-1">Salva</Button>
+              <Button variant="outline" onClick={() => setShowBudgetDialog(false)} className="flex-1">
+                Annulla
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

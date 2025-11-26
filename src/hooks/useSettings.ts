@@ -48,11 +48,11 @@ export const useSettings = (userId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings", userId] });
-      toast({ title: "Settings updated successfully" });
+      toast({ title: "✅ Impostazioni aggiornate con successo" });
     },
     onError: (error: any) => {
       toast({ 
-        title: "Error updating settings", 
+        title: "Errore durante l'aggiornamento delle impostazioni", 
         description: error.message,
         variant: "destructive" 
       });
