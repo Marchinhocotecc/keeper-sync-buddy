@@ -48,11 +48,11 @@ export const useExpenses = (userId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses", userId] });
-      toast({ title: "Expense added successfully" });
+      toast({ title: "✅ Spesa aggiunta con successo" });
     },
     onError: (error: any) => {
       toast({ 
-        title: "Error adding expense", 
+        title: "Errore durante l'aggiunta della spesa", 
         description: error.message,
         variant: "destructive" 
       });
@@ -66,11 +66,11 @@ export const useExpenses = (userId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses", userId] });
-      toast({ title: "Expense deleted" });
+      toast({ title: "🗑️ Spesa eliminata" });
     },
     onError: (error: any) => {
       toast({ 
-        title: "Error deleting expense", 
+        title: "Errore durante l'eliminazione", 
         description: error.message,
         variant: "destructive" 
       });
