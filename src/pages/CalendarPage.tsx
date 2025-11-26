@@ -297,46 +297,40 @@ export default function CalendarPage() {
                   <Skeleton className="h-64 w-full" />
                 </div>
               ) : (
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={handleDateSelect}
-                  className="rounded-md border-0"
-                  modifiers={{
-                    hasEvents: (checkDate) => {
-                      const dayEventsList = getEventsForDate(checkDate);
-                      return dayEventsList.length > 0;
+                <div className="relative calendar-with-indicators">
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={handleDateSelect}
+                    className="rounded-md border-0"
+                  />
+                  <style>{`
+                    .calendar-with-indicators .rdp-day_button {
+                      position: relative;
                     }
-                  }}
-                  modifiersClassNames={{
-                    hasEvents: "relative"
-                  }}
-                  components={{
-                    Day: ({ date: dayDate, ...props }) => {
-                      const dayEventsList = getEventsForDate(dayDate);
-                      const hasEvents = dayEventsList.length > 0;
+                    ${Array.from(daysWithEvents).map(dateStr => {
+                      const eventsForDay = getEventsForDate(new Date(dateStr));
+                      const dateObj = new Date(dateStr);
+                      const dayNum = dateObj.getDate();
+                      const monthNum = dateObj.getMonth();
+                      const yearNum = dateObj.getFullYear();
                       
-                      return (
-                        <div className="relative">
-                          <button {...props as any} />
-                          {hasEvents && (
-                            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
-                              {dayEventsList.slice(0, 3).map((evt, idx) => (
-                                <div
-                                  key={idx}
-                                  className={cn(
-                                    "w-1 h-1 rounded-full",
-                                    getCategoryDotColor(evt.category)
-                                  )}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-                  }}
-                />
+                      return `
+                        .calendar-with-indicators button[name="day"][data-date="${yearNum}-${String(monthNum + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}"]:after {
+                          content: "";
+                          position: absolute;
+                          bottom: 4px;
+                          left: 50%;
+                          transform: translateX(-50%);
+                          width: 4px;
+                          height: 4px;
+                          border-radius: 999px;
+                          background: hsl(var(--primary));
+                        }
+                      `;
+                    }).join('\n')}
+                  `}</style>
+                </div>
               )}
             </div>
           </CardContent>
