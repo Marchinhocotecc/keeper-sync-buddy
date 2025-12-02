@@ -1,15 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, AlertCircle, Settings, TrendingUp, TrendingDown } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Plus, Trash2, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useSettings } from '@/hooks/useSettings';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -21,10 +20,79 @@ export default function ExpensesPage() {
   const { toast } = useToast();
   const [userId, setUserId] = React.useState<string | undefined>();
   const { expenses, isLoading, isError, error, addExpense, deleteExpense } = useExpenses(userId);
-  const { settings, updateSettings } = useSettings(userId);
+  const { settings } = useSettings(userId);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showBudgetDialog, setShowBudgetDialog] = useState(false);
-  const [budgetInput, setBudgetInput] = useState('');
+  
+  // Budget state with debounced autosave
+  const [budgetValue, setBudgetValue] = useState<string>('0');
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load budget from settings when available
+  useEffect(() => {
+    if (settings) {
+      const budget = (settings as any)?.monthly_budget ?? 0;
+      setBudgetValue(String(budget));
+    }
+  }, [settings]);
+
+  const saveBudget = useCallback(async (value: number) => {
+    if (!userId) return;
+    
+    setIsSavingBudget(true);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ user_id: userId, monthly_budget: value })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      
+      toast({
+        title: "Budget salvato con successo",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Errore nel salvataggio",
+        description: err.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsSavingBudget(false);
+    }
+  }, [userId, toast]);
+
+  const handleBudgetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+    
+    // Allow empty or valid number input
+    if (inputValue === '' || /^\d*\.?\d*$/.test(inputValue)) {
+      setBudgetValue(inputValue);
+      
+      // Clear existing timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      
+      // Parse and validate
+      const numValue = parseFloat(inputValue) || 0;
+      if (numValue < 0) return;
+      
+      // Debounced save
+      debounceTimerRef.current = setTimeout(() => {
+        saveBudget(numValue);
+      }, 400);
+    }
+  };
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -80,29 +148,6 @@ export default function ExpensesPage() {
     setShowAddForm(false);
   };
 
-  const handleBudgetSave = async () => {
-    const budget = parseFloat(budgetInput);
-    if (isNaN(budget) || budget < 0) {
-      toast({
-        title: "Errore",
-        description: "Il budget deve essere un numero positivo",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    await updateSettings.mutateAsync({
-      monthly_budget: budget
-    });
-    setShowBudgetDialog(false);
-    setBudgetInput('');
-  };
-
-  React.useEffect(() => {
-    if (showBudgetDialog && settings) {
-      setBudgetInput(String((settings as any)?.monthly_budget || 0));
-    }
-  }, [showBudgetDialog, settings]);
 
   const filteredExpenses = Array.isArray(expenses) ? expenses : [];
   
@@ -132,7 +177,7 @@ export default function ExpensesPage() {
   }, [currentMonthExpenses]);
 
   const totalExpenses = currentMonthExpenses.reduce((sum, exp) => sum + parseFloat(String(exp.amount)), 0);
-  const monthlyBudget = (settings as any)?.monthly_budget || 0;
+  const monthlyBudget = parseFloat(budgetValue) || 0;
   const remaining = monthlyBudget - totalExpenses;
   const budgetProgress = monthlyBudget > 0 ? (totalExpenses / monthlyBudget) * 100 : 0;
 
@@ -178,19 +223,27 @@ export default function ExpensesPage() {
           <Card className="border-border/50 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Budget</CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => setShowBudgetDialog(true)}
-                >
-                  <Settings className="h-3 w-3" />
-                </Button>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Budget Mensile</CardTitle>
+                {isSavingBudget && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Salvataggio...
+                  </span>
+                )}
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">€{monthlyBudget.toFixed(2)}</div>
+              <div className="flex items-center gap-1">
+                <span className="text-2xl font-bold">€</span>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={budgetValue}
+                  onChange={handleBudgetChange}
+                  className="text-2xl font-bold h-auto p-0 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 w-28"
+                  placeholder="0"
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -353,33 +406,6 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Budget Edit Dialog */}
-      <Dialog open={showBudgetDialog} onOpenChange={setShowBudgetDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Modifica Budget Mensile</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="budget">Budget Mensile (€)</Label>
-              <Input
-                id="budget"
-                type="number"
-                step="0.01"
-                value={budgetInput}
-                onChange={(e) => setBudgetInput(e.target.value)}
-                min="0"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleBudgetSave} className="flex-1">Salva</Button>
-              <Button variant="outline" onClick={() => setShowBudgetDialog(false)} className="flex-1">
-                Annulla
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </main>
   );
 }
