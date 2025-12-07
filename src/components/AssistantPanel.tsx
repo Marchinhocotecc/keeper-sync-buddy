@@ -160,9 +160,9 @@ export default function AssistantPanel() {
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
                 <Sparkles className="h-8 w-8 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold mb-2 text-foreground">Assistente AI Ibrido</h3>
+              <h3 className="text-lg font-semibold mb-2 text-foreground">Il tuo Coach Personale 💛</h3>
               <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-                Gestisco localmente il 90% delle tue richieste. Chiedi pure!
+                Ciao! Sono qui per aiutarti a organizzarti e motivarti. Dimmi pure!
               </p>
               
               {suggestions.length > 0 && (
