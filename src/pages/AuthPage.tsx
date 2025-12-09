@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
@@ -15,27 +16,45 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
-    // Check if user is already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate('/');
+        checkTermsAcceptance(session.user);
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
-        navigate('/');
+        checkTermsAcceptance(session.user);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  const checkTermsAcceptance = (user: any) => {
+    const termsAccepted = user?.user_metadata?.terms_accepted;
+    if (termsAccepted) {
+      navigate('/');
+    } else {
+      navigate('/accept-terms');
+    }
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!termsAccepted) {
+      toast({
+        title: 'Errore',
+        description: 'Devi accettare i Termini e Condizioni per registrarti',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -44,18 +63,22 @@ export default function AuthPage() {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            terms_accepted: true,
+            terms_accepted_at: new Date().toISOString(),
+          },
         },
       });
 
       if (error) throw error;
 
       toast({
-        title: 'Success!',
-        description: 'Check your email for the confirmation link.',
+        title: 'Registrazione completata!',
+        description: 'Controlla la tua email per il link di conferma.',
       });
     } catch (error: any) {
       toast({
-        title: 'Error',
+        title: 'Errore',
         description: error.message,
         variant: 'destructive',
       });
@@ -69,17 +92,23 @@ export default function AuthPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
 
-      navigate('/');
+      // Check if terms were accepted
+      const termsAccepted = data.user?.user_metadata?.terms_accepted;
+      if (!termsAccepted) {
+        navigate('/accept-terms');
+      } else {
+        navigate('/');
+      }
     } catch (error: any) {
       toast({
-        title: 'Error',
+        title: 'Errore',
         description: error.message,
         variant: 'destructive',
       });
@@ -153,7 +182,7 @@ export default function AuthPage() {
                   <Input
                     id="password-signup"
                     type="password"
-                    placeholder="At least 6 characters"
+                    placeholder="Almeno 6 caratteri"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -161,9 +190,27 @@ export default function AuthPage() {
                     minLength={6}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="terms"
+                    checked={termsAccepted}
+                    onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+                    disabled={loading}
+                  />
+                  <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
+                    Accetto i{' '}
+                    <Link
+                      to="/terms-and-conditions"
+                      className="text-primary hover:underline font-medium"
+                      target="_blank"
+                    >
+                      Termini e Condizioni
+                    </Link>
+                  </Label>
+                </div>
+                <Button type="submit" className="w-full" disabled={loading || !termsAccepted}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Sign Up
+                  Registrati
                 </Button>
               </form>
             </TabsContent>

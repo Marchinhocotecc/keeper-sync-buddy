@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,47 +6,54 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Trash2, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useSettings } from '@/hooks/useSettings';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { BudgetCard } from '@/components/BudgetCard';
+import { BudgetEditModal } from '@/components/BudgetEditModal';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#f43f5e'];
 
 export default function ExpensesPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [userId, setUserId] = React.useState<string | undefined>();
-  const { expenses, isLoading, isError, error, addExpense, deleteExpense } = useExpenses(userId);
+  const [userId, setUserId] = useState<string | undefined>();
+  const { expenses, isLoading, addExpense, deleteExpense } = useExpenses(userId);
   const { settings } = useSettings(userId);
   const [showAddForm, setShowAddForm] = useState(false);
-  
-  // Budget state with debounced autosave
-  const [budgetValue, setBudgetValue] = useState<string>('0');
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [isSavingBudget, setIsSavingBudget] = useState(false);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Budget state
+  const [budget, setBudget] = useState(0);
+  const [budgetNote, setBudgetNote] = useState('');
 
   // Load budget from settings when available
   useEffect(() => {
     if (settings) {
-      const budget = (settings as any)?.monthly_budget ?? 0;
-      setBudgetValue(String(budget));
+      const budgetValue = (settings as any)?.monthly_budget ?? 0;
+      setBudget(budgetValue);
     }
   }, [settings]);
 
-  const saveBudget = useCallback(async (value: number) => {
+  const handleSaveBudget = useCallback(async (newBudget: number, note: string) => {
     if (!userId) return;
     
     setIsSavingBudget(true);
     try {
       const { error } = await supabase
         .from('settings')
-        .upsert({ user_id: userId, monthly_budget: value })
+        .upsert({ user_id: userId, monthly_budget: newBudget })
         .eq('user_id', userId);
 
       if (error) throw error;
+      
+      setBudget(newBudget);
+      setBudgetNote(note);
+      setShowBudgetModal(false);
       
       toast({
         title: "Budget salvato con successo",
@@ -62,39 +69,7 @@ export default function ExpensesPage() {
     }
   }, [userId, toast]);
 
-  const handleBudgetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
-    
-    // Allow empty or valid number input
-    if (inputValue === '' || /^\d*\.?\d*$/.test(inputValue)) {
-      setBudgetValue(inputValue);
-      
-      // Clear existing timer
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      
-      // Parse and validate
-      const numValue = parseFloat(inputValue) || 0;
-      if (numValue < 0) return;
-      
-      // Debounced save
-      debounceTimerRef.current = setTimeout(() => {
-        saveBudget(numValue);
-      }, 400);
-    }
-  };
-
-  // Cleanup debounce timer on unmount
   useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, []);
-
-  React.useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data?.user?.id);
     });
@@ -129,7 +104,6 @@ export default function ExpensesPage() {
       return;
     }
     
-    // Convert local date to UTC
     const localDate = new Date(formData.date + 'T00:00:00');
     const utcDate = localDate.toISOString().split('T')[0];
     
@@ -148,10 +122,8 @@ export default function ExpensesPage() {
     setShowAddForm(false);
   };
 
-
   const filteredExpenses = Array.isArray(expenses) ? expenses : [];
   
-  // Calculate current month expenses only
   const currentMonthExpenses = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -177,9 +149,8 @@ export default function ExpensesPage() {
   }, [currentMonthExpenses]);
 
   const totalExpenses = currentMonthExpenses.reduce((sum, exp) => sum + parseFloat(String(exp.amount)), 0);
-  const monthlyBudget = parseFloat(budgetValue) || 0;
+  const monthlyBudget = budget;
   const remaining = monthlyBudget - totalExpenses;
-  const budgetProgress = monthlyBudget > 0 ? (totalExpenses / monthlyBudget) * 100 : 0;
 
   if (isLoading) {
     return (
@@ -220,32 +191,10 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Budget Mensile</CardTitle>
-                {isSavingBudget && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Salvataggio...
-                  </span>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-1">
-                <span className="text-2xl font-bold">€</span>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={budgetValue}
-                  onChange={handleBudgetChange}
-                  className="text-2xl font-bold h-auto p-0 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 w-28"
-                  placeholder="0"
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <BudgetCard 
+            budget={budget} 
+            onEditClick={() => setShowBudgetModal(true)} 
+          />
 
           <Card className={`border-border/50 shadow-sm ${remaining < 0 ? 'border-destructive/50' : ''}`}>
             <CardHeader className="pb-3">
@@ -406,6 +355,15 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Budget Edit Modal */}
+      <BudgetEditModal
+        open={showBudgetModal}
+        onOpenChange={setShowBudgetModal}
+        currentBudget={budget}
+        currentNote={budgetNote}
+        onSave={handleSaveBudget}
+        isSaving={isSavingBudget}
+      />
     </main>
   );
 }
