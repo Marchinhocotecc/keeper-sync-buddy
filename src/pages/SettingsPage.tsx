@@ -243,39 +243,39 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background pb-24">
+    <main className="min-h-screen bg-background pb-20 sm:pb-24">
       <div className="container mx-auto px-4 py-6 max-w-lg">
         {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
+          className="mb-5 sm:mb-6"
         >
-          <h1 className="text-2xl font-semibold text-foreground">{t('settings.title')}</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">{t('settings.title')}</h1>
         </motion.div>
 
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="space-y-4"
+          className="space-y-3 sm:space-y-4"
         >
           {/* Profile Section */}
           <motion.div variants={itemVariants}>
-            <Card className="border-border/50 shadow-sm overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16 border-2 border-border">
+            <Card className="app-card overflow-hidden">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-border shrink-0">
                     <AvatarImage src={userProfile.avatarUrl} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-lg font-medium">
+                    <AvatarFallback className="bg-primary/10 text-primary text-sm sm:text-lg font-medium">
                       {getInitials(userProfile.name, userProfile.email)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
+                    <p className="text-sm sm:text-base font-medium text-foreground truncate">
                       {userProfile.name || 'Utente'}
                     </p>
-                    <p className="text-sm text-muted-foreground truncate">
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       {userProfile.email}
                     </p>
                   </div>
@@ -283,7 +283,7 @@ export default function SettingsPage() {
                     variant="ghost" 
                     size="sm"
                     onClick={() => setShowProfileModal(true)}
-                    className="text-primary"
+                    className="text-primary text-xs sm:text-sm shrink-0"
                   >
                     Modifica
                   </Button>
@@ -294,19 +294,19 @@ export default function SettingsPage() {
 
           {/* Language Section */}
           <motion.div variants={itemVariants}>
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Globe className="h-5 w-5 text-primary" />
+            <Card className="app-card">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-3 mb-2 sm:mb-3">
+                  <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                    <Globe className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <div>
-                    <Label className="text-base font-medium">{t('settings.language')}</Label>
-                    <p className="text-sm text-muted-foreground">{t('settings.languageDesc')}</p>
+                  <div className="min-w-0">
+                    <Label className="text-sm sm:text-base font-medium">{t('settings.language')}</Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{t('settings.languageDesc')}</p>
                   </div>
                 </div>
                 <Select value={i18n.language} onValueChange={handleLanguageChange}>
-                  <SelectTrigger className="h-11 mt-2">
+                  <SelectTrigger className="h-10 sm:h-11 mt-2 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -321,18 +321,20 @@ export default function SettingsPage() {
 
           {/* Theme Section */}
           <motion.div variants={itemVariants}>
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Moon className="h-5 w-5 text-primary" />
+          {/* Theme Section */}
+          <motion.div variants={itemVariants}>
+            <Card className="app-card">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-3 mb-2 sm:mb-3">
+                  <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                    <Moon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <div>
-                    <Label className="text-base font-medium">{t('settings.theme')}</Label>
-                    <p className="text-sm text-muted-foreground">{t('settings.themeDesc')}</p>
+                  <div className="min-w-0">
+                    <Label className="text-sm sm:text-base font-medium">{t('settings.theme')}</Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{t('settings.themeDesc')}</p>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-1.5 sm:gap-2 mt-2">
                   {[
                     { value: 'light', icon: Sun, label: t('settings.light') },
                     { value: 'dark', icon: Moon, label: t('settings.dark') },
@@ -343,10 +345,10 @@ export default function SettingsPage() {
                       variant={theme === value ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => handleThemeChange(value)}
-                      className="flex-1 gap-2"
+                      className="flex-1 gap-1 sm:gap-2 text-xs sm:text-sm h-9 sm:h-10"
                     >
-                      <Icon className="h-4 w-4" />
-                      {label}
+                      <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">{label}</span>
                     </Button>
                   ))}
                 </div>
@@ -356,21 +358,22 @@ export default function SettingsPage() {
 
           {/* Notifications Section */}
           <motion.div variants={itemVariants}>
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="p-4">
+            <Card className="app-card">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Bell className="h-5 w-5 text-primary" />
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                      <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     </div>
-                    <div>
-                      <Label className="text-base font-medium">Notifiche</Label>
-                      <p className="text-sm text-muted-foreground">Ricevi avvisi e promemoria</p>
+                    <div className="min-w-0">
+                      <Label className="text-sm sm:text-base font-medium">Notifiche</Label>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Ricevi avvisi e promemoria</p>
                     </div>
                   </div>
                   <Switch
                     checked={notificationsEnabled}
                     onCheckedChange={handleNotificationsChange}
+                    className="shrink-0"
                   />
                 </div>
               </CardContent>
@@ -379,38 +382,39 @@ export default function SettingsPage() {
 
           {/* Assistant Section */}
           <motion.div variants={itemVariants}>
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="p-4 space-y-4">
+            <Card className="app-card">
+              <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Brain className="h-5 w-5 text-primary" />
+                  <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                    <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <div>
-                    <Label className="text-base font-medium">Assistente</Label>
-                    <p className="text-sm text-muted-foreground">Configura il tuo coach personale</p>
+                  <div className="min-w-0">
+                    <Label className="text-sm sm:text-base font-medium">Assistente</Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Configura il tuo coach personale</p>
                   </div>
                 </div>
                 
                 <Separator className="my-2" />
                 
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Memoria assistente</p>
-                    <p className="text-xs text-muted-foreground">L'assistente ricorda le tue preferenze</p>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm font-medium text-foreground">Memoria assistente</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">L'assistente ricorda le tue preferenze</p>
                   </div>
                   <Switch
                     checked={assistantMemory}
                     onCheckedChange={handleAssistantMemoryChange}
+                    className="shrink-0"
                   />
                 </div>
                 
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-xs sm:text-sm h-9 sm:h-10"
                   onClick={() => setShowResetMemoryModal(true)}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-2" />
                   Reset memoria assistente
                 </Button>
               </CardContent>
@@ -419,38 +423,38 @@ export default function SettingsPage() {
 
           {/* Support Section */}
           <motion.div variants={itemVariants}>
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <HelpCircle className="h-5 w-5 text-primary" />
+            <Card className="app-card">
+              <CardContent className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+                <div className="flex items-center gap-3 mb-1 sm:mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                    <HelpCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <div>
-                    <Label className="text-base font-medium">Supporto</Label>
-                    <p className="text-sm text-muted-foreground">Assistenza e informazioni</p>
+                  <div className="min-w-0">
+                    <Label className="text-sm sm:text-base font-medium">Supporto</Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Assistenza e informazioni</p>
                   </div>
                 </div>
                 
                 <a 
                   href="mailto:support@dailysynckeeper.app"
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Contattaci</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                    <span className="text-xs sm:text-sm font-medium">Contattaci</span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 </a>
                 
                 <a 
                   href="/privacy"
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Privacy & Termini</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <ExternalLink className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                    <span className="text-xs sm:text-sm font-medium">Privacy & Termini</span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 </a>
               </CardContent>
             </Card>
@@ -460,10 +464,10 @@ export default function SettingsPage() {
           <motion.div variants={itemVariants}>
             <Button 
               variant="outline" 
-              className="w-full h-12 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+              className="w-full h-10 sm:h-12 text-xs sm:text-sm text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
               onClick={handleLogout}
             >
-              <LogOut className="h-4 w-4 mr-2" />
+              <LogOut className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-2" />
               {t('nav.logout')}
             </Button>
           </motion.div>

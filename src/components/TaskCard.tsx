@@ -29,21 +29,21 @@ export function TaskCard({ task, onToggle, onDelete }: TaskCardProps) {
   return (
     <Card
       className={cn(
-        "p-4 transition-all hover:shadow-md",
+        "p-3 sm:p-4 transition-all hover:shadow-md",
         task.completed && "opacity-60",
         priorityColors[task.priority]
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2 sm:gap-3">
         <Checkbox
           checked={task.completed}
           onCheckedChange={() => onToggle(task.id)}
-          className="mt-1"
+          className="mt-0.5 sm:mt-1"
         />
         <div className="flex-1 min-w-0">
           <p
             className={cn(
-              "font-medium text-foreground",
+              "text-sm font-medium text-foreground",
               task.completed && "line-through text-muted-foreground"
             )}
           >
@@ -60,9 +60,9 @@ export function TaskCard({ task, onToggle, onDelete }: TaskCardProps) {
           variant="ghost"
           size="icon"
           onClick={() => onDelete(task.id)}
-          className="text-muted-foreground hover:text-destructive"
+          className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive shrink-0"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Button>
       </div>
     </Card>

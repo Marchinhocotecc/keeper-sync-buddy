@@ -276,20 +276,20 @@ export default function CalendarPage() {
 
   return (
     <main className="min-h-screen bg-muted/30">
-      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-screen-xl">
+      <div className="page-container">
         {/* Header */}
-        <div className="mb-6 sm:mb-8 animate-fade-in">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
+        <div className="page-header animate-fade-in">
+          <h1 className="page-title">
             📅 {t('calendar.title')}
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+          <p className="page-subtitle">
             {t('calendar.subtitle')}
           </p>
         </div>
 
         {/* Calendar Card */}
-        <Card className="border-border/50 shadow-sm mb-6 animate-fade-in">
-          <CardContent className="p-4 sm:p-6">
+        <Card className="app-card mb-4 sm:mb-6 animate-fade-in">
+          <CardContent className="p-3 sm:p-6">
             <div className="flex flex-col items-center">
               {isLoading ? (
                 <div className="w-full max-w-sm space-y-4">
@@ -297,12 +297,12 @@ export default function CalendarPage() {
                   <Skeleton className="h-64 w-full" />
                 </div>
               ) : (
-                <div className="relative calendar-with-indicators">
+                <div className="relative calendar-with-indicators w-full max-w-sm">
                   <Calendar
                     mode="single"
                     selected={date}
                     onSelect={handleDateSelect}
-                    className="rounded-md border-0"
+                    className="rounded-md border-0 w-full"
                   />
                   <style>{`
                     .calendar-with-indicators .rdp-day_button {
@@ -338,9 +338,9 @@ export default function CalendarPage() {
 
         {/* Daily Events Section */}
         <div className="animate-fade-in">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg sm:text-xl font-semibold text-foreground flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5 text-primary" />
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h2 className="text-base sm:text-lg font-semibold text-foreground flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               {format(date, 'EEEE, d MMMM yyyy', { locale: it })}
             </h2>
           </div>
@@ -352,37 +352,37 @@ export default function CalendarPage() {
             </div>
           ) : dayEvents.length === 0 ? (
             <Card className="border-dashed border-2 border-border/50">
-              <CardContent className="p-8 text-center">
-                <CalendarIcon className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-muted-foreground mb-4">{t('calendar.noEvents')}</p>
-                <Button onClick={openCreateDialog} variant="outline" className="gap-2">
+              <CardContent className="p-6 sm:p-8 text-center">
+                <CalendarIcon className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-4">{t('calendar.noEvents')}</p>
+                <Button onClick={openCreateDialog} variant="outline" className="gap-2 text-sm">
                   <Plus className="h-4 w-4" />
                   {t('calendar.createEvent')}
                 </Button>
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3 max-h-[400px] overflow-y-auto">
               {dayEvents.map((event) => (
                 <Card
                   key={event.id}
-                  className="cursor-pointer hover:shadow-md transition-all duration-200 border-border/50 hover:border-primary/20 group"
+                  className="cursor-pointer hover:shadow-md transition-all duration-200 app-card hover:border-primary/20 group"
                   onClick={() => openDetailModal(event)}
                 >
-                  <CardContent className="p-4">
+                  <CardContent className="p-3 sm:p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground mb-2 truncate group-hover:text-primary transition-colors">
+                        <h3 className="font-medium text-sm sm:text-base text-foreground mb-1.5 sm:mb-2 truncate group-hover:text-primary transition-colors">
                           {event.title}
                         </h3>
                         {event.description && (
-                          <p className="text-sm text-muted-foreground mb-2 line-clamp-1">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 line-clamp-1">
                             {event.description}
                           </p>
                         )}
-                        <div className="flex flex-wrap items-center gap-3 text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="h-3.5 w-3.5" />
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+                          <span className="flex items-center gap-1 sm:gap-1.5 text-muted-foreground">
+                            <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                             {getEventTimeDisplay(event)}
                           </span>
                           {event.category && (
@@ -390,7 +390,7 @@ export default function CalendarPage() {
                               variant="outline" 
                               className={cn("text-xs", getCategoryColor(event.category))}
                             >
-                              <Tag className="h-3 w-3 mr-1" />
+                              <Tag className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
                               {t(`calendar.${event.category}`)}
                             </Badge>
                           )}
@@ -409,9 +409,9 @@ export default function CalendarPage() {
       <Button
         onClick={openCreateDialog}
         size="lg"
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-110 z-50"
+        className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-110 z-50"
       >
-        <Plus className="h-6 w-6" />
+        <Plus className="h-5 w-5 sm:h-6 sm:w-6" />
       </Button>
 
       {/* Event Detail Modal */}

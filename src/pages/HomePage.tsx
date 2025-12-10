@@ -147,7 +147,7 @@ export default function HomePage() {
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl">
+        <div className="page-container">
           <Skeleton className="h-10 w-64 mb-2" />
           <Skeleton className="h-6 w-96 mb-8" />
           <div className="grid gap-6 lg:grid-cols-3">
@@ -166,7 +166,7 @@ export default function HomePage() {
   if (error) {
     return (
       <main className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 sm:px-6 py-12 max-w-7xl">
+        <div className="page-container">
           <Alert variant="destructive" className="max-w-2xl">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -180,13 +180,13 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl">
+      <div className="page-container">
         {/* Header */}
-        <div className="mb-8 animate-fade-in">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
+        <div className="page-header animate-fade-in">
+          <h1 className="page-title">
             Benvenuto, {userName}
           </h1>
-          <p className="text-muted-foreground text-sm sm:text-base">
+          <p className="page-subtitle">
             {new Date().toLocaleDateString('it-IT', { 
               weekday: 'long', 
               year: 'numeric', 
@@ -196,30 +196,30 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
           {/* Tasks Section */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="border-border/50 shadow-sm">
-              <CardHeader className="border-b border-border/50">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+            <Card className="app-card">
+              <CardHeader className="border-b border-border/50 px-4 sm:px-6 py-4">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     I miei Task
                   </CardTitle>
                   <Button 
                     onClick={() => setShowAddForm(true)} 
                     size="sm" 
-                    className="gap-2 shadow-sm hover-scale"
+                    className="gap-2 shadow-sm hover-scale h-8 sm:h-9 text-xs sm:text-sm"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     <span className="hidden sm:inline">Aggiungi</span>
                   </Button>
                 </div>
               </CardHeader>
 
-              <CardContent className="pt-6">
+              <CardContent className="p-4 sm:p-6">
                 {showAddForm && (
-                  <div className="mb-6 p-4 bg-muted/50 rounded-lg border border-border/50 animate-scale-in">
+                  <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-muted/50 rounded-lg border border-border/50 animate-scale-in">
                     <AddTaskForm
                       onAdd={handleAddTask}
                       onCancel={() => setShowAddForm(false)}
@@ -228,27 +228,27 @@ export default function HomePage() {
                 )}
 
                 <Tabs defaultValue="today" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4 mb-4">
-                    <TabsTrigger value="today" className="gap-1">
-                      <Flag className="h-3 w-3" />
-                      Oggi ({todayTasks.length})
+                  <TabsList className="grid w-full grid-cols-4 mb-3 sm:mb-4 h-auto p-1">
+                    <TabsTrigger value="today" className="gap-1 text-xs sm:text-sm py-2 px-1 sm:px-2">
+                      <Flag className="h-3 w-3 hidden sm:block" />
+                      <span className="truncate">Oggi ({todayTasks.length})</span>
                     </TabsTrigger>
-                    <TabsTrigger value="upcoming" className="gap-1">
-                      <Clock className="h-3 w-3" />
-                      Prossimi ({upcomingTasks.length})
+                    <TabsTrigger value="upcoming" className="gap-1 text-xs sm:text-sm py-2 px-1 sm:px-2">
+                      <Clock className="h-3 w-3 hidden sm:block" />
+                      <span className="truncate">Prossimi ({upcomingTasks.length})</span>
                     </TabsTrigger>
-                    <TabsTrigger value="low" className="gap-1">
-                      Bassi ({lowPriorityTasks.length})
+                    <TabsTrigger value="low" className="gap-1 text-xs sm:text-sm py-2 px-1 sm:px-2">
+                      <span className="truncate">Bassi ({lowPriorityTasks.length})</span>
                     </TabsTrigger>
-                    <TabsTrigger value="completed" className="gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Fatti ({completedTasks.length})
+                    <TabsTrigger value="completed" className="gap-1 text-xs sm:text-sm py-2 px-1 sm:px-2">
+                      <CheckCircle2 className="h-3 w-3 hidden sm:block" />
+                      <span className="truncate">Fatti ({completedTasks.length})</span>
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="today" className="space-y-2">
+                  <TabsContent value="today" className="space-y-2 max-h-[350px] overflow-y-auto">
                     {todayTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
+                      <p className="text-xs sm:text-sm text-muted-foreground py-6 sm:py-8 text-center">
                         Nessun task prioritario per oggi 🎉
                       </p>
                     ) : (
@@ -266,9 +266,9 @@ export default function HomePage() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="upcoming" className="space-y-2">
+                  <TabsContent value="upcoming" className="space-y-2 max-h-[350px] overflow-y-auto">
                     {upcomingTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
+                      <p className="text-xs sm:text-sm text-muted-foreground py-6 sm:py-8 text-center">
                         Nessun task in programma
                       </p>
                     ) : (
@@ -286,9 +286,9 @@ export default function HomePage() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="low" className="space-y-2">
+                  <TabsContent value="low" className="space-y-2 max-h-[350px] overflow-y-auto">
                     {lowPriorityTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
+                      <p className="text-xs sm:text-sm text-muted-foreground py-6 sm:py-8 text-center">
                         Nessun task a bassa priorità
                       </p>
                     ) : (
@@ -306,9 +306,9 @@ export default function HomePage() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="completed" className="space-y-2">
+                  <TabsContent value="completed" className="space-y-2 max-h-[350px] overflow-y-auto">
                     {completedTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
+                      <p className="text-xs sm:text-sm text-muted-foreground py-6 sm:py-8 text-center">
                         Nessun task completato ancora
                       </p>
                     ) : (
