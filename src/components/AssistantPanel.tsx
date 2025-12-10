@@ -5,11 +5,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, Bot, User, Sparkles, Lightbulb } from "lucide-react";
+import { Send, Bot, User, Sparkles, Lightbulb, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { processMessage, getAdaptiveSuggestionsForUser } from "@/agent";
-import type { AgentResponse } from "@/agent";
+import { handleMessage, loadMemory, clearMemory } from "@/utils/assistant";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Message {
@@ -19,38 +18,6 @@ interface Message {
   suggestions?: Array<{ text: string; priority: string }>;
   timestamp: Date;
 }
-
-interface ChatEntry {
-  user: string;
-  assistant: string;
-}
-
-const CONTEXT_STORAGE_KEY = "assistant_context_chats";
-const MAX_CONTEXT_CHATS = 5;
-
-// Load context from localStorage
-const loadContextChats = (): ChatEntry[] => {
-  try {
-    const stored = localStorage.getItem(CONTEXT_STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error("Error loading context:", error);
-  }
-  return [];
-};
-
-// Save context to localStorage
-const saveContextChats = (chats: ChatEntry[]) => {
-  try {
-    // Keep only last 5 chats
-    const trimmed = chats.slice(-MAX_CONTEXT_CHATS);
-    localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(trimmed));
-  } catch (error) {
-    console.error("Error saving context:", error);
-  }
-};
 
 // Format timestamp
 const formatTime = (date: Date): string => {
@@ -69,18 +36,12 @@ export default function AssistantPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Array<{ text: string; priority: string }>>([]);
-  const [contextChats, setContextChats] = useState<ChatEntry[]>([]);
   
   const lastCallRef = useRef<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isRequestingRef = useRef(false);
-
-  // Load context on mount
-  useEffect(() => {
-    setContextChats(loadContextChats());
-  }, []);
 
   // Autoscroll to bottom when messages change
   useEffect(() => {
@@ -91,6 +52,7 @@ export default function AssistantPanel() {
     }
   }, [messages, isLoading]);
 
+  // Load user session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
@@ -103,21 +65,57 @@ export default function AssistantPanel() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load adaptive suggestions on mount
+  // Load memory and suggestions on mount
   useEffect(() => {
     if (userId && messages.length === 0) {
-      loadSuggestions();
+      loadInitialData();
     }
   }, [userId]);
 
-  const loadSuggestions = async () => {
+  const loadInitialData = async () => {
     if (!userId) return;
     
     try {
-      const sugs = await getAdaptiveSuggestionsForUser(userId);
-      setSuggestions(sugs);
+      // Load conversation memory
+      const memory = await loadMemory(userId);
+      if (memory.length > 0) {
+        const loadedMessages: Message[] = memory.map(m => ({
+          role: m.role,
+          content: m.content,
+          source: m.source,
+          timestamp: new Date(m.timestamp)
+        }));
+        setMessages(loadedMessages);
+      }
+      
+      // Set default suggestions
+      setSuggestions([
+        { text: "Mostra i miei task", priority: "medium" },
+        { text: "Cosa ho in programma oggi?", priority: "medium" },
+        { text: "Come posso organizzarmi meglio?", priority: "low" },
+        { text: "Mi sento stressato, aiutami", priority: "low" },
+      ]);
     } catch (error) {
-      // Silent fail for suggestions
+      console.error('Error loading initial data:', error);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!userId) return;
+    
+    try {
+      await clearMemory(userId);
+      setMessages([]);
+      toast({
+        title: "Cronologia cancellata",
+        description: "La memoria dell'assistente è stata resettata.",
+      });
+    } catch (error) {
+      toast({
+        title: "Errore",
+        description: "Non sono riuscito a cancellare la cronologia.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -154,17 +152,8 @@ export default function AssistantPanel() {
     setSuggestions([]);
 
     try {
-      // Build context array from stored chats
-      const contextMessages = contextChats.flatMap(chat => [
-        { role: "user" as const, content: chat.user },
-        { role: "assistant" as const, content: chat.assistant }
-      ]);
-
-      const response: AgentResponse = await processMessage(
-        textToSend, 
-        userId, 
-        { contextMessages }
-      );
+      // Use the new hybrid assistant
+      const response = await handleMessage(textToSend, userId);
       
       const assistantMessage: Message = {
         role: "assistant",
@@ -175,20 +164,6 @@ export default function AssistantPanel() {
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
-
-      // Save new chat to context
-      const newChat: ChatEntry = {
-        user: textToSend,
-        assistant: response.message
-      };
-      const updatedChats = [...contextChats, newChat].slice(-MAX_CONTEXT_CHATS);
-      setContextChats(updatedChats);
-      saveContextChats(updatedChats);
-
-      // Handle navigation if requested
-      if (response.data?.navigateTo) {
-        setTimeout(() => navigate(response.data.navigateTo), 500);
-      }
 
       // Show suggestions if available
       if (response.suggestions && response.suggestions.length > 0) {
@@ -215,7 +190,7 @@ export default function AssistantPanel() {
       setIsLoading(false);
       isRequestingRef.current = false;
     }
-  }, [input, isLoading, userId, toast, navigate, contextChats]);
+  }, [input, isLoading, userId, toast]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && !isLoading) {
@@ -251,6 +226,21 @@ export default function AssistantPanel() {
 
   return (
     <Card className="flex flex-col h-[calc(100vh-12rem)] bg-background border-border">
+      {/* Header with clear button */}
+      {messages.length > 0 && (
+        <div className="flex justify-end px-4 pt-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearHistory}
+            className="text-muted-foreground hover:text-destructive h-8 px-2"
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            <span className="text-xs">Cancella</span>
+          </Button>
+        </div>
+      )}
+      
       <div 
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 sm:p-6"
@@ -329,7 +319,10 @@ export default function AssistantPanel() {
                   >
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                     {msg.role === "assistant" && msg.source && (
-                      <Badge variant="outline" className="mt-2 sm:mt-3 text-xs">
+                      <Badge 
+                        variant={msg.source === 'external' ? 'default' : 'outline'} 
+                        className="mt-2 sm:mt-3 text-xs"
+                      >
                         {msg.source === 'local' ? '⚡ Locale' : '🌐 AI Esterno'}
                       </Badge>
                     )}
@@ -389,7 +382,7 @@ export default function AssistantPanel() {
                       <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                       <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                     </div>
-                    <span className="text-xs text-muted-foreground ml-1">Sto scrivendo…</span>
+                    <span className="text-xs text-muted-foreground ml-1">Sto pensando…</span>
                   </div>
                 </div>
               </motion.div>
@@ -408,7 +401,7 @@ export default function AssistantPanel() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={isLoading ? "Attendere risposta..." : "Chiedimi qualsiasi cosa..."}
+            placeholder={isLoading ? "Sto elaborando..." : "Chiedimi qualsiasi cosa..."}
             disabled={isLoading}
             className="flex-1 h-11 sm:h-12 rounded-xl border-border focus-visible:ring-primary text-sm sm:text-base"
           />
