@@ -10,10 +10,10 @@ interface BudgetCardProps {
 
 export function BudgetCard({ budget, onEditClick }: BudgetCardProps) {
   return (
-    <Card className="border-border/50 shadow-sm">
-      <CardHeader className="pb-3">
+    <Card className="app-card">
+      <CardHeader className="app-card-header">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Budget Mensile</CardTitle>
+          <CardTitle className="app-card-title">Budget Mensile</CardTitle>
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4 text-primary" />
             <Button
@@ -28,7 +28,7 @@ export function BudgetCard({ budget, onEditClick }: BudgetCardProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">€{budget.toFixed(2)}</div>
+        <div className="app-card-value">€{budget.toFixed(2)}</div>
       </CardContent>
     </Card>
   );

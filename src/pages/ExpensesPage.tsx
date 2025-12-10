@@ -155,7 +155,7 @@ export default function ExpensesPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-muted/30">
-        <div className="container mx-auto px-6 py-12 max-w-screen-xl">
+        <div className="page-container">
           <div className="flex items-center justify-center py-20">
             <div className="animate-pulse text-muted-foreground">{t('expenses.loading')}</div>
           </div>
@@ -166,28 +166,28 @@ export default function ExpensesPage() {
 
   return (
     <main className="min-h-screen bg-muted/30">
-      <div className="container mx-auto px-6 py-8 max-w-screen-xl">
-        <div className="mb-8 flex items-center justify-between">
+      <div className="page-container">
+        <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">{t('expenses.title')}</h1>
-            <p className="text-muted-foreground">Gestisci le tue spese</p>
+            <h1 className="page-title">{t('expenses.title')}</h1>
+            <p className="page-subtitle">Gestisci le tue spese</p>
           </div>
-          <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2 shadow-sm">
+          <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2 shadow-sm w-full sm:w-auto">
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">{t('expenses.addExpense')}</span>
+            <span>{t('expenses.addExpense')}</span>
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3 mb-6">
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader className="pb-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3 mb-6">
+          <Card className="app-card">
+            <CardHeader className="app-card-header">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Totale Spese</CardTitle>
+                <CardTitle className="app-card-title">Totale Spese</CardTitle>
                 <TrendingUp className="h-4 w-4 text-primary" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">€{totalExpenses.toFixed(2)}</div>
+              <div className="app-card-value">€{totalExpenses.toFixed(2)}</div>
             </CardContent>
           </Card>
 
@@ -196,39 +196,39 @@ export default function ExpensesPage() {
             onEditClick={() => setShowBudgetModal(true)} 
           />
 
-          <Card className={`border-border/50 shadow-sm ${remaining < 0 ? 'border-destructive/50' : ''}`}>
-            <CardHeader className="pb-3">
+          <Card className={`app-card ${remaining < 0 ? 'border-destructive/50' : ''}`}>
+            <CardHeader className="app-card-header">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Rimanente</CardTitle>
+                <CardTitle className="app-card-title">Rimanente</CardTitle>
                 <TrendingDown className={`h-4 w-4 ${remaining < 0 ? 'text-destructive' : 'text-success'}`} />
               </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${remaining < 0 ? 'text-destructive' : 'text-success'}`}>
+              <div className={`app-card-value ${remaining < 0 ? 'text-destructive' : 'text-success'}`}>
                 €{remaining.toFixed(2)}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader className="border-b border-border/50">
-              <CardTitle>Spese Recenti</CardTitle>
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+          <Card className="app-card">
+            <CardHeader className="border-b border-border/50 px-4 sm:px-6 py-4">
+              <CardTitle className="text-base sm:text-lg font-semibold">Spese Recenti</CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="p-4 sm:p-6">
               {filteredExpenses.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">Nessuna spesa</p>
+                <p className="text-center text-sm text-muted-foreground py-8">Nessuna spesa</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3 max-h-[400px] overflow-y-auto">
                   {filteredExpenses.slice(0, 10).map((expense) => (
                     <div
                       key={expense.id}
                       className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card hover:bg-muted/50 transition-colors"
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{expense.description || 'Nessuna descrizione'}</p>
-                        <p className="text-sm text-muted-foreground">
+                      <div className="flex-1 min-w-0 mr-3">
+                        <p className="text-sm font-medium truncate">{expense.description || 'Nessuna descrizione'}</p>
+                        <p className="text-xs text-muted-foreground">
                           {new Date(expense.date + 'T00:00:00').toLocaleDateString('it-IT', {
                             day: '2-digit',
                             month: '2-digit', 
@@ -236,13 +236,13 @@ export default function ExpensesPage() {
                           })}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold">€{parseFloat(String(expense.amount)).toFixed(2)}</span>
+                      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                        <span className="text-sm font-semibold">€{parseFloat(String(expense.amount)).toFixed(2)}</span>
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => deleteExpense.mutate(expense.id)}
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -254,15 +254,15 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader className="border-b border-border/50">
-              <CardTitle>Per Categoria</CardTitle>
+          <Card className="app-card">
+            <CardHeader className="border-b border-border/50 px-4 sm:px-6 py-4">
+              <CardTitle className="text-base sm:text-lg font-semibold">Per Categoria</CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="p-4 sm:p-6">
               {categoryData.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">Nessun dato</p>
+                <p className="text-center text-sm text-muted-foreground py-8">Nessun dato</p>
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={250}>
                   <PieChart>
                     <Pie
                       data={categoryData}
@@ -270,7 +270,7 @@ export default function ExpensesPage() {
                       cy="50%"
                       labelLine={false}
                       label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
+                      outerRadius={70}
                       fill="#8884d8"
                       dataKey="value"
                     >
