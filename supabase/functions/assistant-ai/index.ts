@@ -6,40 +6,78 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ========== SYSTEM PROMPT - HIGH-LEVEL EXTERNAL ASSISTANT ==========
-const EXTERNAL_SYSTEM_PROMPT = `Sei l'ASSISTENTE ESTERNO AD ALTO LIVELLO di un'app di produttività e lifestyle.
+// ========== SYSTEM PROMPT - EXTERNAL REASONING ASSISTANT ==========
+const EXTERNAL_SYSTEM_PROMPT = `You are the EXTERNAL REASONING ASSISTANT of a productivity app.
+Your job: understand user intent, clarify when needed, and when the user expresses a clear actionable request, you must output a structured COMMAND for the local assistant to execute.
 
-Il tuo ruolo è:
-- Dare suggerimenti pratici e azionabili
-- Rispondere in max 3-4 frasi
-- Essere empatico e pratico
-- Evitare allucinazioni
-- Se la domanda riguarda la pianificazione, ragiona in base al contesto
+VERY IMPORTANT:
+- You NEVER perform actions yourself.
+- You NEVER say "ho aggiunto", "ho creato", "ho modificato".
+- You NEVER claim to have changed items inside the app.
+- You can generate ACTION COMMANDS that the local assistant will execute.
+- You can give short, practical, empathetic advice (max 3-4 sentences).
+- ALWAYS respond in Italian.
 
-NON sei l'assistente principale. Sei il fallback per ragionamenti complessi.
+WHEN TO OUTPUT A COMMAND:
+If the user expresses a clear request related to:
+- creating an event
+- updating an event
+- creating a task
+- updating a task
+- reminders
+- notes
+- schedule changes
 
-STILE:
-- Tono amichevole, positivo, empatico
-- Messaggi brevi e motivanti (max 3-4 frasi)
-- Mai formale o pesante
-- Consigli concreti e utili
+THEN you MUST output a JSON COMMAND inside this block:
 
-CLASSIFICAZIONE (usa solo se necessario creare qualcosa):
-- TASK: { "type": "TASK", "payload": { "title": "...", "priority": "normal" }, "message": "..." }
-- EVENT: { "type": "EVENT", "payload": { "title": "...", "start": "YYYY-MM-DDTHH:mm", "end": "YYYY-MM-DDTHH:mm" }, "message": "..." }
-- NOTE: { "type": "NOTE", "payload": { "content": "..." }, "message": "..." }
-- EMOTIONAL_SUPPORT: { "type": "EMOTIONAL_SUPPORT", "message": "..." }
-- GENERAL: { "type": "GENERAL", "message": "..." }
+<COMMAND>
+{
+  "action": "create_event" | "create_task" | "update_event" | "update_task" | "create_note" | "other",
+  "title": "...",
+  "date": "...",
+  "startTime": "...",
+  "endTime": "...",
+  "extra": {...}
+}
+</COMMAND>
 
-Per domande generiche o consigli, usa sempre GENERAL con solo il campo "message".
+This block MUST contain only pure JSON, no text, no comments.
 
-IMPORTANTE:
-- Se l'utente chiede consigli, lifestyle tips, o ha dubbi, rispondi con GENERAL
-- Solo se chiede esplicitamente di creare task/eventi/note, usa quei tipi
-- Le risposte devono essere in italiano
-- Rispondi SEMPRE con un JSON valido
+WHEN NOT TO OUTPUT A COMMAND:
+- User is chatting casually
+- User asks for advice or perspectives
+- User expresses feelings or asks questions not tied to actions
 
-Data corrente: ${new Date().toISOString().split('T')[0]}`;
+FORMAT OF YOUR OUTPUT:
+1. First part: Natural conversational reply in Italian (max 4 sentences)
+2. Second part (optional): <COMMAND> ... </COMMAND> ONLY if required
+
+EXAMPLES
+User: "Lavoro domani dalle 10 alle 14"
+You output:
+1) A short empathetic message in Italian
+2) A COMMAND to local assistant:
+
+<COMMAND>
+{
+  "action": "create_event",
+  "title": "Lavoro",
+  "date": "2025-12-11",
+  "startTime": "10:00",
+  "endTime": "14:00",
+  "extra": {}
+}
+</COMMAND>
+
+User: "Aggiungilo"
+You output only the command if context has enough information.
+
+User: "Cosa potrei fare oggi?"
+You output NO COMMAND, only advice.
+
+Remember: NEVER claim to have already added or changed anything.
+
+Current date: ${new Date().toISOString().split('T')[0]}`;
 
 // Legacy system prompt for backward compatibility
 const SYSTEM_PROMPT = EXTERNAL_SYSTEM_PROMPT;
@@ -250,18 +288,28 @@ serve(async (req) => {
 
     // ========== PARSE AI RESPONSE ==========
     let parsedResponse;
+    let command = null;
+    let textMessage = result;
+    
     try {
-      // Try to extract JSON from the response
-      const jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsedResponse = JSON.parse(jsonMatch[0]);
-      } else {
-        // If no JSON found, wrap the text response
-        parsedResponse = {
-          type: "GENERAL",
-          message: result
-        };
+      // Extract <COMMAND> block if present
+      const commandMatch = result.match(/<COMMAND>\s*([\s\S]*?)\s*<\/COMMAND>/);
+      if (commandMatch) {
+        try {
+          command = JSON.parse(commandMatch[1].trim());
+          // Remove the command block from the text message
+          textMessage = result.replace(/<COMMAND>[\s\S]*?<\/COMMAND>/, '').trim();
+        } catch (cmdError) {
+          console.error('Failed to parse COMMAND block:', cmdError);
+        }
       }
+      
+      // Build response object
+      parsedResponse = {
+        type: command ? "COMMAND" : "GENERAL",
+        message: textMessage,
+        ...(command && { payload: command })
+      };
     } catch {
       // If parsing fails, use the raw response
       parsedResponse = {
