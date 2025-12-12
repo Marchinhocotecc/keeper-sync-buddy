@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  source?: 'local' | 'external';
+  source?: 'local' | 'external' | 'fallback';
   suggestions?: Array<{ text: string; priority: string }>;
   timestamp: Date;
   commandExecuted?: boolean;
@@ -173,14 +173,6 @@ export default function AssistantPanel() {
       // Show suggestions if available
       if (response.suggestions && response.suggestions.length > 0) {
         setSuggestions(response.suggestions.map(s => ({ text: s, priority: 'medium' })));
-      }
-
-      if (!response.success) {
-        toast({
-          title: "Attenzione",
-          description: response.message,
-          variant: "default",
-        });
       }
     } catch (error: any) {
       toast({
