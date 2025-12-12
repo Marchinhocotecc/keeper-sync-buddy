@@ -17,6 +17,8 @@ interface Message {
   source?: 'local' | 'external';
   suggestions?: Array<{ text: string; priority: string }>;
   timestamp: Date;
+  commandExecuted?: boolean;
+  commandResult?: string;
 }
 
 // Format timestamp
@@ -160,7 +162,9 @@ export default function AssistantPanel() {
         content: response.message,
         source: response.source,
         suggestions: response.suggestions,
-        timestamp: new Date()
+        timestamp: new Date(),
+        commandExecuted: response.commandExecuted,
+        commandResult: response.commandResult
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
@@ -319,12 +323,19 @@ export default function AssistantPanel() {
                   >
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                     {msg.role === "assistant" && msg.source && (
-                      <Badge 
-                        variant={msg.source === 'external' ? 'default' : 'outline'} 
-                        className="mt-2 sm:mt-3 text-xs"
-                      >
-                        {msg.source === 'local' ? '⚡ Locale' : '🌐 AI Esterno'}
-                      </Badge>
+                      <div className="flex items-center gap-2 mt-2 sm:mt-3 flex-wrap">
+                        <Badge 
+                          variant={msg.source === 'external' ? 'default' : 'outline'} 
+                          className="text-xs"
+                        >
+                          {msg.source === 'local' ? '⚡ Locale' : '🌐 AI Esterno'}
+                        </Badge>
+                        {msg.commandExecuted && (
+                          <Badge variant="secondary" className="text-xs">
+                            ✓ Comando eseguito
+                          </Badge>
+                        )}
+                      </div>
                     )}
                   </div>
                   {msg.role === "user" && (
