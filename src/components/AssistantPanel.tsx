@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Send, Bot, User, Sparkles, Lightbulb, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { handleMessage, loadMemory, clearMemory } from "@/utils/assistant";
+import { processMessage, getSmartGreeting, resetConversation } from "@/assistant/aiEngine";
+import { loadMemory, clearMemory } from "@/utils/assistant/memory";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Message {
@@ -154,24 +155,24 @@ export default function AssistantPanel() {
     setSuggestions([]);
 
     try {
-      // Use the new hybrid assistant
-      const response = await handleMessage(textToSend, userId);
+      // Use the new hybrid AI Engine
+      const response = await processMessage(userId, textToSend);
       
       const assistantMessage: Message = {
         role: "assistant",
         content: response.message,
         source: response.source,
-        suggestions: response.suggestions,
+        suggestions: response.suggestions?.map(s => ({ text: s, priority: 'medium' })),
         timestamp: new Date(),
-        commandExecuted: response.commandExecuted,
-        commandResult: response.commandResult
+        commandExecuted: response.actionExecuted,
+        commandResult: response.actionResult?.success ? 'success' : undefined
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Show suggestions if available
       if (response.suggestions && response.suggestions.length > 0) {
-        setSuggestions(response.suggestions);
+        setSuggestions(response.suggestions.map(s => ({ text: s, priority: 'medium' })));
       }
 
       if (!response.success) {

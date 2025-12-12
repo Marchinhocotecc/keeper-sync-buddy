@@ -6,70 +6,62 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ========== SYSTEM PROMPT - EXTERNAL REASONING ASSISTANT WITH XML ==========
-const EXTERNAL_SYSTEM_PROMPT = `Sei l'Assistente Esterno Avanzato di Daily Sync Keeper.
-Rispondi SEMPRE con questo formato XML:
+// ========== SYSTEM PROMPT - JSON ONLY FORMAT ==========
+const SYSTEM_PROMPT = `Sei l'Assistente AI di Daily Sync Keeper.
+DEVI RISPONDERE SEMPRE E SOLO in formato JSON valido, senza testo aggiuntivo.
 
-<response>
-  <message>Testo naturale da mostrare all'utente.</message>
-  <action type="tipo_azione">
-    <title>...</title>
-    <date>YYYY-MM-DD</date>
-    <startTime>HH:MM</startTime>
-    <endTime>HH:MM</endTime>
-    <amount>...</amount>
-    <category>...</category>
-    <description>...</description>
-    <priority>low|medium|high</priority>
-  </action>
-</response>
+FORMATO OBBLIGATORIO:
+{
+  "intent": "TIPO_INTENT",
+  "payload": { ... },
+  "message": "Messaggio naturale per l'utente in italiano"
+}
 
-REGOLE IMPORTANTI:
-1. Non aggiungere MAI tu eventi/task/spese nella realtà - genera solo comandi XML.
-2. Usa <action> SOLO se l'utente esprime volontà chiara ("aggiungi", "crea", "programma", "inserisci").
-3. Se l'utente chiede consigli o informazioni, ometti completamente l'elemento <action>.
-4. Rispondi SEMPRE in italiano con tono amichevole e motivazionale.
-5. Il messaggio deve essere breve (max 3-4 frasi).
+INTENT VALIDI:
+- "create_event": Creare un evento (payload: title, date, startTime, endTime)
+- "create_task": Creare un task (payload: title, priority)
+- "create_expense": Registrare spesa (payload: amount, category, description)
+- "create_note": Salvare nota (payload: content, category)
+- "query_tasks": Mostrare task (payload: filter, limit)
+- "query_events": Mostrare eventi (payload: period)
+- "query_expenses": Mostrare spese (payload: period)
+- "query_budget": Mostrare budget (payload: {})
+- "advice": Dare consigli (payload: {})
+- "suggestion": Suggerimento generico (payload: {})
+- "greeting": Saluto (payload: {})
+- "farewell": Congedo (payload: {})
+- "thanks": Ringraziamento (payload: {})
+- "question": Richiesta chiarimento (payload: {})
+- "unknown": Richiesta non chiara (payload: {})
 
-TIPI DI ACTION VALIDI:
-- create_event: per creare eventi nel calendario
-- create_task: per creare task/attività
-- create_expense: per registrare spese
-- update_budget: per aggiornare il budget
-- create_note: per salvare note
+REGOLE FONDAMENTALI:
+1. Rispondi SOLO in JSON puro, mai testo libero
+2. NON inventare dati o eventi inesistenti
+3. NON dire "ho creato" - proponi solo l'azione
+4. Per date usa formato YYYY-MM-DD
+5. Per orari usa formato HH:MM
+6. Rispondi sempre in italiano
+7. Il campo message deve essere breve e amichevole (max 2-3 frasi)
 
 ESEMPI:
 
-Utente: "Lavoro domani dalle 10 alle 14"
-<response>
-  <message>Perfetto! Ti organizzo l'evento di lavoro per domani. Buona produttività! 💪</message>
-  <action type="create_event">
-    <title>Lavoro</title>
-    <date>${new Date(Date.now() + 86400000).toISOString().split('T')[0]}</date>
-    <startTime>10:00</startTime>
-    <endTime>14:00</endTime>
-  </action>
-</response>
+Utente: "Aggiungi evento lavoro domani alle 10"
+{"intent":"create_event","payload":{"title":"Lavoro","date":"${new Date(Date.now() + 86400000).toISOString().split('T')[0]}","startTime":"10:00","endTime":"11:00"},"message":"Perfetto! Aggiungo l'evento lavoro per domani alle 10."}
 
-Utente: "Ho speso 25 euro al supermercato"
-<response>
-  <message>Registrato! Spesa di €25 per la spesa. 📊</message>
-  <action type="create_expense">
-    <amount>25</amount>
-    <category>Supermercato</category>
-    <description>Spesa alimentare</description>
-  </action>
-</response>
+Utente: "Ho speso 50 euro al supermercato"
+{"intent":"create_expense","payload":{"amount":50,"category":"Supermercato","description":"Spesa alimentare"},"message":"Registro la spesa di €50 per il supermercato."}
 
-Utente: "Cosa potrei fare oggi?"
-<response>
-  <message>Potresti iniziare con le attività più importanti della mattina, quando l'energia è alta. Prenditi anche una pausa per ricaricarti!</message>
-</response>
+Utente: "Mostra i miei task"
+{"intent":"query_tasks","payload":{"filter":"pending","limit":10},"message":"Ecco i tuoi task in sospeso."}
 
-Data corrente: ${new Date().toISOString().split('T')[0]}`;
+Utente: "Cosa dovrei fare oggi?"
+{"intent":"advice","payload":{},"message":"Ti consiglio di iniziare con le attività più importanti della mattina quando hai più energia!"}
 
-// Legacy system prompt for backward compatibility
-const SYSTEM_PROMPT = EXTERNAL_SYSTEM_PROMPT;
+Utente: "Ciao"
+{"intent":"greeting","payload":{},"message":"Ciao! Come posso aiutarti oggi?"}
+
+Data corrente: ${new Date().toISOString().split('T')[0]}
+RISPONDI SEMPRE E SOLO IN JSON.`;
 
 // ========== CONFIGURATION ==========
 const RATE_LIMIT_MAX_REQUESTS = 5;
@@ -150,13 +142,14 @@ serve(async (req) => {
       );
     }
 
-    const { prompt, userId, context } = body;
+    const { prompt, message, userId, context, history, systemPrompt, forceJson } = body;
+    const userMessage = prompt || message;
 
-    if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
+    if (!userMessage || typeof userMessage !== "string" || userMessage.trim().length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false,
-          message: "Dimmi pure, sono qui per aiutarti! 💛",
+          message: "Dimmi pure, sono qui per aiutarti!",
           type: "ERROR"
         }), 
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -175,21 +168,23 @@ serve(async (req) => {
     }
 
     // ========== BUILD MESSAGES ==========
+    const activeSystemPrompt = systemPrompt || SYSTEM_PROMPT;
     const messages = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: activeSystemPrompt },
     ];
 
     // Add user context if available
     if (userContext) {
       messages.push({
         role: "system",
-        content: `Contesto utente salvato: ${JSON.stringify(userContext)}`
+        content: `Contesto utente: ${JSON.stringify(userContext)}`
       });
     }
 
-    // Add conversation context if provided
-    if (context && Array.isArray(context)) {
-      context.slice(-5).forEach((msg: any) => {
+    // Add conversation history if provided
+    const conversationHistory = history || context;
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      conversationHistory.slice(-6).forEach((msg: any) => {
         messages.push({
           role: msg.role === 'user' ? 'user' : 'assistant',
           content: msg.content
@@ -197,7 +192,12 @@ serve(async (req) => {
       });
     }
 
-    messages.push({ role: "user", content: prompt });
+    // Add JSON format reminder if forceJson
+    const userContent = forceJson 
+      ? `${userMessage}\n\n[RICORDA: Rispondi SOLO in JSON valido]`
+      : userMessage;
+    
+    messages.push({ role: "user", content: userContent });
 
     // ========== CALL LOVABLE AI ==========
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -277,32 +277,41 @@ serve(async (req) => {
 
     // ========== PARSE AI RESPONSE ==========
     let parsedResponse;
-    let command = null;
-    let textMessage = result;
     
     try {
-      // Extract <COMMAND> block if present
-      const commandMatch = result.match(/<COMMAND>\s*([\s\S]*?)\s*<\/COMMAND>/);
-      if (commandMatch) {
-        try {
-          command = JSON.parse(commandMatch[1].trim());
-          // Remove the command block from the text message
-          textMessage = result.replace(/<COMMAND>[\s\S]*?<\/COMMAND>/, '').trim();
-        } catch (cmdError) {
-          console.error('Failed to parse COMMAND block:', cmdError);
-        }
+      // Try to parse as JSON first
+      let jsonContent = result.trim();
+      
+      // Extract JSON from markdown code blocks if present
+      const codeBlockMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        jsonContent = codeBlockMatch[1].trim();
       }
       
-      // Build response object
+      // Extract JSON object from text
+      const jsonMatch = jsonContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonContent = jsonMatch[0];
+      }
+      
+      const parsed = JSON.parse(jsonContent);
+      
+      // Validate and normalize the response
       parsedResponse = {
-        type: command ? "COMMAND" : "GENERAL",
-        message: textMessage,
-        ...(command && { payload: command })
+        type: "JSON",
+        response: jsonContent,
+        intent: parsed.intent || 'unknown',
+        payload: parsed.payload || {},
+        message: parsed.message || ''
       };
-    } catch {
-      // If parsing fails, use the raw response
+      
+      console.log("Parsed JSON response:", parsedResponse);
+    } catch (parseError) {
+      // If JSON parsing fails, return as text
+      console.warn("Failed to parse JSON, returning as text:", parseError);
       parsedResponse = {
-        type: "GENERAL", 
+        type: "TEXT",
+        response: result,
         message: result
       };
     }
