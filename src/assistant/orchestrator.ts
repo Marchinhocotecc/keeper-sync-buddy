@@ -1,6 +1,6 @@
 /**
  * Orchestrator - Unified interface for UI and future external AI
- * Now with Daily Focus Engine integration
+ * Now with Daily Focus Engine integration and conversation intelligence
  */
 
 import { format, parse, isValid, addDays } from 'date-fns';
@@ -34,6 +34,15 @@ import {
   isFocusRequest, 
   formatFocusResponse 
 } from './dailyFocusEngine';
+import {
+  getSessionState,
+  getDiverseSuggestions,
+  getNoDataAlternativeResponse,
+  detectMode,
+  updateSessionState,
+  isRepetitiveResponse,
+  trackResponse
+} from './conversationIntelligence';
 import { supabase } from '@/integrations/supabase/client';
 
 // Intent patterns for classification
@@ -396,6 +405,8 @@ export async function getAssistantResponse(
 
 // Helper handlers for specific intents
 async function handleQueryTasks(userId: string): Promise<OrchestratorResponse> {
+  const sessionState = getSessionState(userId);
+  
   const { data: tasks } = await supabase
     .from('tasks')
     .select('*')
@@ -405,9 +416,18 @@ async function handleQueryTasks(userId: string): Promise<OrchestratorResponse> {
     .limit(5);
 
   if (!tasks || tasks.length === 0) {
+    // Use conversation intelligence for diverse responses
+    const alternative = getNoDataAlternativeResponse(userId, {
+      hasEvents: false,
+      hasTasks: false,
+      hasExpenses: false
+    });
+    
     return {
-      message: 'Non hai task in sospeso! 🎉 Vuoi aggiungerne uno?',
-      suggestions: ['Aggiungi un task', 'Mostra completati'],
+      message: alternative.message,
+      suggestions: alternative.suggestions.length > 0 
+        ? alternative.suggestions 
+        : ['Aggiungi un task', 'Mostra completati'],
       source: 'local'
     };
   }
@@ -513,11 +533,27 @@ async function handleQueryBudget(userId: string): Promise<OrchestratorResponse> 
 }
 
 async function handleGetSuggestions(userId: string): Promise<OrchestratorResponse> {
+  const sessionState = getSessionState(userId);
   const suggestions = await generateSmartSuggestions(userId);
 
-  if (suggestions.length === 0) {
+  // Check if we already gave similar suggestions
+  if (suggestions.length === 0 || sessionState.noDataResponseCount > 0) {
+    // Use diverse suggestions from conversation intelligence
+    const diverseSuggestions = getDiverseSuggestions(userId);
+    const mode = detectMode('suggerimenti'); // Force suggestion mode
+    
+    let message: string;
+    if (sessionState.noDataResponseCount === 0) {
+      message = 'Hai un po\' di tempo libero oggi. Ecco alcune idee:';
+    } else if (sessionState.noDataResponseCount === 1) {
+      message = 'Vedo che cerchi ispirazione. Prova una di queste:';
+    } else {
+      message = 'Cambiamo prospettiva. Che ne dici di:';
+    }
+
     return {
-      message: 'Non ho suggerimenti particolari per ora. Stai andando alla grande! 👍',
+      message: `${message}\n\n${diverseSuggestions.map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
+      suggestions: diverseSuggestions.slice(0, 3),
       source: 'rules'
     };
   }
@@ -563,7 +599,26 @@ async function handleGetInsights(userId: string): Promise<OrchestratorResponse> 
  * Handle focus/guidance requests using Daily Focus Engine
  */
 async function handleFocusRequest(userId: string): Promise<OrchestratorResponse> {
+  const sessionState = getSessionState(userId);
   const focus = await calculateDailyFocus(userId);
+  
+  // If no focus items, use conversation intelligence
+  if (focus.items.length === 0) {
+    const alternative = getNoDataAlternativeResponse(userId, {
+      hasEvents: false,
+      hasTasks: false,
+      hasExpenses: false
+    });
+    
+    return {
+      message: alternative.message,
+      suggestions: alternative.suggestions.length > 0 
+        ? alternative.suggestions 
+        : getDiverseSuggestions(userId).slice(0, 3),
+      source: 'focus'
+    };
+  }
+
   const formatted = formatFocusResponse(focus);
 
   return {

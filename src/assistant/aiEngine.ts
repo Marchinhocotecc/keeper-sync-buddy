@@ -1,5 +1,5 @@
 /**
- * AI Engine - Hybrid local + external AI system
+ * AI Engine - Hybrid local + external AI system with conversation intelligence
  */
 
 import type { AIEngineResult, AIConversationEntry, AIIntent } from './typesAI';
@@ -18,15 +18,34 @@ import {
   addToConversationHistory,
   getContext 
 } from './contextStore';
+import {
+  getSessionState,
+  updateSessionState,
+  detectRephrasing,
+  detectMode,
+  isRepetitiveResponse,
+  getNoDataAlternativeResponse,
+  trackResponse,
+  increaseInsistence,
+  resetSessionState,
+  type AssistantMode,
+  type SessionState
+} from './conversationIntelligence';
 
 // Threshold for using external AI
 const LOCAL_CONFIDENCE_THRESHOLD = 0.6;
 
 // Keywords that suggest complex requests needing external AI
 const COMPLEX_KEYWORDS = [
-  'perché', 'consigliami', 'cosa dovrei', 'analizza', 'spiega',
-  'qual è il migliore', 'come posso migliorare', 'suggeriscimi',
-  'organizza', 'pianifica', 'ottimizza', 'valuta'
+  'perché', 'analizza', 'spiega',
+  'qual è il migliore', 'come posso migliorare',
+  'ottimizza', 'valuta'
+];
+
+// Keywords for suggestions (handled locally with intelligence)
+const SUGGESTION_KEYWORDS = [
+  'consigliami', 'cosa dovrei', 'suggeriscimi',
+  'organizza', 'pianifica', 'cosa potrei'
 ];
 
 // Keywords that should stay local
@@ -47,6 +66,21 @@ export async function processMessage(
   // Get conversation history for context
   const history = await getConversationHistory(userId);
   const context = await getContext(userId);
+  const sessionState = getSessionState(userId);
+
+  // Detect if user is rephrasing
+  const { isRephrasing, similarity } = detectRephrasing(message, history);
+  if (isRephrasing) {
+    increaseInsistence(userId);
+    console.log('User rephrasing detected, insistence:', sessionState.userInsistenceLevel + 1);
+  }
+
+  // Detect and update assistant mode
+  const detectedMode = detectMode(message);
+  if (detectedMode !== sessionState.mode) {
+    updateSessionState(userId, { mode: detectedMode });
+    console.log('Mode changed to:', detectedMode);
+  }
 
   // Save user message to history
   await addToConversationHistory(userId, {
@@ -56,10 +90,22 @@ export async function processMessage(
   });
 
   // Step 1: Try local processing first
-  const localResult = await tryLocalProcessing(userId, message);
+  const localResult = await tryLocalProcessing(userId, message, isRephrasing);
   
   if (localResult.shouldUseLocal) {
-    // Local processing was sufficient
+    // Check for repetitive response
+    if (isRepetitiveResponse(userId, localResult.result.message)) {
+      console.log('Repetitive response detected, generating alternative');
+      const alternative = getNoDataAlternativeResponse(userId, {
+        hasEvents: false,
+        hasTasks: false,
+        hasExpenses: false
+      });
+      localResult.result.message = alternative.message;
+      localResult.result.suggestions = alternative.suggestions;
+    }
+
+    trackResponse(userId, localResult.result.message, localResult.result.intent || null, true);
     await saveAssistantResponse(userId, localResult.result.message);
     return localResult.result;
   }
@@ -68,12 +114,14 @@ export async function processMessage(
   const externalResult = await tryExternalProcessing(userId, message, history);
   
   if (externalResult.success) {
+    trackResponse(userId, externalResult.result.message, externalResult.result.intent || null, true);
     await saveAssistantResponse(userId, externalResult.result.message);
     return externalResult.result;
   }
 
   // Step 3: Fallback if external AI fails
   const fallbackResult = getFallbackResponse({ wasExternalError: true, userMessage: message });
+  trackResponse(userId, fallbackResult.message, null, false);
   await saveAssistantResponse(userId, fallbackResult.message);
   return fallbackResult;
 }
@@ -83,9 +131,11 @@ export async function processMessage(
  */
 async function tryLocalProcessing(
   userId: string,
-  message: string
+  message: string,
+  isRephrasing: boolean
 ): Promise<{ shouldUseLocal: boolean; result: AIEngineResult }> {
   const lowerMessage = message.toLowerCase();
+  const sessionState = getSessionState(userId);
 
   // Check for help request
   if (/aiuto|help|cosa (puoi|sai) fare/i.test(message)) {
@@ -95,6 +145,46 @@ async function tryLocalProcessing(
   // Check if message has local keywords
   const hasLocalKeyword = LOCAL_KEYWORDS.some(kw => lowerMessage.includes(kw));
   const hasComplexKeyword = COMPLEX_KEYWORDS.some(kw => lowerMessage.includes(kw));
+  const hasSuggestionKeyword = SUGGESTION_KEYWORDS.some(kw => lowerMessage.includes(kw));
+
+  // Suggestion keywords are handled locally with intelligence
+  if (hasSuggestionKeyword && !hasComplexKeyword) {
+    try {
+      const localResponse = await localHandleMessage(userId, message);
+      
+      // If local response is repetitive due to no data, enhance it
+      if (isRepetitiveResponse(userId, localResponse.message) || 
+          (isRephrasing && sessionState.userInsistenceLevel > 0)) {
+        const alternative = getNoDataAlternativeResponse(userId, {
+          hasEvents: false,
+          hasTasks: false,
+          hasExpenses: false
+        });
+        return {
+          shouldUseLocal: true,
+          result: {
+            message: alternative.message,
+            source: 'local',
+            suggestions: alternative.suggestions
+          }
+        };
+      }
+
+      return {
+        shouldUseLocal: true,
+        result: {
+          message: localResponse.message,
+          source: localResponse.source === 'focus' ? 'local' : 'local',
+          suggestions: localResponse.suggestions,
+          ...(localResponse as any).decision && { decision: (localResponse as any).decision },
+          ...(localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning },
+          ...(localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems }
+        } as AIEngineResult & { decision?: string; reasoning?: string; focusItems?: any[] }
+      };
+    } catch (error) {
+      console.error('Local processing error:', error);
+    }
+  }
 
   // Force local for simple requests
   if (hasLocalKeyword && !hasComplexKeyword) {
@@ -106,7 +196,6 @@ async function tryLocalProcessing(
           message: localResponse.message,
           source: localResponse.source === 'focus' ? 'local' : 'local',
           suggestions: localResponse.suggestions,
-          // Pass through focus fields
           ...(localResponse as any).decision && { decision: (localResponse as any).decision },
           ...(localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning },
           ...(localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems }
@@ -122,7 +211,7 @@ async function tryLocalProcessing(
     const localResponse = await localHandleMessage(userId, message);
     
     // Check if local response indicates need for external AI
-    const needsExternal = shouldEscalateToExternal(localResponse, message);
+    const needsExternal = shouldEscalateToExternal(localResponse, message, isRephrasing, sessionState);
     
     if (!needsExternal) {
       return {
@@ -131,7 +220,6 @@ async function tryLocalProcessing(
           message: localResponse.message,
           source: localResponse.source === 'focus' ? 'local' : 'local',
           suggestions: localResponse.suggestions,
-          // Pass through focus fields
           ...(localResponse as any).decision && { decision: (localResponse as any).decision },
           ...(localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning },
           ...(localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems }
@@ -152,7 +240,12 @@ async function tryLocalProcessing(
 /**
  * Check if we should escalate to external AI
  */
-function shouldEscalateToExternal(localResponse: any, message: string): boolean {
+function shouldEscalateToExternal(
+  localResponse: any, 
+  message: string,
+  isRephrasing: boolean,
+  sessionState: SessionState
+): boolean {
   // Never escalate focus responses - they're handled by the Daily Focus Engine
   if (localResponse.source === 'focus') {
     return false;
@@ -160,33 +253,32 @@ function shouldEscalateToExternal(localResponse: any, message: string): boolean 
 
   const lowerMessage = message.toLowerCase();
   
-  // Complex keywords always escalate
+  // Complex keywords always escalate (but not suggestion keywords)
   if (COMPLEX_KEYWORDS.some(kw => lowerMessage.includes(kw))) {
     return true;
   }
 
-  // Long messages might need more context
-  if (message.length > 100) {
+  // Long messages might need more context (but higher threshold)
+  if (message.length > 150) {
     return true;
   }
 
   // Check if local response indicates uncertainty
   const uncertaintyPhrases = [
     'non sono sicuro',
-    'non ho capito',
-    'potresti riformulare',
-    'hmm'
+    'potresti riformulare'
   ];
 
+  // "non ho capito" should NOT trigger external AI - use local fallback instead
   if (uncertaintyPhrases.some(phrase => 
     localResponse.message?.toLowerCase().includes(phrase)
   )) {
     return true;
   }
 
-  // Check for followUp indicating action request
+  // Check for followUp indicating action request that needs parsing
   if (localResponse.followUp && [
-    'create_task', 'create_event', 'create_expense'
+    'create_event', 'create_expense'
   ].includes(localResponse.followUp)) {
     return true;
   }
@@ -224,22 +316,34 @@ async function tryExternalProcessing(
     let result: AIEngineResult;
 
     if (requiresExecution(intent)) {
-      // Execute the command
+      // Execute the command - ONLY here do we confirm action
       const execResult = await executeAICommand(userId, intent, payload);
       
-      result = {
-        message: execResult.success 
-          ? execResult.message 
-          : (aiMessage || execResult.message),
-        source: 'external',
-        intent,
-        actionExecuted: execResult.success,
-        actionResult: {
-          success: execResult.success,
-          data: execResult.data,
-          error: execResult.error
-        }
-      };
+      // CRITICAL: Only claim success if actually executed
+      if (execResult.success) {
+        result = {
+          message: execResult.message, // This message confirms the action
+          source: 'external',
+          intent,
+          actionExecuted: true,
+          actionResult: {
+            success: true,
+            data: execResult.data
+          }
+        };
+      } else {
+        // Execution failed - say so honestly
+        result = {
+          message: execResult.message || 'Non sono riuscito a completare l\'azione. Riprova.',
+          source: 'external',
+          intent,
+          actionExecuted: false,
+          actionResult: {
+            success: false,
+            error: execResult.error
+          }
+        };
+      }
     } else if (requiresQuery(intent)) {
       // Execute query
       const queryResult = await executeAICommand(userId, intent, payload);
@@ -251,8 +355,27 @@ async function tryExternalProcessing(
       };
     } else {
       // Advice, greeting, etc - just return the message
+      // Clean any false action claims from AI message
+      let cleanMessage = aiMessage || 'Come posso aiutarti?';
+      const falseClaimPatterns = [
+        /ho (aggiunto|creato|registrato|inserito)/gi,
+        /fatto!|completato!/gi,
+        /è stato (aggiunto|creato)/gi
+      ];
+      
+      for (const pattern of falseClaimPatterns) {
+        if (pattern.test(cleanMessage)) {
+          // Replace with proposal language
+          cleanMessage = cleanMessage
+            .replace(/ho aggiunto/gi, 'posso aggiungere')
+            .replace(/ho creato/gi, 'posso creare')
+            .replace(/ho registrato/gi, 'posso registrare')
+            .replace(/ho inserito/gi, 'posso inserire');
+        }
+      }
+
       result = {
-        message: aiMessage || 'Come posso aiutarti?',
+        message: cleanMessage,
         source: 'external',
         intent
       };
@@ -287,6 +410,7 @@ function generateFollowUpSuggestions(intent: AIIntent): string[] {
     query_expenses: ['Controlla budget', 'Registra spesa', 'Task'],
     query_budget: ['Vedi spese', 'Modifica budget', 'Task'],
     advice: ['Mostra task', 'Eventi oggi', 'Budget'],
+    suggestion: ['Cosa ho oggi?', 'I miei task', 'Pianifica domani'],
     greeting: ['Cosa ho oggi?', 'I miei task', 'Suggerimenti'],
     default: ['Mostra task', 'Eventi oggi', 'Spese del mese']
   };
@@ -327,6 +451,7 @@ export async function getSmartGreeting(userId: string): Promise<AIEngineResult> 
 export async function resetConversation(userId: string): Promise<void> {
   const { clearConversationHistory } = await import('./contextStore');
   await clearConversationHistory(userId);
+  resetSessionState(userId); // Also reset session intelligence
 }
 
 // Re-export for convenience
