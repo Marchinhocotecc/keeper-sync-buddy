@@ -5,21 +5,26 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, Bot, User, Sparkles, Lightbulb, Trash2 } from "lucide-react";
+import { Send, Bot, User, Sparkles, Lightbulb, Trash2, Target, Brain, CheckCircle2, SkipForward } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { processMessage, getSmartGreeting, resetConversation } from "@/assistant/aiEngine";
 import { loadMemory, clearMemory } from "@/utils/assistant/memory";
 import { motion, AnimatePresence } from "framer-motion";
+import type { FocusItem } from "@/assistant/types";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
-  source?: 'local' | 'external' | 'fallback';
+  source?: 'local' | 'external' | 'fallback' | 'focus';
   suggestions?: Array<{ text: string; priority: string }>;
   timestamp: Date;
   commandExecuted?: boolean;
   commandResult?: string;
+  // Daily Focus fields
+  decision?: string;
+  reasoning?: string;
+  focusItems?: FocusItem[];
 }
 
 // Format timestamp
@@ -91,12 +96,12 @@ export default function AssistantPanel() {
         setMessages(loadedMessages);
       }
       
-      // Set default suggestions
+      // Set default suggestions with focus-related prompts
       setSuggestions([
-        { text: "Mostra i miei task", priority: "medium" },
-        { text: "Cosa ho in programma oggi?", priority: "medium" },
-        { text: "Come posso organizzarmi meglio?", priority: "low" },
-        { text: "Mi sento stressato, aiutami", priority: "low" },
+        { text: "Cosa dovrei fare oggi?", priority: "high" },
+        { text: "Da dove inizio?", priority: "medium" },
+        { text: "Ho poco tempo, aiutami", priority: "medium" },
+        { text: "Mi sento confuso", priority: "low" },
       ]);
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -161,11 +166,15 @@ export default function AssistantPanel() {
       const assistantMessage: Message = {
         role: "assistant",
         content: response.message,
-        source: response.source,
+        source: response.source as Message['source'],
         suggestions: response.suggestions?.map(s => ({ text: s, priority: 'medium' })),
         timestamp: new Date(),
         commandExecuted: response.actionExecuted,
-        commandResult: response.actionResult?.success ? 'success' : undefined
+        commandResult: response.actionResult?.success ? 'success' : undefined,
+        // Focus-specific fields from orchestrator
+        decision: (response as any).decision,
+        reasoning: (response as any).reasoning,
+        focusItems: (response as any).focusItems
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
@@ -315,13 +324,70 @@ export default function AssistantPanel() {
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    
+                    {/* Focus Decision Block */}
+                    {msg.role === "assistant" && msg.decision && (
+                      <div className="mt-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Target className="h-4 w-4 text-primary" />
+                          <span className="text-xs font-semibold text-primary uppercase tracking-wide">Decisione</span>
+                        </div>
+                        <p className="text-sm font-medium text-foreground">{msg.decision}</p>
+                      </div>
+                    )}
+                    
+                    {/* Focus Reasoning Block */}
+                    {msg.role === "assistant" && msg.reasoning && (
+                      <div className="mt-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Brain className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">Perché</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{msg.reasoning}</p>
+                      </div>
+                    )}
+                    
+                    {/* Focus Items Actions */}
+                    {msg.role === "assistant" && msg.focusItems && msg.focusItems.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {msg.focusItems.map((item, itemIdx) => (
+                          <div key={itemIdx} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                item.type === 'task' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' :
+                                item.type === 'event' ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400' :
+                                'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                              }`}>
+                                {item.type === 'task' ? 'Task' : item.type === 'event' ? 'Evento' : 'Recupero'}
+                              </span>
+                              <span className="text-sm">{item.title}</span>
+                            </div>
+                            {item.action && (
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Fatto
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground">
+                                  <SkipForward className="h-3 w-3 mr-1" />
+                                  Salta
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
                     {msg.role === "assistant" && msg.source && (
                       <div className="flex items-center gap-2 mt-2 sm:mt-3 flex-wrap">
                         <Badge 
-                          variant={msg.source === 'external' ? 'default' : 'outline'} 
+                          variant={msg.source === 'external' ? 'default' : msg.source === 'focus' ? 'secondary' : 'outline'} 
                           className="text-xs"
                         >
-                          {msg.source === 'local' ? '⚡ Locale' : '🌐 AI Esterno'}
+                          {msg.source === 'local' ? '⚡ Locale' : 
+                           msg.source === 'focus' ? '🎯 Focus Engine' :
+                           msg.source === 'fallback' ? '🔄 Fallback' : '🌐 AI Esterno'}
                         </Badge>
                         {msg.commandExecuted && (
                           <Badge variant="secondary" className="text-xs">
@@ -346,7 +412,7 @@ export default function AssistantPanel() {
                 </div>
                 
                 {/* Suggestions after assistant message */}
-                {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && (
+                {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && !msg.focusItems && (
                   <div className="ml-10 sm:ml-14 space-y-1.5 sm:space-y-2 mt-2">
                     {msg.suggestions.map((sug, sugIdx) => (
                       <motion.button

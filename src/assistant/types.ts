@@ -177,5 +177,24 @@ export interface OrchestratorResponse {
     payload: Record<string, any>;
   };
   followUp?: string;
-  source: 'local' | 'rules' | 'context';
+  source: 'local' | 'rules' | 'context' | 'focus';
+  // Daily Focus specific fields
+  decision?: string;
+  reasoning?: string;
+  focusItems?: FocusItem[];
+}
+
+// Daily Focus types
+export interface FocusItem {
+  type: 'task' | 'event' | 'recovery' | 'wellness';
+  id: string | null;
+  title: string;
+  reason: string;
+  confidence: 'high' | 'medium';
+  priority: number;
+  estimatedMinutes?: number;
+  action?: {
+    type: 'complete' | 'skip' | 'reschedule';
+    payload?: Record<string, any>;
+  };
 }

@@ -1,5 +1,6 @@
 /**
  * Orchestrator - Unified interface for UI and future external AI
+ * Now with Daily Focus Engine integration
  */
 
 import { format, parse, isValid, addDays } from 'date-fns';
@@ -28,6 +29,11 @@ import {
 } from './coreEngine';
 import { runAllRules } from './rulesEngine';
 import { getUserPatterns, predictBestTimeSlots, predictWeaknesses } from './habitsEngine';
+import { 
+  calculateDailyFocus, 
+  isFocusRequest, 
+  formatFocusResponse 
+} from './dailyFocusEngine';
 import { supabase } from '@/integrations/supabase/client';
 
 // Intent patterns for classification
@@ -161,11 +167,17 @@ function getRandomResponse(templates: string[]): string {
 
 /**
  * Handle user message - Main orchestration function
+ * Now with Daily Focus Engine as primary handler for guidance requests
  */
 export async function handleUserMessage(
   userId: string, 
   message: string
 ): Promise<OrchestratorResponse> {
+  // FIRST: Check if this is a focus/guidance request
+  if (isFocusRequest(message)) {
+    return await handleFocusRequest(userId);
+  }
+
   // Classify intent
   const intentResult = classifyIntent(message);
   
@@ -178,12 +190,29 @@ export async function handleUserMessage(
 
   switch (intentResult.intent) {
     case 'greeting':
-      const greetingData = await getContextualGreeting(userId);
-      response = {
-        message: `${greetingData.greeting} ${greetingData.context}`,
-        suggestions: getQuickActionSuggestions(),
-        source: 'local'
-      };
+      // For greetings, also provide focus if there are pending items
+      const [greetingData, focus] = await Promise.all([
+        getContextualGreeting(userId),
+        calculateDailyFocus(userId)
+      ]);
+      
+      if (focus.items.length > 0) {
+        const formatted = formatFocusResponse(focus);
+        response = {
+          message: `${greetingData.greeting} ${formatted.message}`,
+          suggestions: formatted.suggestions,
+          decision: formatted.decision,
+          reasoning: formatted.reasoning,
+          focusItems: focus.items,
+          source: 'focus'
+        };
+      } else {
+        response = {
+          message: `${greetingData.greeting} ${greetingData.context}`,
+          suggestions: getQuickActionSuggestions(),
+          source: 'local'
+        };
+      }
       break;
 
     case 'farewell':
@@ -530,9 +559,27 @@ async function handleGetInsights(userId: string): Promise<OrchestratorResponse> 
   };
 }
 
+/**
+ * Handle focus/guidance requests using Daily Focus Engine
+ */
+async function handleFocusRequest(userId: string): Promise<OrchestratorResponse> {
+  const focus = await calculateDailyFocus(userId);
+  const formatted = formatFocusResponse(focus);
+
+  return {
+    message: formatted.message,
+    suggestions: formatted.suggestions,
+    decision: formatted.decision,
+    reasoning: formatted.reasoning,
+    focusItems: focus.items,
+    source: 'focus'
+  };
+}
+
 // Export all functions for external use
 export {
   classifyIntent,
   extractEntities,
-  getQuickActionSuggestions
+  getQuickActionSuggestions,
+  handleFocusRequest
 };
