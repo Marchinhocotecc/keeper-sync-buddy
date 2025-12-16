@@ -1,61 +1,35 @@
 /**
- * AI Engine - Hybrid local + external AI system with conversation intelligence
+ * AI Engine - Refactored with deterministic intent classification
+ * Intent is classified FIRST, then response is generated according to rules
  */
 
-import type { AIEngineResult, AIConversationEntry, AIIntent } from './typesAI';
+import type { AIEngineResult, AIIntent } from './typesAI';
 import { handleUserMessage as localHandleMessage } from './orchestrator';
 import { sendToExternalAI, formatHistoryForAI } from './openrouterClient';
-import { isActionableIntent, isQueryIntent } from './intentParser';
 import { executeAICommand, requiresExecution, requiresQuery } from './bridge';
-import { 
-  getFallbackResponse, 
-  getErrorRecoveryResponse, 
-  getNeverUnknownResponse,
-  getHelpResponse 
-} from './fallback';
-import { 
-  getConversationHistory, 
-  addToConversationHistory,
-  getContext 
-} from './contextStore';
+import { getFallbackResponse, getErrorRecoveryResponse, getHelpResponse } from './fallback';
+import { getConversationHistory, addToConversationHistory, getContext } from './contextStore';
+import { resetSessionState, getSessionState, updateSessionState, getDiverseSuggestions } from './conversationIntelligence';
 import {
-  getSessionState,
-  updateSessionState,
-  detectRephrasing,
-  detectMode,
-  isRepetitiveResponse,
-  getNoDataAlternativeResponse,
-  trackResponse,
-  increaseInsistence,
-  resetSessionState,
-  type AssistantMode,
-  type SessionState
-} from './conversationIntelligence';
-
-// Threshold for using external AI
-const LOCAL_CONFIDENCE_THRESHOLD = 0.6;
-
-// Keywords that suggest complex requests needing external AI
-const COMPLEX_KEYWORDS = [
-  'perché', 'analizza', 'spiega',
-  'qual è il migliore', 'come posso migliorare',
-  'ottimizza', 'valuta'
-];
-
-// Keywords for suggestions (handled locally with intelligence)
-const SUGGESTION_KEYWORDS = [
-  'consigliami', 'cosa dovrei', 'suggeriscimi',
-  'organizza', 'pianifica', 'cosa potrei'
-];
-
-// Keywords that should stay local
-const LOCAL_KEYWORDS = [
-  'mostra', 'vedi', 'elenca', 'lista', 'quanto', 'quanti',
-  'aggiungi', 'crea', 'registra', 'segna', 'fatto'
-];
+  classifyIntentV2,
+  wouldBeRepetition,
+  recordResponseHash,
+  clearResponseHashes,
+  incrementUnknownCount,
+  resetUnknownCount,
+  getUnknownCount,
+  type IntentCategory
+} from './intentClassifierV2';
+import {
+  buildControlledResponse,
+  cleanResponse,
+  getClarificationQuestion,
+  getInformationalResponse,
+  type ControlledResponse
+} from './responseController';
 
 /**
- * Main AI Engine entry point
+ * Main AI Engine entry point - SINGLE response per message
  */
 export async function processMessage(
   userId: string,
@@ -63,370 +37,313 @@ export async function processMessage(
 ): Promise<AIEngineResult> {
   console.log('AI Engine processing:', message);
 
-  // Get conversation history for context
-  const history = await getConversationHistory(userId);
-  const context = await getContext(userId);
-  const sessionState = getSessionState(userId);
+  // STEP 1: Classify intent FIRST (deterministic)
+  const classifiedIntent = classifyIntentV2(message);
+  console.log('Classified intent:', classifiedIntent);
 
-  // Detect if user is rephrasing
-  const { isRephrasing, similarity } = detectRephrasing(message, history);
-  if (isRephrasing) {
-    increaseInsistence(userId);
-    console.log('User rephrasing detected, insistence:', sessionState.userInsistenceLevel + 1);
+  // STEP 2: Handle based on intent category
+  let response: AIEngineResult;
+
+  switch (classifiedIntent.category) {
+    case 'ACTION':
+      resetUnknownCount(userId);
+      response = await handleActionIntent(userId, message, classifiedIntent.subtype);
+      break;
+
+    case 'SUGGESTION':
+      resetUnknownCount(userId);
+      response = await handleSuggestionIntent(userId, message);
+      break;
+
+    case 'INFORMATIONAL':
+      resetUnknownCount(userId);
+      response = handleInformationalIntent(message);
+      break;
+
+    case 'UNKNOWN':
+      response = handleUnknownIntent(userId, message);
+      break;
+
+    default:
+      response = handleUnknownIntent(userId, message);
   }
 
-  // Detect and update assistant mode
-  const detectedMode = detectMode(message);
-  if (detectedMode !== sessionState.mode) {
-    updateSessionState(userId, { mode: detectedMode });
-    console.log('Mode changed to:', detectedMode);
+  // STEP 3: Loop guard - check for repetition
+  if (wouldBeRepetition(userId, response.message)) {
+    console.log('Loop guard triggered - generating alternative');
+    response = generateAlternativeResponse(userId, classifiedIntent.category);
   }
 
-  // Save user message to history
-  await addToConversationHistory(userId, {
-    role: 'user',
-    content: message,
-    timestamp: new Date().toISOString()
-  });
+  // STEP 4: Clean forbidden phrases
+  response.message = cleanResponse(response.message);
 
-  // Step 1: Try local processing first
-  const localResult = await tryLocalProcessing(userId, message, isRephrasing);
-  
-  if (localResult.shouldUseLocal) {
-    // Check for repetitive response
-    if (isRepetitiveResponse(userId, localResult.result.message)) {
-      console.log('Repetitive response detected, generating alternative');
-      const alternative = getNoDataAlternativeResponse(userId, {
-        hasEvents: false,
-        hasTasks: false,
-        hasExpenses: false
-      });
-      localResult.result.message = alternative.message;
-      localResult.result.suggestions = alternative.suggestions;
-    }
+  // STEP 5: Record response hash
+  recordResponseHash(userId, response.message);
 
-    trackResponse(userId, localResult.result.message, localResult.result.intent || null, true);
-    await saveAssistantResponse(userId, localResult.result.message);
-    return localResult.result;
-  }
+  // STEP 6: Save to conversation history
+  await saveConversationEntry(userId, message, response.message);
 
-  // Step 2: Use external AI for complex requests
-  const externalResult = await tryExternalProcessing(userId, message, history);
-  
-  if (externalResult.success) {
-    trackResponse(userId, externalResult.result.message, externalResult.result.intent || null, true);
-    await saveAssistantResponse(userId, externalResult.result.message);
-    return externalResult.result;
-  }
-
-  // Step 3: Fallback if external AI fails
-  const fallbackResult = getFallbackResponse({ wasExternalError: true, userMessage: message });
-  trackResponse(userId, fallbackResult.message, null, false);
-  await saveAssistantResponse(userId, fallbackResult.message);
-  return fallbackResult;
+  return response;
 }
 
 /**
- * Try local processing first
+ * Handle ACTION intent - create, update, query data
  */
-async function tryLocalProcessing(
+async function handleActionIntent(
   userId: string,
   message: string,
-  isRephrasing: boolean
-): Promise<{ shouldUseLocal: boolean; result: AIEngineResult }> {
-  const lowerMessage = message.toLowerCase();
-  const sessionState = getSessionState(userId);
-
-  // Check for help request
-  if (/aiuto|help|cosa (puoi|sai) fare/i.test(message)) {
-    return { shouldUseLocal: true, result: getHelpResponse() };
+  subtype?: string
+): Promise<AIEngineResult> {
+  // Social subtypes handled directly
+  if (subtype === 'greeting' || subtype === 'thanks' || subtype === 'farewell' || subtype === 'small_talk' || subtype === 'help') {
+    return handleSocialIntent(userId, message, subtype);
   }
 
-  // Check if message has local keywords
-  const hasLocalKeyword = LOCAL_KEYWORDS.some(kw => lowerMessage.includes(kw));
-  const hasComplexKeyword = COMPLEX_KEYWORDS.some(kw => lowerMessage.includes(kw));
-  const hasSuggestionKeyword = SUGGESTION_KEYWORDS.some(kw => lowerMessage.includes(kw));
-
-  // Suggestion keywords are handled locally with intelligence
-  if (hasSuggestionKeyword && !hasComplexKeyword) {
-    try {
-      const localResponse = await localHandleMessage(userId, message);
-      
-      // If local response is repetitive due to no data, enhance it
-      if (isRepetitiveResponse(userId, localResponse.message) || 
-          (isRephrasing && sessionState.userInsistenceLevel > 0)) {
-        const alternative = getNoDataAlternativeResponse(userId, {
-          hasEvents: false,
-          hasTasks: false,
-          hasExpenses: false
-        });
-        return {
-          shouldUseLocal: true,
-          result: {
-            message: alternative.message,
-            source: 'local',
-            suggestions: alternative.suggestions
-          }
-        };
-      }
-
-      return {
-        shouldUseLocal: true,
-        result: {
-          message: localResponse.message,
-          source: localResponse.source === 'focus' ? 'local' : 'local',
-          suggestions: localResponse.suggestions,
-          ...(localResponse as any).decision && { decision: (localResponse as any).decision },
-          ...(localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning },
-          ...(localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems }
-        } as AIEngineResult & { decision?: string; reasoning?: string; focusItems?: any[] }
-      };
-    } catch (error) {
-      console.error('Local processing error:', error);
-    }
-  }
-
-  // Force local for simple requests
-  if (hasLocalKeyword && !hasComplexKeyword) {
-    try {
-      const localResponse = await localHandleMessage(userId, message);
-      return {
-        shouldUseLocal: true,
-        result: {
-          message: localResponse.message,
-          source: localResponse.source === 'focus' ? 'local' : 'local',
-          suggestions: localResponse.suggestions,
-          ...(localResponse as any).decision && { decision: (localResponse as any).decision },
-          ...(localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning },
-          ...(localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems }
-        } as AIEngineResult & { decision?: string; reasoning?: string; focusItems?: any[] }
-      };
-    } catch (error) {
-      console.error('Local processing error:', error);
-    }
-  }
-
-  // Try local orchestrator
+  // Try local orchestrator first
   try {
     const localResponse = await localHandleMessage(userId, message);
     
-    // Check if local response indicates need for external AI
-    const needsExternal = shouldEscalateToExternal(localResponse, message, isRephrasing, sessionState);
-    
-    if (!needsExternal) {
-      return {
-        shouldUseLocal: true,
-        result: {
-          message: localResponse.message,
-          source: localResponse.source === 'focus' ? 'local' : 'local',
-          suggestions: localResponse.suggestions,
-          ...(localResponse as any).decision && { decision: (localResponse as any).decision },
-          ...(localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning },
-          ...(localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems }
-        } as AIEngineResult & { decision?: string; reasoning?: string; focusItems?: any[] }
-      };
+    // Check if this needs external AI for parsing (create events, expenses)
+    if (localResponse.followUp && ['create_event', 'create_expense'].includes(localResponse.followUp)) {
+      return await handleExternalCreate(userId, message);
     }
+
+    return {
+      message: localResponse.message,
+      source: 'local',
+      suggestions: localResponse.suggestions,
+      intent: subtype as AIIntent,
+      // Only include decision/reasoning if present
+      ...((localResponse as any).decision && { decision: (localResponse as any).decision }),
+      ...((localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning }),
+      ...((localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems })
+    };
   } catch (error) {
-    console.error('Local processing error:', error);
+    console.error('Local action handler error:', error);
+    return getFallbackResponse({ userMessage: message });
   }
-
-  // Default: escalate to external
-  return {
-    shouldUseLocal: false,
-    result: { message: '', source: 'local' }
-  };
 }
 
 /**
- * Check if we should escalate to external AI
+ * Handle social intents (greeting, thanks, etc.)
  */
-function shouldEscalateToExternal(
-  localResponse: any, 
-  message: string,
-  isRephrasing: boolean,
-  sessionState: SessionState
-): boolean {
-  // Never escalate focus responses - they're handled by the Daily Focus Engine
-  if (localResponse.source === 'focus') {
-    return false;
-  }
-
-  const lowerMessage = message.toLowerCase();
-  
-  // Complex keywords always escalate (but not suggestion keywords)
-  if (COMPLEX_KEYWORDS.some(kw => lowerMessage.includes(kw))) {
-    return true;
-  }
-
-  // Long messages might need more context (but higher threshold)
-  if (message.length > 150) {
-    return true;
-  }
-
-  // Check if local response indicates uncertainty
-  const uncertaintyPhrases = [
-    'non sono sicuro',
-    'potresti riformulare'
-  ];
-
-  // "non ho capito" should NOT trigger external AI - use local fallback instead
-  if (uncertaintyPhrases.some(phrase => 
-    localResponse.message?.toLowerCase().includes(phrase)
-  )) {
-    return true;
-  }
-
-  // Check for followUp indicating action request that needs parsing
-  if (localResponse.followUp && [
-    'create_event', 'create_expense'
-  ].includes(localResponse.followUp)) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Try external AI processing
- */
-async function tryExternalProcessing(
+async function handleSocialIntent(
   userId: string,
   message: string,
-  history: any[]
-): Promise<{ success: boolean; result: AIEngineResult }> {
+  subtype: string
+): Promise<AIEngineResult> {
   try {
-    // Format history for AI
-    const formattedHistory = formatHistoryForAI(history);
-    
-    // Call external AI
-    const aiResponse = await sendToExternalAI(message, formattedHistory);
-    
-    if (!aiResponse.success || !aiResponse.response) {
-      console.warn('External AI failed:', aiResponse.error);
-      return {
-        success: false,
-        result: getErrorRecoveryResponse('network')
-      };
-    }
-
-    const { intent, payload, message: aiMessage } = aiResponse.response;
-    console.log('External AI response:', { intent, payload });
-
-    // Handle different intent types
-    let result: AIEngineResult;
-
-    if (requiresExecution(intent)) {
-      // Execute the command - ONLY here do we confirm action
-      const execResult = await executeAICommand(userId, intent, payload);
-      
-      // CRITICAL: Only claim success if actually executed
-      if (execResult.success) {
-        result = {
-          message: execResult.message, // This message confirms the action
-          source: 'external',
-          intent,
-          actionExecuted: true,
-          actionResult: {
-            success: true,
-            data: execResult.data
-          }
-        };
-      } else {
-        // Execution failed - say so honestly
-        result = {
-          message: execResult.message || 'Non sono riuscito a completare l\'azione. Riprova.',
-          source: 'external',
-          intent,
-          actionExecuted: false,
-          actionResult: {
-            success: false,
-            error: execResult.error
-          }
-        };
-      }
-    } else if (requiresQuery(intent)) {
-      // Execute query
-      const queryResult = await executeAICommand(userId, intent, payload);
-      
-      result = {
-        message: queryResult.message,
-        source: 'external',
-        intent
-      };
-    } else {
-      // Advice, greeting, etc - just return the message
-      // Clean any false action claims from AI message
-      let cleanMessage = aiMessage || 'Come posso aiutarti?';
-      const falseClaimPatterns = [
-        /ho (aggiunto|creato|registrato|inserito)/gi,
-        /fatto!|completato!/gi,
-        /è stato (aggiunto|creato)/gi
-      ];
-      
-      for (const pattern of falseClaimPatterns) {
-        if (pattern.test(cleanMessage)) {
-          // Replace with proposal language
-          cleanMessage = cleanMessage
-            .replace(/ho aggiunto/gi, 'posso aggiungere')
-            .replace(/ho creato/gi, 'posso creare')
-            .replace(/ho registrato/gi, 'posso registrare')
-            .replace(/ho inserito/gi, 'posso inserire');
-        }
-      }
-
-      result = {
-        message: cleanMessage,
-        source: 'external',
-        intent
-      };
-    }
-
-    // Add suggestions if not present
-    if (!result.suggestions) {
-      result.suggestions = generateFollowUpSuggestions(intent);
-    }
-
-    return { success: true, result };
-
-  } catch (error) {
-    console.error('External AI processing error:', error);
+    const localResponse = await localHandleMessage(userId, message);
     return {
-      success: false,
-      result: getErrorRecoveryResponse('unknown')
+      message: localResponse.message,
+      source: 'local',
+      suggestions: localResponse.suggestions
+    };
+  } catch {
+    return getHelpResponse();
+  }
+}
+
+/**
+ * Handle SUGGESTION intent - user asks what to do
+ */
+async function handleSuggestionIntent(
+  userId: string,
+  message: string
+): Promise<AIEngineResult> {
+  const sessionState = getSessionState(userId);
+  
+  try {
+    // Get diverse suggestions based on conversation history
+    const suggestions = getDiverseSuggestions(userId);
+    
+    // Vary the intro based on how many times asked
+    const intros = [
+      'Ecco alcune idee per te:',
+      'Prova una di queste:',
+      'Che ne dici di:',
+      'Ti propongo:'
+    ];
+    
+    const introIndex = sessionState.responseCount % intros.length;
+    const intro = intros[introIndex];
+    
+    const suggestionList = suggestions
+      .slice(0, 3)
+      .map((s, i) => `${i + 1}. ${s}`)
+      .join('\n');
+
+    updateSessionState(userId, { responseCount: sessionState.responseCount + 1 });
+
+    return {
+      message: `${intro}\n\n${suggestionList}`,
+      source: 'local',
+      suggestions: suggestions.slice(0, 3),
+      intent: 'suggestion'
+    };
+  } catch (error) {
+    console.error('Suggestion handler error:', error);
+    return {
+      message: 'Ecco un\'idea: prenditi 10 minuti per organizzare la giornata.',
+      source: 'local',
+      suggestions: ['Mostra i task', 'Eventi oggi', 'Budget'],
+      intent: 'suggestion'
     };
   }
 }
 
 /**
- * Generate follow-up suggestions based on intent
+ * Handle INFORMATIONAL intent - general knowledge questions
  */
-function generateFollowUpSuggestions(intent: AIIntent): string[] {
-  const suggestions: Record<string, string[]> = {
-    create_event: ['Mostra calendario', 'Aggiungi altro evento', 'I miei task'],
-    create_task: ['Mostra task', 'Aggiungi altro task', 'Eventi oggi'],
-    create_expense: ['Vedi spese', 'Controlla budget', 'Aggiungi spesa'],
-    query_tasks: ['Segna come fatto', 'Aggiungi task', 'Eventi oggi'],
-    query_events: ['Aggiungi evento', 'Task da fare', 'Budget'],
-    query_expenses: ['Controlla budget', 'Registra spesa', 'Task'],
-    query_budget: ['Vedi spese', 'Modifica budget', 'Task'],
-    advice: ['Mostra task', 'Eventi oggi', 'Budget'],
-    suggestion: ['Cosa ho oggi?', 'I miei task', 'Pianifica domani'],
-    greeting: ['Cosa ho oggi?', 'I miei task', 'Suggerimenti'],
-    default: ['Mostra task', 'Eventi oggi', 'Spese del mese']
+function handleInformationalIntent(message: string): AIEngineResult {
+  // NO actions, NO decisions, NO task language
+  return {
+    message: getInformationalResponse(message),
+    source: 'local',
+    // No suggestions for informational queries
+    intent: 'advice'
   };
-
-  return suggestions[intent] || suggestions.default;
 }
 
 /**
- * Save assistant response to history
+ * Handle UNKNOWN intent
  */
-async function saveAssistantResponse(userId: string, message: string): Promise<void> {
+function handleUnknownIntent(userId: string, message: string): AIEngineResult {
+  const unknownCount = incrementUnknownCount(userId);
+  
+  const clarification = getClarificationQuestion(unknownCount - 1);
+  
+  if (!clarification) {
+    // Stop responding after 2 UNKNOWN in a row
+    return {
+      message: '',
+      source: 'local'
+    };
+  }
+
+  return {
+    message: clarification,
+    source: 'local',
+    // No suggestions for unknown - just clarify
+    intent: 'unknown'
+  };
+}
+
+/**
+ * Generate alternative when loop detected
+ */
+function generateAlternativeResponse(userId: string, category: IntentCategory): AIEngineResult {
+  const sessionState = getSessionState(userId);
+  updateSessionState(userId, { noDataResponseCount: sessionState.noDataResponseCount + 1 });
+  
+  const alternatives = [
+    {
+      message: 'Cambiamo prospettiva. Hai qualcosa di specifico in mente?',
+      suggestions: ['Aggiungi task', 'Crea evento', 'Registra spesa']
+    },
+    {
+      message: 'Vuoi che ti aiuti con qualcosa di concreto?',
+      suggestions: ['Mostra task', 'Eventi oggi', 'Vedi budget']
+    },
+    {
+      message: 'Posso aiutarti a organizzare, pianificare o registrare qualcosa.',
+      suggestions: ['Pianifica giornata', 'Analisi settimanale']
+    }
+  ];
+
+  const altIndex = sessionState.noDataResponseCount % alternatives.length;
+  const alt = alternatives[altIndex];
+
+  return {
+    message: alt.message,
+    source: 'local',
+    suggestions: alt.suggestions
+  };
+}
+
+/**
+ * Handle external AI for complex creates (events, expenses with parsing)
+ */
+async function handleExternalCreate(
+  userId: string,
+  message: string
+): Promise<AIEngineResult> {
+  try {
+    const history = await getConversationHistory(userId);
+    const formattedHistory = formatHistoryForAI(history);
+    
+    const aiResponse = await sendToExternalAI(message, formattedHistory);
+    
+    if (!aiResponse.success || !aiResponse.response) {
+      return {
+        message: 'Dimmi più dettagli: cosa vuoi creare e quando?',
+        source: 'local',
+        followUp: 'create_event'
+      };
+    }
+
+    const { intent, payload, message: aiMessage } = aiResponse.response;
+
+    if (requiresExecution(intent)) {
+      const execResult = await executeAICommand(userId, intent, payload);
+      
+      if (execResult.success) {
+        return {
+          message: execResult.message,
+          source: 'external',
+          intent,
+          actionExecuted: true,
+          actionResult: { success: true, data: execResult.data }
+        };
+      } else {
+        return {
+          message: execResult.message || 'Non sono riuscito a completare l\'azione. Riprova con più dettagli.',
+          source: 'external',
+          intent,
+          actionExecuted: false
+        };
+      }
+    }
+
+    // Clean any false action claims
+    let cleanMessage = aiMessage || 'Come posso aiutarti?';
+    cleanMessage = cleanMessage
+      .replace(/ho aggiunto/gi, 'posso aggiungere')
+      .replace(/ho creato/gi, 'posso creare')
+      .replace(/ho registrato/gi, 'posso registrare');
+
+    return {
+      message: cleanMessage,
+      source: 'external',
+      intent
+    };
+  } catch (error) {
+    console.error('External AI error:', error);
+    return getErrorRecoveryResponse('network');
+  }
+}
+
+/**
+ * Save conversation entries
+ */
+async function saveConversationEntry(
+  userId: string,
+  userMessage: string,
+  assistantMessage: string
+): Promise<void> {
   await addToConversationHistory(userId, {
-    role: 'assistant',
-    content: message,
+    role: 'user',
+    content: userMessage,
     timestamp: new Date().toISOString()
   });
+  
+  if (assistantMessage) {
+    await addToConversationHistory(userId, {
+      role: 'assistant',
+      content: assistantMessage,
+      timestamp: new Date().toISOString()
+    });
+  }
 }
 
 /**
@@ -451,7 +368,9 @@ export async function getSmartGreeting(userId: string): Promise<AIEngineResult> 
 export async function resetConversation(userId: string): Promise<void> {
   const { clearConversationHistory } = await import('./contextStore');
   await clearConversationHistory(userId);
-  resetSessionState(userId); // Also reset session intelligence
+  resetSessionState(userId);
+  clearResponseHashes(userId);
+  resetUnknownCount(userId);
 }
 
 // Re-export for convenience

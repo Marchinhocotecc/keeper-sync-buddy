@@ -96,6 +96,10 @@ export interface AIEngineResult {
     error?: string;
   };
   suggestions?: string[];
+  followUp?: string;
+  decision?: string;
+  reasoning?: string;
+  focusItems?: any[];
 }
 
 // Conversation entry for AI context
