@@ -104,9 +104,13 @@ async function tryLocalProcessing(
         shouldUseLocal: true,
         result: {
           message: localResponse.message,
-          source: 'local',
-          suggestions: localResponse.suggestions
-        }
+          source: localResponse.source === 'focus' ? 'local' : 'local',
+          suggestions: localResponse.suggestions,
+          // Pass through focus fields
+          ...(localResponse as any).decision && { decision: (localResponse as any).decision },
+          ...(localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning },
+          ...(localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems }
+        } as AIEngineResult & { decision?: string; reasoning?: string; focusItems?: any[] }
       };
     } catch (error) {
       console.error('Local processing error:', error);
@@ -125,9 +129,13 @@ async function tryLocalProcessing(
         shouldUseLocal: true,
         result: {
           message: localResponse.message,
-          source: 'local',
-          suggestions: localResponse.suggestions
-        }
+          source: localResponse.source === 'focus' ? 'local' : 'local',
+          suggestions: localResponse.suggestions,
+          // Pass through focus fields
+          ...(localResponse as any).decision && { decision: (localResponse as any).decision },
+          ...(localResponse as any).reasoning && { reasoning: (localResponse as any).reasoning },
+          ...(localResponse as any).focusItems && { focusItems: (localResponse as any).focusItems }
+        } as AIEngineResult & { decision?: string; reasoning?: string; focusItems?: any[] }
       };
     }
   } catch (error) {
@@ -145,6 +153,11 @@ async function tryLocalProcessing(
  * Check if we should escalate to external AI
  */
 function shouldEscalateToExternal(localResponse: any, message: string): boolean {
+  // Never escalate focus responses - they're handled by the Daily Focus Engine
+  if (localResponse.source === 'focus') {
+    return false;
+  }
+
   const lowerMessage = message.toLowerCase();
   
   // Complex keywords always escalate
