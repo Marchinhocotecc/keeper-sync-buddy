@@ -268,6 +268,42 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_notifications: {
+        Row: {
+          body: string
+          created_at: string | null
+          id: string
+          reference_id: string | null
+          scheduled_time: string
+          shown: boolean | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          id?: string
+          reference_id?: string | null
+          scheduled_time: string
+          shown?: boolean | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          id?: string
+          reference_id?: string | null
+          scheduled_time?: string
+          shown?: boolean | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           created_at: string | null
@@ -275,6 +311,13 @@ export type Database = {
           language: string | null
           monthly_budget: number | null
           notifications_enabled: boolean | null
+          notify_calendar: boolean | null
+          notify_daily_focus: boolean | null
+          notify_focus_time: string | null
+          notify_task_before_minutes: number | null
+          notify_tasks: boolean | null
+          notify_wellbeing: boolean | null
+          notify_wellbeing_time: string | null
           theme: string | null
           user_id: string | null
         }
@@ -284,6 +327,13 @@ export type Database = {
           language?: string | null
           monthly_budget?: number | null
           notifications_enabled?: boolean | null
+          notify_calendar?: boolean | null
+          notify_daily_focus?: boolean | null
+          notify_focus_time?: string | null
+          notify_task_before_minutes?: number | null
+          notify_tasks?: boolean | null
+          notify_wellbeing?: boolean | null
+          notify_wellbeing_time?: string | null
           theme?: string | null
           user_id?: string | null
         }
@@ -293,6 +343,13 @@ export type Database = {
           language?: string | null
           monthly_budget?: number | null
           notifications_enabled?: boolean | null
+          notify_calendar?: boolean | null
+          notify_daily_focus?: boolean | null
+          notify_focus_time?: string | null
+          notify_task_before_minutes?: number | null
+          notify_tasks?: boolean | null
+          notify_wellbeing?: boolean | null
+          notify_wellbeing_time?: string | null
           theme?: string | null
           user_id?: string | null
         }

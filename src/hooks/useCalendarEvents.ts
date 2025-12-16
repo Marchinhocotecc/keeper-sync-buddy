@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  scheduleEventNotification, 
+  cancelNotificationsForItem 
+} from "@/services/notificationService";
 
 export interface CalendarEvent {
   id: string;
@@ -59,12 +63,34 @@ export const useCalendarEvents = (userId?: string) => {
       if (error) throw error;
       return data as CalendarEvent;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", userId] });
       toast({ 
         title: "✅ Evento creato!",
         description: "Il tuo evento è stato aggiunto al calendario"
       });
+
+      // Schedule notification if enabled
+      if (userId && data) {
+        try {
+          const { data: settings } = await supabase
+            .from('settings')
+            .select('notifications_enabled, notify_calendar')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (settings?.notifications_enabled && settings?.notify_calendar !== false) {
+            await scheduleEventNotification(
+              userId,
+              data.id,
+              data.title,
+              data.start_time
+            );
+          }
+        } catch (error) {
+          console.error('Error scheduling event notification:', error);
+        }
+      }
     },
     onError: (error: any) => {
       toast({ 
@@ -113,13 +139,19 @@ export const useCalendarEvents = (userId?: string) => {
         .eq("user_id", userId);
 
       if (error) throw error;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: async (id) => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", userId] });
       toast({ 
         title: "🗑️ Evento eliminato",
         description: "L'evento è stato rimosso dal calendario"
       });
+      
+      // Cancel scheduled notification
+      if (userId) {
+        await cancelNotificationsForItem(userId, id);
+      }
     },
     onError: (error: any) => {
       toast({ 

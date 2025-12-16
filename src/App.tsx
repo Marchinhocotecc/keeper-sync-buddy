@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Navigation } from "@/components/Navigation";
+import { NotificationInitializer } from "@/components/NotificationInitializer";
 import HomePage from "./pages/HomePage";
 import CalendarPage from "./pages/CalendarPage";
 import ExpensesPage from "./pages/ExpensesPage";
@@ -24,6 +25,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <TooltipProvider>
+        <NotificationInitializer />
         <Toaster />
         <Sonner />
         <BrowserRouter>
