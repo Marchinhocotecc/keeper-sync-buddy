@@ -8,8 +8,16 @@ export interface UserSettings {
   language: string;
   notifications_enabled: boolean;
   monthly_budget?: number;
+  // Notification preferences
+  notify_tasks?: boolean;
+  notify_calendar?: boolean;
+  notify_daily_focus?: boolean;
+  notify_wellbeing?: boolean;
+  notify_focus_time?: string;
+  notify_wellbeing_time?: string;
+  notify_task_before_minutes?: number;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export const useSettings = (userId?: string) => {
@@ -28,7 +36,7 @@ export const useSettings = (userId?: string) => {
         .maybeSingle();
 
       if (error) throw error;
-      return data;
+      return data as UserSettings | null;
     },
     enabled: !!userId,
   });
@@ -48,7 +56,6 @@ export const useSettings = (userId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings", userId] });
-      toast({ title: "✅ Impostazioni aggiornate con successo" });
     },
     onError: (error: any) => {
       toast({ 

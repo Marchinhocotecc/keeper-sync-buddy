@@ -8,7 +8,6 @@ import {
   Moon, 
   Sun, 
   Monitor, 
-  Bell, 
   Brain, 
   HelpCircle, 
   LogOut, 
@@ -31,6 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useSettings } from '@/hooks/useSettings';
 import { useNavigate } from 'react-router-dom';
+import NotificationSettings from '@/components/NotificationSettings';
 
 interface UserProfile {
   email: string;
@@ -74,7 +74,6 @@ export default function SettingsPage() {
   const { settings, isLoading: isLoadingSettings, updateSettings } = useSettings(user?.id);
 
   // Local state for settings
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [assistantMemory, setAssistantMemory] = useState(true);
 
   // Modals
@@ -106,13 +105,9 @@ export default function SettingsPage() {
     loadUser();
   }, []);
 
-  // Sync settings to local state
+  // Sync settings to local state (for assistant memory)
   useEffect(() => {
-    if (settings) {
-      setNotificationsEnabled(settings.notifications_enabled ?? true);
-      // assistant_memory is stored in the settings but may not exist yet
-      // We'll treat it as a separate field in user_context or settings
-    }
+    // assistant_memory handled separately
   }, [settings]);
 
   // Handle language change
@@ -128,14 +123,6 @@ export default function SettingsPage() {
     setTheme(value);
     if (user?.id) {
       await updateSettings.mutateAsync({ theme: value });
-    }
-  };
-
-  // Handle notifications toggle
-  const handleNotificationsChange = async (checked: boolean) => {
-    setNotificationsEnabled(checked);
-    if (user?.id) {
-      await updateSettings.mutateAsync({ notifications_enabled: checked });
     }
   };
 
@@ -356,28 +343,9 @@ export default function SettingsPage() {
             </Card>
           </motion.div>
 
-          {/* Notifications Section */}
+          {/* Notifications Section - New Component */}
           <motion.div variants={itemVariants}>
-            <Card className="app-card">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-2 rounded-lg bg-primary/10 shrink-0">
-                      <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0">
-                      <Label className="text-sm sm:text-base font-medium">Notifiche</Label>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Ricevi avvisi e promemoria</p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={notificationsEnabled}
-                    onCheckedChange={handleNotificationsChange}
-                    className="shrink-0"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <NotificationSettings userId={user?.id} />
           </motion.div>
 
           {/* Assistant Section */}

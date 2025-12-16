@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  scheduleTaskNotification, 
+  cancelNotificationsForItem,
+  getNotificationPreferencesFromSettings
+} from "@/services/notificationService";
 
 export interface Task {
   id: string;
@@ -46,13 +51,36 @@ export const useTasks = (userId?: string) => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
-      toast({ title: "Task added successfully" });
+      toast({ title: "Task aggiunto" });
+
+      // Schedule notification if enabled
+      if (userId && data) {
+        try {
+          const { data: settings } = await supabase
+            .from('settings')
+            .select('notifications_enabled, notify_tasks, notify_task_before_minutes')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (settings?.notifications_enabled && settings?.notify_tasks !== false) {
+            await scheduleTaskNotification(
+              userId,
+              data.id,
+              data.title,
+              data.due_date || null,
+              settings.notify_task_before_minutes || 60
+            );
+          }
+        } catch (error) {
+          console.error('Error scheduling task notification:', error);
+        }
+      }
     },
     onError: (error: any) => {
       toast({ 
-        title: "Error adding task", 
+        title: "Errore nell'aggiunta del task", 
         description: error.message,
         variant: "destructive" 
       });
@@ -67,13 +95,19 @@ export const useTasks = (userId?: string) => {
         .eq("id", id);
 
       if (error) throw error;
+      return { id, newCompleted: !completed };
     },
-    onSuccess: () => {
+    onSuccess: async ({ id, newCompleted }) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
+      
+      // Cancel notification if task completed
+      if (newCompleted && userId) {
+        await cancelNotificationsForItem(userId, id);
+      }
     },
     onError: (error: any) => {
       toast({ 
-        title: "Error updating task", 
+        title: "Errore nell'aggiornamento del task", 
         description: error.message,
         variant: "destructive" 
       });
@@ -84,14 +118,20 @@ export const useTasks = (userId?: string) => {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("todos").delete().eq("id", id);
       if (error) throw error;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: async (id) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
-      toast({ title: "Task deleted" });
+      toast({ title: "Task eliminato" });
+      
+      // Cancel scheduled notification
+      if (userId) {
+        await cancelNotificationsForItem(userId, id);
+      }
     },
     onError: (error: any) => {
       toast({ 
-        title: "Error deleting task", 
+        title: "Errore nell'eliminazione del task", 
         description: error.message,
         variant: "destructive" 
       });
