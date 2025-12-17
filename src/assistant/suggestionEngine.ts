@@ -150,11 +150,14 @@ function getGenericSuggestions(constraints: Constraints): string[] {
 
 function getAlternativeDomain(current: DomainType, constraints: Constraints): string {
   const excluded = constraints.excludeDomains || [];
-  const alternatives: Record<DomainType & string, string> = {
+  const alternatives: Partial<Record<NonNullable<DomainType>, string>> = {
     productivity: 'benessere o finanze',
+    task: 'benessere o finanze',
     wellness: 'produttività o pianificazione',
     finance: 'benessere o produttività',
+    expense: 'benessere o produttività',
     planning: 'produttività o relax',
+    calendar: 'produttività o relax',
     social: 'produttività o benessere',
     general: 'task o eventi'
   };
@@ -185,37 +188,16 @@ export function buildSuggestionResponse(
     return 'Non ho altri suggerimenti per questo ambito. Vuoi esplorare qualcos\'altro?';
   }
 
-  const domainIntros: Record<DomainType & string, string[]> = {
-    productivity: [
-      'Per la produttività:',
-      'Ecco cosa puoi fare:',
-      'Sul fronte lavoro:'
-    ],
-    wellness: [
-      'Per il tuo benessere:',
-      'Prenditi cura di te:',
-      'Per rilassarti:'
-    ],
-    finance: [
-      'Per le tue finanze:',
-      'Lato economico:',
-      'Per il budget:'
-    ],
-    planning: [
-      'Per organizzarti:',
-      'Per la pianificazione:',
-      'Per il tuo calendario:'
-    ],
-    social: [
-      'Per le relazioni:',
-      'Sul fronte sociale:',
-      'Per connetterti:'
-    ],
-    general: [
-      'Ecco alcune idee:',
-      'Ti suggerisco:',
-      'Prova una di queste:'
-    ]
+  const domainIntros: Partial<Record<NonNullable<DomainType>, string[]>> = {
+    productivity: ['Per la produttività:', 'Ecco cosa puoi fare:', 'Sul fronte lavoro:'],
+    task: ['Per i tuoi task:', 'Ecco cosa puoi fare:', 'Sul fronte lavoro:'],
+    wellness: ['Per il tuo benessere:', 'Prenditi cura di te:', 'Per rilassarti:'],
+    finance: ['Per le tue finanze:', 'Lato economico:', 'Per il budget:'],
+    expense: ['Per le tue spese:', 'Lato economico:', 'Per il budget:'],
+    planning: ['Per organizzarti:', 'Per la pianificazione:', 'Per il tuo calendario:'],
+    calendar: ['Per il calendario:', 'Per la pianificazione:', 'Per i tuoi eventi:'],
+    social: ['Per le relazioni:', 'Sul fronte sociale:', 'Per connetterti:'],
+    general: ['Ecco alcune idee:', 'Ti suggerisco:', 'Prova una di queste:']
   };
 
   const intros = domain ? domainIntros[domain] || domainIntros.general : domainIntros.general;

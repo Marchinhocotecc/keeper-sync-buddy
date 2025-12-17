@@ -5,20 +5,24 @@
  * Phase 2: Decision Object validation
  * Phase 3: Execution (executeDecision)
  * 
- * NEVER responds directly to user input
- * ALL responses ONLY after valid Decision Object
+ * PRINCIPLE: The assistant NEVER responds directly to user input.
+ * ALL responses ONLY after producing a validated AssistantDecision object.
  */
 
-import type { AIEngineResult, AIIntent } from './typesAI';
-import { buildDecision, resetSession, getCurrentDecision, type DecisionObject } from './decisionEngine';
+import type { AIEngineResult } from './typesAI';
+import { 
+  buildDecision, 
+  resetSession, 
+  getCurrentDecision, 
+  getUnknownCount,
+  type DecisionObject 
+} from './decisionEngine';
 import { executeDecision, toAIEngineResult } from './executionController';
 import { addToConversationHistory, clearConversationHistory } from './contextStore';
 import {
   wouldBeRepetition,
   recordResponseHash,
-  clearResponseHashes,
-  incrementUnknownCount,
-  resetUnknownCount
+  clearResponseHashes
 } from './intentClassifierV2';
 
 /**
@@ -36,27 +40,32 @@ export async function processMessage(
   console.log('Decision Object:', JSON.stringify(decision, null, 2));
 
   // ========== PHASE 2: VALIDATION ==========
-  if (!decision.valid) {
-    console.error('Invalid decision:', decision.validationError);
-    // Return minimal response for invalid decisions
-    return {
-      message: '',
-      source: 'local'
-    };
-  }
-
-  // Track UNKNOWN intents
-  if (decision.intent === 'UNKNOWN') {
-    const unknownCount = incrementUnknownCount(userId);
-    if (unknownCount >= 2) {
-      // Stop responding after 2 UNKNOWN in a row
+  // Check if all required fields are present
+  if (!isValidDecision(decision)) {
+    console.error('Invalid decision - missing required fields');
+    
+    // For low confidence actions, ask for clarification
+    if (decision.intent === 'ACTION' && decision.validationError === 'missing_data') {
       return {
-        message: '',
+        message: getClarificationForAction(decision),
         source: 'local'
       };
     }
-  } else {
-    resetUnknownCount(userId);
+    
+    // For unknown/error intents, handle gracefully
+    if (decision.intent === 'UNKNOWN' || decision.intent === 'ERROR') {
+      const unknownCount = getUnknownCount(userId);
+      if (unknownCount >= 2) {
+        // Stop responding after 2 unknowns
+        return { message: '', source: 'local' };
+      }
+      return {
+        message: 'Non ho capito. Prova con: "aggiungi task", "cosa ho oggi", o "cosa mi consigli".',
+        source: 'local'
+      };
+    }
+    
+    return { message: '', source: 'local' };
   }
 
   // ========== PHASE 3: EXECUTION ==========
@@ -65,26 +74,27 @@ export async function processMessage(
   const executionResult = await executeDecision(userId, message, decision);
   
   if (!executionResult) {
-    console.error('Execution returned null');
-    return {
-      message: '',
-      source: 'local'
-    };
+    console.log('Execution returned null - stopping response');
+    return { message: '', source: 'local' };
   }
 
   // Loop guard - check for repetition
-  if (wouldBeRepetition(userId, executionResult.message)) {
-    console.log('Loop guard triggered');
+  if (executionResult.message && wouldBeRepetition(userId, executionResult.message)) {
+    console.log('Loop guard triggered - generating alternative');
     const alternative = generateAlternativeResponse(decision);
     executionResult.message = alternative.message;
     executionResult.suggestions = alternative.suggestions;
   }
 
   // Record response hash for loop detection
-  recordResponseHash(userId, executionResult.message);
+  if (executionResult.message) {
+    recordResponseHash(userId, executionResult.message);
+  }
 
-  // Save conversation
-  await saveConversation(userId, message, executionResult.message);
+  // Save conversation (only if we have a response)
+  if (executionResult.message) {
+    await saveConversation(userId, message, executionResult.message);
+  }
 
   // Convert to AIEngineResult
   const result = toAIEngineResult(executionResult);
@@ -97,6 +107,51 @@ export async function processMessage(
 }
 
 /**
+ * Validate that decision has all required fields
+ */
+function isValidDecision(decision: DecisionObject): boolean {
+  // Must have intent
+  if (!decision.intent) return false;
+  
+  // Must have domain
+  if (!decision.domain) return false;
+  
+  // Must have confidence
+  if (typeof decision.confidence !== 'number') return false;
+  
+  // For ACTION with requires_action, need sufficient confidence
+  if (decision.intent === 'ACTION' && decision.requires_action) {
+    if (decision.confidence < 0.5) return false;
+  }
+  
+  // Check explicit valid flag
+  return decision.valid;
+}
+
+/**
+ * Get clarification message for incomplete action
+ */
+function getClarificationForAction(decision: DecisionObject): string {
+  const data = decision.extracted_data || {};
+  
+  switch (decision.domain) {
+    case 'task':
+      if (!data.title) return 'Cosa vuoi aggiungere come task?';
+      break;
+    case 'calendar':
+      if (!data.title) return 'Come si chiama l\'evento?';
+      if (!data.date) return 'Quando vuoi programmare l\'evento?';
+      if (!data.startTime) return 'A che ora inizia?';
+      break;
+    case 'expense':
+      if (!data.amount) return 'Qual è l\'importo della spesa?';
+      break;
+  }
+  
+  return 'Puoi darmi più dettagli?';
+}
+
+/**
  * Generate alternative when loop detected
  */
 function generateAlternativeResponse(decision: DecisionObject): {
@@ -106,25 +161,35 @@ function generateAlternativeResponse(decision: DecisionObject): {
   switch (decision.intent) {
     case 'SUGGESTION':
       return {
-        message: 'Cambiamo prospettiva. In quale ambito vuoi concentrarti?',
+        message: 'Proviamo un altro approccio. Vuoi concentrarti su produttività, benessere o finanze?',
         suggestions: ['Produttività', 'Benessere', 'Finanze']
+      };
+    
+    case 'QUERY':
+      return {
+        message: 'Vuoi vedere altri dati? Task, eventi o spese?',
+        suggestions: ['Task', 'Eventi', 'Spese']
       };
     
     case 'ACTION':
       return {
-        message: 'Come posso aiutarti in modo diverso?',
-        suggestions: ['Mostra task', 'Eventi oggi', 'Budget']
+        message: 'Cos\'altro posso fare per te?'
+      };
+    
+    case 'CHAT':
+      return {
+        message: 'Dimmi come posso aiutarti!'
       };
     
     default:
       return {
-        message: 'Dimmi cosa vuoi fare.'
+        message: 'Come posso aiutarti?'
       };
   }
 }
 
 /**
- * Save conversation entry
+ * Save conversation entry (limited to last 5 messages)
  */
 async function saveConversation(
   userId: string,
@@ -160,7 +225,6 @@ export async function resetConversation(userId: string): Promise<void> {
   await clearConversationHistory(userId);
   resetSession(userId);
   clearResponseHashes(userId);
-  resetUnknownCount(userId);
   console.log('Conversation reset for user:', userId);
 }
 

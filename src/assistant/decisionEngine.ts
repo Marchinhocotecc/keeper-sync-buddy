@@ -7,9 +7,18 @@
  * NEVER respond without a valid Decision Object
  */
 
-export type IntentType = 'ACTION' | 'SUGGESTION' | 'INFORMATIONAL' | 'UNKNOWN';
-export type DomainType = 'productivity' | 'wellness' | 'finance' | 'planning' | 'social' | 'general' | null;
-export type ActionType = 'create' | 'update' | 'delete' | 'query' | 'respond' | 'clarify' | null;
+export type IntentType = 'ACTION' | 'QUERY' | 'SUGGESTION' | 'CHAT' | 'ERROR' | 'INFORMATIONAL' | 'UNKNOWN';
+export type DomainType = 'calendar' | 'task' | 'expense' | 'planning' | 'wellness' | 'general' | 'productivity' | 'finance' | 'social' | null;
+export type ActionType = 'CREATE' | 'UPDATE' | 'DELETE' | 'READ' | 'create' | 'update' | 'delete' | 'query' | 'respond' | 'clarify' | null;
+export type ResponseStyle = 'concise' | 'supportive' | 'neutral' | 'friendly';
+
+export interface ContextRequired {
+  today_tasks?: boolean;
+  today_events?: boolean;
+  budget?: boolean;
+  wellness?: boolean;
+  recent_history?: boolean;
+}
 
 /**
  * Decision Object - ALL fields required for response generation
@@ -21,9 +30,18 @@ export interface DecisionObject {
   constraints: Constraints;
   action: ActionType;
   requires_ai: boolean;
+  requires_action?: boolean;
+  action_type?: ActionType;
+  context_required?: ContextRequired;
+  response_style?: ResponseStyle;
+  confidence?: number;
+  extracted_data?: Record<string, any>;
   valid: boolean;             // False if any required field is missing
   validationError?: string;
 }
+
+// Alias for compatibility
+export type AssistantDecision = DecisionObject;
 
 export interface Constraints {
   timeRange?: 'today' | 'tomorrow' | 'week' | 'month' | null;
@@ -84,11 +102,14 @@ const SOCIAL_TRIGGERS = {
   help: /(?:aiuto|help|cosa\s+(?:puoi|sai)\s+fare)/i
 };
 
-const DOMAIN_KEYWORDS: Record<DomainType & string, RegExp> = {
+const DOMAIN_KEYWORDS: Partial<Record<NonNullable<DomainType>, RegExp>> = {
   productivity: /(?:task|attività|compito|lavoro|studio|progetto|deadline)/i,
+  task: /(?:task|attività|compito|lavoro|studio|progetto|deadline)/i,
   wellness: /(?:relax|riposo|benessere|meditazione|esercizio|salute|stress)/i,
   finance: /(?:spesa|budget|soldi|costo|pagamento|euro|€)/i,
+  expense: /(?:spesa|budget|soldi|costo|pagamento|euro|€)/i,
   planning: /(?:evento|appuntamento|calendario|riunione|meeting|programma)/i,
+  calendar: /(?:evento|appuntamento|calendario|riunione|meeting|programma)/i,
   social: /(?:amici|famiglia|uscire|chiamare|messaggio)/i,
   general: /.*/
 };
@@ -387,4 +408,23 @@ export function getSessionConstraints(userId: string): Constraints {
 
 export function getCurrentDecision(userId: string): DecisionObject | null {
   return getSession(userId).currentDecision;
+}
+
+/**
+ * Track unknown count for limiting repeated unknown responses
+ */
+const unknownCounts = new Map<string, number>();
+
+export function getUnknownCount(userId: string): number {
+  return unknownCounts.get(userId) || 0;
+}
+
+export function incrementUnknownCount(userId: string): number {
+  const count = (unknownCounts.get(userId) || 0) + 1;
+  unknownCounts.set(userId, count);
+  return count;
+}
+
+export function resetUnknownCount(userId: string): void {
+  unknownCounts.set(userId, 0);
 }
