@@ -3,7 +3,16 @@
  * Ensures ONE response per message, proper UI controls
  */
 
-import type { IntentCategory, ClassifiedIntent } from './intentClassifierV2';
+import type { IntentType } from './decisionEngine';
+
+// Re-map IntentCategory to IntentType for compatibility
+type IntentCategory = IntentType | 'INFORMATIONAL' | 'UNKNOWN';
+
+export interface ClassifiedIntent {
+  category: IntentCategory;
+  confidence: number;
+  subtype?: string;
+}
 
 export interface ControlledResponse {
   message: string;
