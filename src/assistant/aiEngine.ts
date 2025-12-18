@@ -3,20 +3,27 @@
  * 
  * STRICT PIPELINE (NON-NEGOTIABLE):
  * 
- * INPUT → INTENT PARSER → CONTEXT LOADER → DECISION ROUTER → RESPONSE
+ * INPUT → PENDING CHECK → INTENT PARSER → CONTEXT LOADER → DECISION ROUTER → RESPONSE
  * 
  * Rules:
  * 1. NEVER respond without going through the pipeline
  * 2. NEVER skip context loading
  * 3. NEVER claim actions without DB confirmation
  * 4. External AI can ONLY advise, never execute
+ * 5. Follow-up messages complete pending intents
+ * 6. NO generic fallback responses
  */
 
 import type { AIEngineResult } from './typesAI';
-import { parseIntent, type ParsedIntent } from './intentParser';
+import { parseIntent, type ParsedIntent, type ExtractedData } from './intentParser';
 import { loadUserContext, type UserContext } from './contextLoader';
 import { routeDecision, resetUnknownCount, type RouterResponse } from './decisionRouter';
-import { addToConversationHistory, clearConversationHistory } from './contextStore';
+import { 
+  addToConversationHistory, 
+  clearConversationHistory,
+  getPendingIntent,
+  clearPendingIntent
+} from './contextStore';
 
 // Response hash tracking for loop prevention
 const responseHashes = new Map<string, Set<string>>();
@@ -33,10 +40,29 @@ export async function processMessage(
   console.log('User:', userId);
   console.log('Message:', message);
   
-  // ========== PHASE 1: INTENT PARSING ==========
-  console.log('--- Phase 1: Intent Parsing ---');
-  const parsedIntent = parseIntent(message);
-  console.log('Parsed Intent:', parsedIntent.intent);
+  // ========== PHASE 0: CHECK PENDING INTENT ==========
+  console.log('--- Phase 0: Pending Intent Check ---');
+  const pendingIntent = getPendingIntent(userId);
+  let parsedIntent: ParsedIntent;
+  
+  if (pendingIntent) {
+    console.log('Found pending intent:', pendingIntent.intent);
+    // Merge new message data with pending intent
+    parsedIntent = mergeWithPendingIntent(message, pendingIntent);
+    console.log('Merged intent:', parsedIntent.intent);
+    console.log('Merged confidence:', parsedIntent.confidence);
+    
+    // Clear pending if we now have enough data
+    if (parsedIntent.confidence >= 0.8) {
+      clearPendingIntent(userId);
+    }
+  } else {
+    // ========== PHASE 1: INTENT PARSING ==========
+    console.log('--- Phase 1: Intent Parsing ---');
+    parsedIntent = parseIntent(message);
+  }
+  
+  console.log('Final Intent:', parsedIntent.intent);
   console.log('Confidence:', parsedIntent.confidence);
   console.log('Extracted Data:', JSON.stringify(parsedIntent.extractedData, null, 2));
   
@@ -91,7 +117,86 @@ export async function processMessage(
 }
 
 /**
- * Generate alternative response when loop detected
+ * Merge new message with pending intent to complete the action
+ */
+function mergeWithPendingIntent(
+  newMessage: string,
+  pending: { intent: any; extractedData: Partial<ExtractedData>; clarificationQuestion: string }
+): ParsedIntent {
+  const newParsed = parseIntent(newMessage);
+  const mergedData: ExtractedData = {
+    ...pending.extractedData,
+    rawText: newMessage
+  } as ExtractedData;
+  
+  // Extract additional data from new message
+  const lower = newMessage.toLowerCase();
+  
+  // Extract time if missing
+  if (!mergedData.startTime) {
+    const timeMatch = newMessage.match(/(\d{1,2})(?:[:.:](\d{2}))?/);
+    if (timeMatch) {
+      mergedData.startTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2] || '00'}`;
+    }
+  }
+  
+  // Extract amount if missing
+  if (!mergedData.amount) {
+    const amountMatch = newMessage.match(/€?\s*(\d+(?:[.,]\d{2})?)/);
+    if (amountMatch) {
+      mergedData.amount = parseFloat(amountMatch[1].replace(',', '.'));
+    }
+  }
+  
+  // Use new message as title if we don't have one
+  if (!mergedData.title && newMessage.length > 2 && newMessage.length < 100) {
+    // Don't use if it's just a number or time
+    if (!/^\d+(?:[:.]\d+)?$/.test(newMessage.trim())) {
+      mergedData.title = newMessage.trim();
+    }
+  }
+  
+  // Calculate new confidence based on completeness
+  let confidence = 0.5;
+  if (pending.intent === 'CREATE_EVENT') {
+    if (mergedData.title) confidence += 0.2;
+    if (mergedData.date) confidence += 0.2;
+    if (mergedData.startTime) confidence += 0.2;
+  } else if (pending.intent === 'CREATE_TASK') {
+    if (mergedData.title) confidence = 0.9;
+  } else if (pending.intent === 'CREATE_EXPENSE') {
+    if (mergedData.amount) confidence = 0.9;
+  }
+  
+  return {
+    intent: pending.intent,
+    confidence: Math.min(confidence, 1),
+    extractedData: mergedData,
+    requiresClarification: confidence < 0.8,
+    clarificationQuestion: confidence < 0.8 ? getMissingDataQuestion(pending.intent, mergedData) : undefined
+  };
+}
+
+/**
+ * Get specific question for missing data
+ */
+function getMissingDataQuestion(intent: string, data: Partial<ExtractedData>): string {
+  if (intent === 'CREATE_EVENT') {
+    if (!data.title) return 'Come si chiama l\'evento?';
+    if (!data.date) return 'Quando?';
+    if (!data.startTime) return 'A che ora?';
+  }
+  if (intent === 'CREATE_TASK') {
+    if (!data.title) return 'Cosa devi fare?';
+  }
+  if (intent === 'CREATE_EXPENSE') {
+    if (!data.amount) return 'Quanto hai speso?';
+  }
+  return 'Mi servono più dettagli.';
+}
+
+/**
+ * Generate alternative response when loop detected - NO GENERIC FALLBACKS
  */
 function getAlternativeResponse(
   parsedIntent: ParsedIntent,
@@ -99,9 +204,9 @@ function getAlternativeResponse(
 ): { message: string; suggestions?: string[] } {
   const { intent } = parsedIntent;
   
+  // Context-specific responses only - no generic fallbacks
   switch (intent) {
     case 'ADVICE_CONTEXTUAL':
-      // Provide different suggestions based on context
       if (context.pendingTasks.length > 0) {
         return {
           message: `Hai ${context.pendingTasks.length} task in sospeso. Vuoi che ti aiuti a organizzarli?`,
@@ -111,31 +216,26 @@ function getAlternativeResponse(
       if (context.todayEvents.length > 0) {
         return {
           message: `Hai ${context.todayEvents.length} eventi oggi. Vuoi vedere il programma?`,
-          suggestions: ['Eventi di oggi', 'Suggerimenti']
+          suggestions: ['Eventi di oggi']
         };
       }
       return {
-        message: 'Giornata libera! Cosa vorresti fare?',
-        suggestions: ['Aggiungi task', 'Aggiungi evento', 'Controlla budget']
+        message: 'Giornata libera! Aggiungi un task o un evento.',
+        suggestions: ['Aggiungi task', 'Aggiungi evento']
       };
     
     case 'QUERY_TASKS':
     case 'QUERY_EVENTS':
       return {
-        message: 'C\'è altro che posso aiutarti a trovare?',
-        suggestions: ['Budget', 'Spese', 'Suggerimenti']
-      };
-    
-    case 'SMALL_TALK':
-      return {
-        message: 'Dimmi come posso esserti utile!',
-        suggestions: ['Task', 'Eventi', 'Spese']
+        message: 'Vuoi vedere il budget o le spese?',
+        suggestions: ['Budget', 'Spese']
       };
     
     default:
+      // Return empty to avoid generic response
       return {
-        message: 'Come posso aiutarti?',
-        suggestions: ['Mostra i task', 'Eventi di oggi', 'Suggerimenti']
+        message: '',
+        suggestions: []
       };
   }
 }

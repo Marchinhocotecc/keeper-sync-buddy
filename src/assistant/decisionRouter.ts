@@ -26,6 +26,7 @@ import {
 } from './localExecutor';
 import { getContextualAdvice, getGeneralAnswer } from './aiAdvisor';
 import { getContextualGreeting } from './contextLoader';
+import { setPendingIntent, clearPendingIntent, incrementPendingAttempts, getPendingIntent } from './contextStore';
 
 export interface RouterResponse {
   message: string;
@@ -118,16 +119,21 @@ async function handleCreateEvent(
   requiresClarification: boolean,
   clarificationQuestion?: string
 ): Promise<RouterResponse> {
-  // Confidence gate: < 0.8 requires clarification
+  // Confidence gate: < 0.8 requires clarification - SET PENDING INTENT
   if (confidence < 0.8 || requiresClarification) {
+    const question = clarificationQuestion || getMissingFieldQuestion('CREATE_EVENT', data);
+    setPendingIntent(userId, 'CREATE_EVENT', data, question);
     return {
-      message: clarificationQuestion || 'Come si chiama l\'evento e quando?',
+      message: question,
       source: 'local',
       actionPerformed: false,
       requiresClarification: true,
-      clarificationQuestion
+      clarificationQuestion: question
     };
   }
+  
+  // Clear pending on success attempt
+  clearPendingIntent(userId);
   
   // Execute create
   const result = await createEvent(userId, data);
@@ -148,15 +154,18 @@ async function handleCreateTask(
   clarificationQuestion?: string
 ): Promise<RouterResponse> {
   if (confidence < 0.8 || requiresClarification) {
+    const question = clarificationQuestion || 'Cosa vuoi aggiungere come task?';
+    setPendingIntent(userId, 'CREATE_TASK', data, question);
     return {
-      message: clarificationQuestion || 'Cosa vuoi aggiungere come task?',
+      message: question,
       source: 'local',
       actionPerformed: false,
       requiresClarification: true,
-      clarificationQuestion
+      clarificationQuestion: question
     };
   }
   
+  clearPendingIntent(userId);
   const result = await createTask(userId, data);
   
   return {
@@ -175,15 +184,18 @@ async function handleCreateExpense(
   clarificationQuestion?: string
 ): Promise<RouterResponse> {
   if (confidence < 0.8 || requiresClarification) {
+    const question = clarificationQuestion || 'Qual è l\'importo della spesa?';
+    setPendingIntent(userId, 'CREATE_EXPENSE', data, question);
     return {
-      message: clarificationQuestion || 'Qual è l\'importo della spesa?',
+      message: question,
       source: 'local',
       actionPerformed: false,
       requiresClarification: true,
-      clarificationQuestion
+      clarificationQuestion: question
     };
   }
   
+  clearPendingIntent(userId);
   const result = await createExpense(userId, data);
   
   return {
@@ -192,6 +204,19 @@ async function handleCreateExpense(
     actionPerformed: result.success,
     requiresClarification: !result.success
   };
+}
+
+/**
+ * Get specific question based on what's missing
+ */
+function getMissingFieldQuestion(intent: string, data: ExtractedData): string {
+  if (intent === 'CREATE_EVENT') {
+    if (!data.title) return 'Come si chiama l\'evento?';
+    if (!data.date) return 'Quando?';
+    if (!data.startTime) return 'A che ora?';
+    return 'Mi servono titolo, data e ora.';
+  }
+  return 'Mi servono più dettagli.';
 }
 
 // ============ QUERY HANDLERS ============
@@ -347,7 +372,7 @@ function handleSmallTalk(context: UserContext, message: string): RouterResponse 
   };
 }
 
-// ============ UNKNOWN HANDLER ============
+// ============ UNKNOWN HANDLER - NO GENERIC FALLBACKS ============
 
 function handleUnknown(userId: string, clarificationQuestion?: string): RouterResponse {
   const count = unknownCounts.get(userId) || 0;
@@ -355,24 +380,49 @@ function handleUnknown(userId: string, clarificationQuestion?: string): RouterRe
   // Increment count
   unknownCounts.set(userId, count + 1);
   
-  // After MAX attempts, stop responding
+  // After MAX attempts, return empty - NO GENERIC RESPONSES
   if (count >= MAX_UNKNOWN_ATTEMPTS) {
-    unknownCounts.set(userId, 0); // Reset for next interaction
+    unknownCounts.set(userId, 0);
     return {
-      message: '', // Empty = no response
+      message: '', // Empty = no response, no generic fallback
       source: 'local',
       actionPerformed: false,
       requiresClarification: false
     };
   }
   
-  // First attempt: ask one clarification question
+  // Check if there's a pending intent we can reference
+  const pending = getPendingIntent(userId);
+  if (pending) {
+    const attempts = incrementPendingAttempts(userId);
+    if (attempts <= 2) {
+      // Rephrase the question based on pending intent
+      return {
+        message: pending.clarificationQuestion,
+        source: 'local',
+        actionPerformed: false,
+        requiresClarification: true,
+        clarificationQuestion: pending.clarificationQuestion
+      };
+    } else {
+      // Too many attempts, clear and give up
+      clearPendingIntent(userId);
+      return {
+        message: '', // No generic fallback
+        source: 'local',
+        actionPerformed: false,
+        requiresClarification: false
+      };
+    }
+  }
+  
+  // First attempt only: one specific clarification, not generic menu
+  // NO "Come posso aiutarti?" or similar generic phrases
   return {
-    message: clarificationQuestion || 'Vuoi creare un evento, un task, registrare una spesa, o hai bisogno di consigli?',
+    message: '', // Empty = no generic response
     source: 'local',
     actionPerformed: false,
-    requiresClarification: true,
-    clarificationQuestion
+    requiresClarification: false
   };
 }
 
