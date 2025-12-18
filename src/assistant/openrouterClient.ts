@@ -1,5 +1,6 @@
 /**
  * OpenRouter Client - Wrapper for external AI calls
+ * Updated: force module refresh
  */
 
 import { supabase } from '@/integrations/supabase/client';
