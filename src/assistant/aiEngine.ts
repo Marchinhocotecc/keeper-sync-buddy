@@ -1,195 +1,147 @@
 /**
- * AI Engine - Strict 3-Phase Decision Architecture
+ * AI Engine - Main Entry Point
  * 
- * Phase 1: Classification (buildDecision)
- * Phase 2: Decision Object validation
- * Phase 3: Execution (executeDecision)
+ * STRICT PIPELINE (NON-NEGOTIABLE):
  * 
- * PRINCIPLE: The assistant NEVER responds directly to user input.
- * ALL responses ONLY after producing a validated AssistantDecision object.
+ * INPUT → INTENT PARSER → CONTEXT LOADER → DECISION ROUTER → RESPONSE
+ * 
+ * Rules:
+ * 1. NEVER respond without going through the pipeline
+ * 2. NEVER skip context loading
+ * 3. NEVER claim actions without DB confirmation
+ * 4. External AI can ONLY advise, never execute
  */
 
 import type { AIEngineResult } from './typesAI';
-import { 
-  buildDecision, 
-  resetSession, 
-  getCurrentDecision, 
-  getUnknownCount,
-  type DecisionObject 
-} from './decisionEngine';
-import { executeDecision, toAIEngineResult } from './executionController';
+import { parseIntent, type ParsedIntent } from './intentParser';
+import { loadUserContext, type UserContext } from './contextLoader';
+import { routeDecision, resetUnknownCount, type RouterResponse } from './decisionRouter';
 import { addToConversationHistory, clearConversationHistory } from './contextStore';
-import {
-  wouldBeRepetition,
-  recordResponseHash,
-  clearResponseHashes
-} from './intentClassifierV2';
+
+// Response hash tracking for loop prevention
+const responseHashes = new Map<string, Set<string>>();
+const MAX_HASH_HISTORY = 10;
 
 /**
- * Main entry point - 3-phase strict architecture
+ * Process user message through the strict pipeline
  */
 export async function processMessage(
   userId: string,
   message: string
 ): Promise<AIEngineResult> {
-  console.log('=== AI Engine: Phase 1 - Classification ===');
-  console.log('Input:', message);
-
-  // ========== PHASE 1: CLASSIFICATION ==========
-  const decision = buildDecision(userId, message);
-  console.log('Decision Object:', JSON.stringify(decision, null, 2));
-
-  // ========== PHASE 2: VALIDATION ==========
-  // Check if all required fields are present
-  if (!isValidDecision(decision)) {
-    console.error('Invalid decision - missing required fields');
+  console.log('=== AI Engine Pipeline Start ===');
+  console.log('User:', userId);
+  console.log('Message:', message);
+  
+  // ========== PHASE 1: INTENT PARSING ==========
+  console.log('--- Phase 1: Intent Parsing ---');
+  const parsedIntent = parseIntent(message);
+  console.log('Parsed Intent:', parsedIntent.intent);
+  console.log('Confidence:', parsedIntent.confidence);
+  console.log('Extracted Data:', JSON.stringify(parsedIntent.extractedData, null, 2));
+  
+  // ========== PHASE 2: CONTEXT LOADING ==========
+  console.log('--- Phase 2: Context Loading ---');
+  const context = await loadUserContext(userId);
+  console.log('Context loaded:', {
+    pendingTasks: context.pendingTasks.length,
+    todayEvents: context.todayEvents.length,
+    budgetPercentage: context.budgetPercentage.toFixed(0) + '%'
+  });
+  
+  // ========== PHASE 3: DECISION ROUTING ==========
+  console.log('--- Phase 3: Decision Routing ---');
+  const routerResponse = await routeDecision(userId, parsedIntent, context);
+  console.log('Router Response:', {
+    source: routerResponse.source,
+    actionPerformed: routerResponse.actionPerformed,
+    requiresClarification: routerResponse.requiresClarification
+  });
+  
+  // ========== PHASE 4: LOOP PREVENTION ==========
+  if (routerResponse.message) {
+    const hash = simpleHash(routerResponse.message);
     
-    // For low confidence actions, ask for clarification
-    if (decision.intent === 'ACTION' && decision.validationError === 'missing_data') {
-      return {
-        message: getClarificationForAction(decision),
-        source: 'local'
-      };
+    if (isRepetition(userId, hash)) {
+      console.log('Loop detected - generating alternative');
+      const alternative = getAlternativeResponse(parsedIntent, context);
+      routerResponse.message = alternative.message;
+      routerResponse.suggestions = alternative.suggestions;
     }
     
-    // For unknown/error intents, handle gracefully
-    if (decision.intent === 'UNKNOWN' || decision.intent === 'ERROR') {
-      const unknownCount = getUnknownCount(userId);
-      if (unknownCount >= 2) {
-        // Stop responding after 2 unknowns
-        return { message: '', source: 'local' };
-      }
-      return {
-        message: 'Non ho capito. Prova con: "aggiungi task", "cosa ho oggi", o "cosa mi consigli".',
-        source: 'local'
-      };
-    }
-    
-    return { message: '', source: 'local' };
+    recordHash(userId, hash);
   }
-
-  // ========== PHASE 3: EXECUTION ==========
-  console.log('=== AI Engine: Phase 3 - Execution ===');
   
-  const executionResult = await executeDecision(userId, message, decision);
+  // ========== PHASE 5: SAVE CONVERSATION ==========
+  if (routerResponse.message) {
+    await saveConversation(userId, message, routerResponse.message);
+  }
   
-  if (!executionResult) {
-    console.log('Execution returned null - stopping response');
-    return { message: '', source: 'local' };
-  }
-
-  // Loop guard - check for repetition
-  if (executionResult.message && wouldBeRepetition(userId, executionResult.message)) {
-    console.log('Loop guard triggered - generating alternative');
-    const alternative = generateAlternativeResponse(decision);
-    executionResult.message = alternative.message;
-    executionResult.suggestions = alternative.suggestions;
-  }
-
-  // Record response hash for loop detection
-  if (executionResult.message) {
-    recordResponseHash(userId, executionResult.message);
-  }
-
-  // Save conversation (only if we have a response)
-  if (executionResult.message) {
-    await saveConversation(userId, message, executionResult.message);
-  }
-
-  // Convert to AIEngineResult
-  const result = toAIEngineResult(executionResult);
+  // ========== PHASE 6: FORMAT RESULT ==========
+  const result: AIEngineResult = {
+    message: routerResponse.message,
+    source: routerResponse.source === 'ai_advisor' ? 'external' : 'local',
+    suggestions: routerResponse.suggestions
+  };
   
-  console.log('=== AI Engine: Response ===');
-  console.log('Message:', result.message);
-  console.log('Source:', result.source);
-
+  console.log('=== AI Engine Pipeline End ===');
+  console.log('Final message:', result.message?.substring(0, 100) + '...');
+  
   return result;
 }
 
 /**
- * Validate that decision has all required fields
+ * Generate alternative response when loop detected
  */
-function isValidDecision(decision: DecisionObject): boolean {
-  // Must have intent
-  if (!decision.intent) return false;
+function getAlternativeResponse(
+  parsedIntent: ParsedIntent,
+  context: UserContext
+): { message: string; suggestions?: string[] } {
+  const { intent } = parsedIntent;
   
-  // Must have domain
-  if (!decision.domain) return false;
-  
-  // Must have confidence
-  if (typeof decision.confidence !== 'number') return false;
-  
-  // For ACTION with requires_action, need sufficient confidence
-  if (decision.intent === 'ACTION' && decision.requires_action) {
-    if (decision.confidence < 0.5) return false;
-  }
-  
-  // Check explicit valid flag
-  return decision.valid;
-}
-
-/**
- * Get clarification message for incomplete action
- */
-function getClarificationForAction(decision: DecisionObject): string {
-  const data = decision.extracted_data || {};
-  
-  switch (decision.domain) {
-    case 'task':
-      if (!data.title) return 'Cosa vuoi aggiungere come task?';
-      break;
-    case 'calendar':
-      if (!data.title) return 'Come si chiama l\'evento?';
-      if (!data.date) return 'Quando vuoi programmare l\'evento?';
-      if (!data.startTime) return 'A che ora inizia?';
-      break;
-    case 'expense':
-      if (!data.amount) return 'Qual è l\'importo della spesa?';
-      break;
-  }
-  
-  return 'Puoi darmi più dettagli?';
-}
-
-/**
- * Generate alternative when loop detected
- */
-function generateAlternativeResponse(decision: DecisionObject): {
-  message: string;
-  suggestions?: string[];
-} {
-  switch (decision.intent) {
-    case 'SUGGESTION':
+  switch (intent) {
+    case 'ADVICE_CONTEXTUAL':
+      // Provide different suggestions based on context
+      if (context.pendingTasks.length > 0) {
+        return {
+          message: `Hai ${context.pendingTasks.length} task in sospeso. Vuoi che ti aiuti a organizzarli?`,
+          suggestions: ['Mostra i task', 'Priorità del giorno']
+        };
+      }
+      if (context.todayEvents.length > 0) {
+        return {
+          message: `Hai ${context.todayEvents.length} eventi oggi. Vuoi vedere il programma?`,
+          suggestions: ['Eventi di oggi', 'Suggerimenti']
+        };
+      }
       return {
-        message: 'Proviamo un altro approccio. Vuoi concentrarti su produttività, benessere o finanze?',
-        suggestions: ['Produttività', 'Benessere', 'Finanze']
+        message: 'Giornata libera! Cosa vorresti fare?',
+        suggestions: ['Aggiungi task', 'Aggiungi evento', 'Controlla budget']
       };
     
-    case 'QUERY':
+    case 'QUERY_TASKS':
+    case 'QUERY_EVENTS':
       return {
-        message: 'Vuoi vedere altri dati? Task, eventi o spese?',
+        message: 'C\'è altro che posso aiutarti a trovare?',
+        suggestions: ['Budget', 'Spese', 'Suggerimenti']
+      };
+    
+    case 'SMALL_TALK':
+      return {
+        message: 'Dimmi come posso esserti utile!',
         suggestions: ['Task', 'Eventi', 'Spese']
-      };
-    
-    case 'ACTION':
-      return {
-        message: 'Cos\'altro posso fare per te?'
-      };
-    
-    case 'CHAT':
-      return {
-        message: 'Dimmi come posso aiutarti!'
       };
     
     default:
       return {
-        message: 'Come posso aiutarti?'
+        message: 'Come posso aiutarti?',
+        suggestions: ['Mostra i task', 'Eventi di oggi', 'Suggerimenti']
       };
   }
 }
 
 /**
- * Save conversation entry (limited to last 5 messages)
+ * Save conversation to history
  */
 async function saveConversation(
   userId: string,
@@ -197,13 +149,13 @@ async function saveConversation(
   assistantMessage: string
 ): Promise<void> {
   if (!assistantMessage) return;
-
+  
   await addToConversationHistory(userId, {
     role: 'user',
     content: userMessage,
     timestamp: new Date().toISOString()
   });
-
+  
   await addToConversationHistory(userId, {
     role: 'assistant',
     content: assistantMessage,
@@ -212,27 +164,62 @@ async function saveConversation(
 }
 
 /**
- * Get smart greeting based on context
+ * Simple hash function for response comparison
+ */
+function simpleHash(str: string): string {
+  // Normalize: lowercase, remove punctuation, trim
+  const normalized = str.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  return normalized.substring(0, 50);
+}
+
+/**
+ * Check if response would be a repetition
+ */
+function isRepetition(userId: string, hash: string): boolean {
+  const hashes = responseHashes.get(userId);
+  return hashes ? hashes.has(hash) : false;
+}
+
+/**
+ * Record response hash
+ */
+function recordHash(userId: string, hash: string): void {
+  if (!responseHashes.has(userId)) {
+    responseHashes.set(userId, new Set());
+  }
+  
+  const hashes = responseHashes.get(userId)!;
+  hashes.add(hash);
+  
+  // Limit history
+  if (hashes.size > MAX_HASH_HISTORY) {
+    const first = hashes.values().next().value;
+    hashes.delete(first);
+  }
+}
+
+/**
+ * Clear response hashes for user
+ */
+export function clearResponseHashes(userId: string): void {
+  responseHashes.delete(userId);
+}
+
+/**
+ * Get smart greeting
  */
 export async function getSmartGreeting(userId: string): Promise<AIEngineResult> {
   return processMessage(userId, 'ciao');
 }
 
 /**
- * Reset conversation and all state
+ * Reset conversation state
  */
 export async function resetConversation(userId: string): Promise<void> {
   await clearConversationHistory(userId);
-  resetSession(userId);
+  resetUnknownCount(userId);
   clearResponseHashes(userId);
   console.log('Conversation reset for user:', userId);
-}
-
-/**
- * Get current decision for debugging
- */
-export function getDecision(userId: string): DecisionObject | null {
-  return getCurrentDecision(userId);
 }
 
 // Re-exports

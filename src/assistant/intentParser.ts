@@ -1,326 +1,141 @@
 /**
- * Intent Parser - Robust JSON parser for AI responses
+ * Intent Parser - Deterministic, rule-based + fuzzy matching
+ * PHASE 1 of the Assistant Pipeline
  */
 
-import type { AIIntent, AIResponse, ParsedAIResponse } from './typesAI';
+import { format, addDays, isValid } from 'date-fns';
 
-// Valid intents list for validation
-const VALID_INTENTS: AIIntent[] = [
-  'create_event', 'create_task', 'create_expense', 'create_note',
-  'update_task', 'update_event', 'delete_task', 'delete_event',
-  'query_tasks', 'query_events', 'query_expenses', 'query_budget',
-  'advice', 'suggestion', 'greeting', 'farewell', 'thanks', 'question', 'unknown'
+export type AssistantIntent = 
+  | 'CREATE_EVENT' | 'CREATE_TASK' | 'CREATE_EXPENSE'
+  | 'QUERY_DAY' | 'QUERY_TASKS' | 'QUERY_EVENTS' | 'QUERY_EXPENSES' | 'QUERY_BUDGET'
+  | 'ADVICE_CONTEXTUAL' | 'ADVICE_GENERAL' | 'SMALL_TALK' | 'UNKNOWN';
+
+export interface ParsedIntent {
+  intent: AssistantIntent;
+  confidence: number;
+  extractedData: ExtractedData;
+  requiresClarification: boolean;
+  clarificationQuestion?: string;
+}
+
+export interface ExtractedData {
+  title?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  amount?: number;
+  category?: string;
+  priority?: 'low' | 'medium' | 'high';
+  timeRange?: 'today' | 'tomorrow' | 'week' | 'month';
+  rawText: string;
+}
+
+// Also export for openrouterClient compatibility
+export type AIIntent = AssistantIntent | 'create_event' | 'create_task' | 'create_expense' | 'create_note' | 'update_task' | 'delete_task' | 'query_tasks' | 'query_events' | 'query_expenses' | 'query_budget' | 'advice' | 'greeting' | 'unknown';
+
+// Parse AI response from external AI (JSON format)
+export function parseAIResponse(rawText: string): { success: boolean; response: any; error?: string } {
+  try {
+    // Try direct JSON parse
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return { success: true, response: { intent: parsed.intent, payload: parsed.payload, message: parsed.message } };
+    }
+    // Fallback: treat as plain message
+    return { success: true, response: { intent: 'unknown', payload: {}, message: rawText } };
+  } catch {
+    return { success: false, response: null, error: 'Failed to parse AI response' };
+  }
+}
+
+const CREATE_EVENT_PATTERNS = [
+  /(?:lavoro|lavorare)\s+(?:domani|oggi|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)/i,
+  /(?:dentista|dottore|medico|veterinario)\s+(?:domani|oggi|alle?)/i,
+  /(?:domani|oggi).*(?:alle?\s*\d|ore\s*\d)/i,
+  /(?:aggiungi|crea|programma)\s+(?:un\s+)?(?:evento|appuntamento)/i,
+  /(?:alle?\s*\d{1,2}[:.]\d{0,2})/i,
 ];
 
-/**
- * Parse AI response with extreme robustness
- */
-export function parseAIResponse(rawText: string): ParsedAIResponse {
-  if (!rawText || typeof rawText !== 'string') {
-    return { success: false, response: null, rawText: '', error: 'Empty response' };
+const CREATE_TASK_PATTERNS = [
+  /(?:aggiungi|crea|nuovo)\s+(?:un\s+)?task/i,
+  /(?:devo|ricordami\s+di)\s+(?!.*(?:alle?\s*\d))/i,
+  /(?:portare|comprare|chiamare|fare)\s+\w+/i,
+];
+
+const CREATE_EXPENSE_PATTERNS = [
+  /(?:ho\s+speso|spesa\s+di|pagato)\s*€?\s*\d+/i,
+  /(?:registra|aggiungi)\s+(?:una\s+)?spesa/i,
+  /€\s*\d+/,
+];
+
+const QUERY_PATTERNS = {
+  QUERY_DAY: [/(?:cosa\s+ho|com'è)\s+(?:oggi|domani)/i, /(?:giornata|programma)\s+(?:di\s+)?(?:oggi|domani)/i],
+  QUERY_TASKS: [/(?:mostra|vedi|lista)\s+(?:i\s+)?task/i, /(?:i\s+miei\s+)?task/i],
+  QUERY_EVENTS: [/(?:mostra|vedi)\s+(?:gli\s+)?eventi/i, /calendario/i],
+  QUERY_EXPENSES: [/(?:mostra|vedi)\s+(?:le\s+)?spese/i, /quanto\s+ho\s+speso/i],
+  QUERY_BUDGET: [/(?:come\s+va|stato)\s+(?:il\s+)?budget/i, /quanto\s+mi\s+resta/i],
+};
+
+const ADVICE_CONTEXTUAL_PATTERNS = [/(?:cosa\s+(?:potrei|dovrei|mi\s+consigli)\s+fare)/i, /(?:suggerisci|consiglia)/i];
+const ADVICE_GENERAL_PATTERNS = [/(?:cos['']?è|perch[eé]|spiegami)/i, /(?:di\s+che\s+colore)/i];
+const SMALL_TALK_PATTERNS = [/^(?:ciao|salve|buongiorno|grazie|come\s+stai)/i];
+
+export function parseIntent(message: string): ParsedIntent {
+  const normalized = message.trim();
+  const lower = normalized.toLowerCase();
+  const extractedData = extractData(normalized);
+  
+  if (SMALL_TALK_PATTERNS.some(p => p.test(lower)) && normalized.length < 30) {
+    return { intent: 'SMALL_TALK', confidence: 0.95, extractedData, requiresClarification: false };
   }
-
-  const cleanedText = rawText.trim();
-
-  // Try multiple parsing strategies
-  const strategies = [
-    () => parseDirectJSON(cleanedText),
-    () => extractJSONFromText(cleanedText),
-    () => extractJSONFromCodeBlock(cleanedText),
-    () => fixAndParseJSON(cleanedText),
-    () => extractIntentFromText(cleanedText),
-    () => buildResponseFromNaturalText(cleanedText)
-  ];
-
-  for (const strategy of strategies) {
-    try {
-      const result = strategy();
-      if (result && result.success) {
-        return result;
-      }
-    } catch (e) {
-      // Continue to next strategy
+  
+  if (CREATE_EVENT_PATTERNS.some(p => p.test(lower)) || (extractedData.date && extractedData.startTime)) {
+    const conf = (extractedData.title ? 0.3 : 0) + (extractedData.date ? 0.3 : 0) + (extractedData.startTime ? 0.3 : 0) + 0.1;
+    return { intent: 'CREATE_EVENT', confidence: Math.min(conf, 1), extractedData, requiresClarification: conf < 0.8, clarificationQuestion: !extractedData.title ? 'Come si chiama l\'evento?' : undefined };
+  }
+  
+  if (CREATE_EXPENSE_PATTERNS.some(p => p.test(lower)) || extractedData.amount) {
+    return { intent: 'CREATE_EXPENSE', confidence: extractedData.amount ? 0.9 : 0.7, extractedData, requiresClarification: !extractedData.amount, clarificationQuestion: 'Qual è l\'importo?' };
+  }
+  
+  if (CREATE_TASK_PATTERNS.some(p => p.test(lower))) {
+    return { intent: 'CREATE_TASK', confidence: extractedData.title ? 0.9 : 0.7, extractedData, requiresClarification: !extractedData.title, clarificationQuestion: 'Cosa vuoi aggiungere?' };
+  }
+  
+  for (const [intent, patterns] of Object.entries(QUERY_PATTERNS)) {
+    if (patterns.some(p => p.test(lower))) {
+      return { intent: intent as AssistantIntent, confidence: 0.9, extractedData, requiresClarification: false };
     }
   }
-
-  // Last resort: return as advice with the raw text as message
-  return {
-    success: true,
-    response: {
-      intent: 'advice',
-      payload: {},
-      message: cleanedText.slice(0, 500) // Limit message length
-    },
-    rawText: cleanedText
-  };
+  
+  if (ADVICE_CONTEXTUAL_PATTERNS.some(p => p.test(lower))) {
+    return { intent: 'ADVICE_CONTEXTUAL', confidence: 0.85, extractedData, requiresClarification: false };
+  }
+  
+  if (ADVICE_GENERAL_PATTERNS.some(p => p.test(lower))) {
+    return { intent: 'ADVICE_GENERAL', confidence: 0.8, extractedData, requiresClarification: false };
+  }
+  
+  return { intent: 'UNKNOWN', confidence: 0.3, extractedData, requiresClarification: true, clarificationQuestion: 'Vuoi creare un evento, un task, registrare una spesa, o hai bisogno di consigli?' };
 }
 
-/**
- * Try direct JSON parse
- */
-function parseDirectJSON(text: string): ParsedAIResponse | null {
-  try {
-    const parsed = JSON.parse(text);
-    return validateAndNormalize(parsed, text);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Extract JSON from surrounding text
- */
-function extractJSONFromText(text: string): ParsedAIResponse | null {
-  // Find JSON object in text
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return validateAndNormalize(parsed, text);
-    } catch {
-      // Try to fix common issues
-      return null;
-    }
-  }
-  return null;
-}
-
-/**
- * Extract JSON from markdown code blocks
- */
-function extractJSONFromCodeBlock(text: string): ParsedAIResponse | null {
-  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlockMatch) {
-    try {
-      const parsed = JSON.parse(codeBlockMatch[1].trim());
-      return validateAndNormalize(parsed, text);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-/**
- * Fix common JSON errors and parse
- */
-function fixAndParseJSON(text: string): ParsedAIResponse | null {
-  let fixed = text;
-
-  // Remove leading/trailing non-JSON text
-  fixed = fixed.replace(/^[^{]*/, '').replace(/[^}]*$/, '');
-
-  // Fix common issues
-  fixed = fixed
-    .replace(/'/g, '"')                    // Single to double quotes
-    .replace(/,\s*}/g, '}')                // Trailing commas
-    .replace(/,\s*]/g, ']')                // Trailing commas in arrays
-    .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3') // Unquoted keys
-    .replace(/:\s*'([^']*)'/g, ': "$1"')   // Single-quoted values
-    .replace(/\n/g, ' ')                    // Remove newlines
-    .replace(/\t/g, ' ');                   // Remove tabs
-
-  try {
-    const parsed = JSON.parse(fixed);
-    return validateAndNormalize(parsed, text);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Extract intent from natural language text patterns
- */
-function extractIntentFromText(text: string): ParsedAIResponse | null {
-  const lowerText = text.toLowerCase();
-
-  // Pattern matching for common responses
-  const patterns: { pattern: RegExp; intent: AIIntent; extractPayload?: (text: string) => any }[] = [
-    { 
-      pattern: /creo|aggiungo|inserisco.*evento/i, 
-      intent: 'create_event',
-      extractPayload: extractEventFromText
-    },
-    { 
-      pattern: /creo|aggiungo|inserisco.*task/i, 
-      intent: 'create_task',
-      extractPayload: extractTaskFromText
-    },
-    { 
-      pattern: /registro|aggiungo.*spesa|€\s*\d+/i, 
-      intent: 'create_expense',
-      extractPayload: extractExpenseFromText
-    },
-    { pattern: /consiglio|suggerisco|potresti/i, intent: 'advice' },
-    { pattern: /ciao|buongiorno|buonasera|salve/i, intent: 'greeting' },
-    { pattern: /arrivederci|a dopo|bye/i, intent: 'farewell' },
-    { pattern: /grazie|thanks/i, intent: 'thanks' },
-    { pattern: /\?$|cosa|come|quando|perché/i, intent: 'question' }
-  ];
-
-  for (const { pattern, intent, extractPayload } of patterns) {
-    if (pattern.test(lowerText)) {
-      const payload = extractPayload ? extractPayload(text) : {};
-      return {
-        success: true,
-        response: {
-          intent,
-          payload,
-          message: text.slice(0, 300)
-        },
-        rawText: text
-      };
-    }
-  }
-
-  return null;
-}
-
-/**
- * Build response from natural text as last resort
- */
-function buildResponseFromNaturalText(text: string): ParsedAIResponse {
-  return {
-    success: true,
-    response: {
-      intent: 'advice',
-      payload: {},
-      message: text.slice(0, 500)
-    },
-    rawText: text
-  };
-}
-
-/**
- * Validate and normalize parsed JSON
- */
-function validateAndNormalize(parsed: any, rawText: string): ParsedAIResponse | null {
-  if (!parsed || typeof parsed !== 'object') {
-    return null;
-  }
-
-  // Normalize intent
-  let intent: AIIntent = 'unknown';
-  if (parsed.intent && typeof parsed.intent === 'string') {
-    const normalizedIntent = parsed.intent.toLowerCase().replace(/[^a-z_]/g, '');
-    if (VALID_INTENTS.includes(normalizedIntent as AIIntent)) {
-      intent = normalizedIntent as AIIntent;
-    }
-  }
-
-  // Normalize payload
-  const payload = parsed.payload && typeof parsed.payload === 'object' 
-    ? parsed.payload 
-    : {};
-
-  // Normalize message
-  const message = typeof parsed.message === 'string' 
-    ? parsed.message 
-    : typeof parsed.response === 'string'
-      ? parsed.response
-      : '';
-
-  const response: AIResponse = {
-    intent,
-    payload,
-    message,
-    confidence: typeof parsed.confidence === 'number' ? parsed.confidence : undefined
-  };
-
-  return {
-    success: true,
-    response,
-    rawText
-  };
-}
-
-/**
- * Extract event details from natural text
- */
-function extractEventFromText(text: string): any {
-  const payload: any = { title: 'Nuovo evento' };
-
-  // Extract title
-  const titleMatch = text.match(/(?:evento|appuntamento)\s+(?:chiamato|intitolato|:)?\s*["']?([^"'\n,]+)/i);
-  if (titleMatch) payload.title = titleMatch[1].trim();
-
-  // Extract time
-  const timeMatch = text.match(/(\d{1,2})[:\.](\d{2})/);
-  if (timeMatch) {
-    payload.startTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
-    const endHour = (parseInt(timeMatch[1]) + 1).toString().padStart(2, '0');
-    payload.endTime = `${endHour}:${timeMatch[2]}`;
-  }
-
-  // Extract date keywords
+function extractData(message: string): ExtractedData {
+  const data: ExtractedData = { rawText: message };
+  const lower = message.toLowerCase();
   const today = new Date();
-  if (/oggi/i.test(text)) {
-    payload.date = today.toISOString().split('T')[0];
-  } else if (/domani/i.test(text)) {
-    today.setDate(today.getDate() + 1);
-    payload.date = today.toISOString().split('T')[0];
-  }
-
-  return payload;
-}
-
-/**
- * Extract task details from natural text
- */
-function extractTaskFromText(text: string): any {
-  const payload: any = { title: 'Nuovo task' };
-
-  // Extract title
-  const titleMatch = text.match(/task\s+(?:chiamato|intitolato|:)?\s*["']?([^"'\n,]+)/i);
-  if (titleMatch) payload.title = titleMatch[1].trim();
-
-  // Extract priority
-  if (/alta|urgente|importante/i.test(text)) {
-    payload.priority = 'high';
-  } else if (/bassa|poco importante/i.test(text)) {
-    payload.priority = 'low';
-  }
-
-  return payload;
-}
-
-/**
- * Extract expense details from natural text
- */
-function extractExpenseFromText(text: string): any {
-  const payload: any = {};
-
-  // Extract amount
-  const amountMatch = text.match(/€?\s*(\d+(?:[.,]\d{2})?)/);
-  if (amountMatch) {
-    payload.amount = parseFloat(amountMatch[1].replace(',', '.'));
-  }
-
-  // Extract category
-  const categories = ['spesa', 'cibo', 'trasporto', 'casa', 'salute', 'svago', 'lavoro'];
-  for (const cat of categories) {
-    if (text.toLowerCase().includes(cat)) {
-      payload.category = cat;
-      break;
-    }
-  }
-
-  return payload;
-}
-
-/**
- * Check if intent is actionable (requires execution)
- */
-export function isActionableIntent(intent: AIIntent): boolean {
-  return [
-    'create_event', 'create_task', 'create_expense', 'create_note',
-    'update_task', 'update_event', 'delete_task', 'delete_event'
-  ].includes(intent);
-}
-
-/**
- * Check if intent is a query (requires data fetch)
- */
-export function isQueryIntent(intent: AIIntent): boolean {
-  return ['query_tasks', 'query_events', 'query_expenses', 'query_budget'].includes(intent);
+  
+  if (/\boggi\b/.test(lower)) { data.date = format(today, 'yyyy-MM-dd'); data.timeRange = 'today'; }
+  else if (/\bdomani\b/.test(lower)) { data.date = format(addDays(today, 1), 'yyyy-MM-dd'); data.timeRange = 'tomorrow'; }
+  
+  const timeMatch = message.match(/alle?\s*(\d{1,2})(?:[:.:](\d{2}))?/i);
+  if (timeMatch) data.startTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2] || '00'}`;
+  
+  const amountMatch = message.match(/€\s*(\d+(?:[.,]\d{2})?)|(\d+(?:[.,]\d{2})?)\s*(?:euro|€)/i);
+  if (amountMatch) data.amount = parseFloat((amountMatch[1] || amountMatch[2]).replace(',', '.'));
+  
+  let title = message.replace(/^(?:aggiungi|crea|registra|ho|devo)\s*/i, '').replace(/\b(?:alle?\s*\d+|oggi|domani)\b/gi, '').trim();
+  if (title.length > 2) data.title = title;
+  
+  return data;
 }
