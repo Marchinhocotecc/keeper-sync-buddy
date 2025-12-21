@@ -154,7 +154,7 @@ async function handleCreateEvent(
     const humanTime = data.startTime!;
 
     return {
-      message: `✅ Evento creato: "${data.title!.trim()}" ${humanDate} ${humanTime}`,
+      message: `✅ Ho creato l'evento: "${data.title!.trim()}" ${humanDate} alle ${humanTime}.`,
       source: 'local',
       actionPerformed: true,
       requiresClarification: false,
@@ -216,8 +216,14 @@ async function handleCreateTask(
   clearPendingIntent(userId);
   const result = await createTask(userId, data);
   
+  // Risposta più conversazionale
+  const taskTitle = data.title || 'nuovo task';
+  const friendlyMessage = result.success 
+    ? `✅ Ho aggiunto il task: "${taskTitle}".`
+    : result.message;
+  
   return {
-    message: result.message,
+    message: friendlyMessage,
     source: 'local',
     actionPerformed: result.success,
     requiresClarification: !result.success
@@ -301,8 +307,9 @@ async function handleRecordExpense(
   // Recalculate budget for next context load
   await recalculateBudgetForUser(userId);
 
+  const formattedAmount = data.amount!.toFixed(2).replace('.', ',');
   return {
-    message: `✅ Spesa registrata: ${data.amount}€ per ${note || String(data.category).trim()}`,
+    message: `✅ Ho registrato una spesa di ${formattedAmount}€ per ${note || String(data.category).trim()}.`,
     source: 'local',
     actionPerformed: true,
     requiresClarification: false,
@@ -430,6 +437,39 @@ async function handleAdviceGeneral(
   message: string,
   context: UserContext
 ): Promise<RouterResponse> {
+  const lower = message.toLowerCase();
+  
+  // Handle delete commands locally without calling AI
+  if (/(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:le\s+)?spese?/i.test(lower)) {
+    return {
+      message: 'Per ora non posso eliminare tutte le spese con un solo comando. Vuoi che ti aiuti a registrare una nuova spesa o a vedere quelle recenti?',
+      suggestions: ['Registra spesa', 'Mostra spese'],
+      source: 'local',
+      actionPerformed: false,
+      requiresClarification: false
+    };
+  }
+  
+  if (/(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:i\s+)?task/i.test(lower)) {
+    return {
+      message: 'Per ora non posso eliminare tutti i task con un solo comando. Vuoi che ti aiuti ad aggiungerne uno nuovo o a vedere quelli in sospeso?',
+      suggestions: ['Aggiungi task', 'Mostra task'],
+      source: 'local',
+      actionPerformed: false,
+      requiresClarification: false
+    };
+  }
+  
+  if (/(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:gli\s+)?eventi?/i.test(lower)) {
+    return {
+      message: 'Per ora non posso eliminare tutti gli eventi con un solo comando. Vuoi che ti aiuti a crearne uno nuovo o a vedere quelli di oggi?',
+      suggestions: ['Aggiungi evento', 'Eventi di oggi'],
+      source: 'local',
+      actionPerformed: false,
+      requiresClarification: false
+    };
+  }
+  
   const answer = await getGeneralAnswer(message, context.recentMessages);
   
   return {
@@ -459,26 +499,30 @@ function handleSmallTalk(context: UserContext, message: string): RouterResponse 
   // Thanks
   if (/^(?:grazie|ok|perfetto|ottimo)$/i.test(lowerMessage)) {
     return {
-      message: 'Prego!',
+      message: 'Prego! Serve altro?',
       source: 'local',
       actionPerformed: false,
       requiresClarification: false
     };
   }
   
-  // How are you
+  // How are you - più amichevole
   if (/^come\s+stai\??$/i.test(lowerMessage)) {
+    const hasWork = context.pendingTasks.length > 0 || context.todayEvents.length > 0;
+    const response = hasWork 
+      ? `Bene, grazie! Hai ${context.pendingTasks.length} task e ${context.todayEvents.length} eventi oggi. Vuoi un riepilogo?`
+      : 'Bene, grazie! Giornata tranquilla per ora. Vuoi aggiungere qualcosa?';
     return {
-      message: 'Tutto bene! Come posso aiutarti?',
+      message: response,
       source: 'local',
       actionPerformed: false,
       requiresClarification: false
     };
   }
   
-  // Default greeting
+  // Default greeting - più amichevole
   return {
-    message: 'Ciao! Aggiungi un task, un evento o una spesa.',
+    message: 'Ciao! Dimmi cosa vuoi fare: aggiungere un task, un evento o registrare una spesa.',
     source: 'local',
     actionPerformed: false,
     requiresClarification: false

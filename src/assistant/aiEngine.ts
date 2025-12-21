@@ -16,14 +16,16 @@
 
 import { format, addDays } from 'date-fns';
 import type { AIEngineResult } from './typesAI';
-import { parseIntent, type ParsedIntent, type ExtractedData } from './intentParser';
+import { parseIntent, type ParsedIntent, type ExtractedData, type AssistantIntent } from './intentParser';
 import { loadUserContext, type UserContext } from './contextLoader';
 import { routeDecision, resetUnknownCount, type RouterResponse } from './decisionRouter';
 import { 
   addToConversationHistory, 
   clearConversationHistory,
   getPendingIntent,
-  clearPendingIntent
+  clearPendingIntent,
+  setPendingIntent,
+  type PendingIntent
 } from './contextStore';
 
 // Response hash tracking for loop prevention
@@ -50,6 +52,9 @@ export async function processMessage(
     // PRIORITY: If pending intent exists, ALWAYS continue it
     console.log('Found pending intent:', pendingIntent.intent);
     console.log('Pending data:', JSON.stringify(pendingIntent.extractedData));
+    
+    // Store userId mapping for later
+    pendingToUserMap.set(pendingIntent, userId);
     
     // Merge new message data with pending intent
     parsedIntent = mergeWithPendingIntent(message, pendingIntent);
@@ -129,14 +134,22 @@ export async function processMessage(
   return result;
 }
 
+// Helper to find userId from pending (stored in map key)
+const pendingToUserMap = new Map<PendingIntent, string>();
+
+function findUserIdForPending(pending: PendingIntent): string | null {
+  return pendingToUserMap.get(pending) || null;
+}
+
 /**
  * Merge new message with pending intent to complete the action
  * Handles: CREATE_EVENT, CREATE_TASK, RECORD_EXPENSE, CREATE_GENERIC
  */
 function mergeWithPendingIntent(
   newMessage: string,
-  pending: { intent: any; extractedData: Partial<ExtractedData>; clarificationQuestion: string }
+  pending: PendingIntent
 ): ParsedIntent {
+  const userId = findUserIdForPending(pending);
   const mergedData: ExtractedData = {
     ...pending.extractedData,
     rawText: newMessage
@@ -151,6 +164,8 @@ function mergeWithPendingIntent(
     // User responding to "task o evento?"
     if (/task/i.test(lower)) {
       console.log('User chose TASK');
+      // CRITICAL: Update pending intent to CREATE_TASK so next message continues correctly
+      if (userId) setPendingIntent(userId, 'CREATE_TASK', mergedData, 'Cosa vuoi aggiungere?');
       return {
         intent: 'CREATE_TASK',
         confidence: 0.95,
@@ -160,6 +175,8 @@ function mergeWithPendingIntent(
     }
     if (/evento/i.test(lower)) {
       console.log('User chose EVENT');
+      // CRITICAL: Update pending intent to CREATE_EVENT (NOT CREATE_GENERIC anymore)
+      if (userId) setPendingIntent(userId, 'CREATE_EVENT', mergedData, 'Quando?');
       // For event we need more data (date, time)
       return {
         intent: 'CREATE_EVENT',
@@ -171,6 +188,7 @@ function mergeWithPendingIntent(
     }
     // If neither, treat the new message as the choice (default to task)
     console.log('Default to TASK');
+    if (userId) setPendingIntent(userId, 'CREATE_TASK', mergedData, 'Cosa vuoi aggiungere?');
     return {
       intent: 'CREATE_TASK',
       confidence: 0.95,

@@ -98,6 +98,13 @@ const QUESTION_PATTERNS = [
   /(?:puoi|potresti|mi\s+dici|dimmi)\s+/i,
 ];
 
+// ============ DELETE/REMOVE PATTERNS - NOT CREATE_GENERIC ============
+const DELETE_PATTERNS = [
+  /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:le\s+)?spese?/i,
+  /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:i\s+)?task/i,
+  /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:gli\s+)?eventi?/i,
+];
+
 /**
  * Main intent parser - DETERMINISTIC CLASSIFICATION
  * 
@@ -139,7 +146,18 @@ export function parseIntent(message: string): ParsedIntent {
     }
   }
   
-  // ========== RULE 3: CHECK IF QUESTION ==========
+  // ========== RULE 3: DELETE COMMANDS - NOT CREATE_GENERIC ==========
+  if (DELETE_PATTERNS.some(p => p.test(lower))) {
+    console.log('Matched: DELETE command (not supported yet)');
+    return {
+      intent: 'ADVICE_GENERAL',
+      confidence: 0.9,
+      extractedData: { ...extractedData, rawText: message },
+      requiresClarification: false
+    };
+  }
+  
+  // ========== RULE 4: CHECK IF QUESTION ==========
   const isQuestion = QUESTION_PATTERNS.some(p => p.test(lower));
   
   if (isQuestion) {
