@@ -94,14 +94,20 @@ export async function processMessage(
   // ========== PHASE 4: LOOP PREVENTION ==========
   if (routerResponse.message) {
     const hash = simpleHash(routerResponse.message);
-    
+
     if (isRepetition(userId, hash)) {
       console.log('Loop detected - generating alternative');
       const alternative = getAlternativeResponse(parsedIntent, context);
-      routerResponse.message = alternative.message;
-      routerResponse.suggestions = alternative.suggestions;
+
+      // Never allow empty final message
+      if (alternative.message && alternative.message.trim().length > 0) {
+        routerResponse.message = alternative.message;
+        routerResponse.suggestions = alternative.suggestions;
+      } else {
+        console.log('Alternative was empty - keeping original message');
+      }
     }
-    
+
     recordHash(userId, hash);
   }
   
