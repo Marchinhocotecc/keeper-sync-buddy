@@ -14,6 +14,7 @@
  * 6. NO generic fallback responses
  */
 
+import { format, addDays } from 'date-fns';
 import type { AIEngineResult } from './typesAI';
 import { parseIntent, type ParsedIntent, type ExtractedData } from './intentParser';
 import { loadUserContext, type UserContext } from './contextLoader';
@@ -124,76 +125,158 @@ export async function processMessage(
 
 /**
  * Merge new message with pending intent to complete the action
+ * Handles: CREATE_EVENT, CREATE_TASK, RECORD_EXPENSE, CREATE_GENERIC
  */
 function mergeWithPendingIntent(
   newMessage: string,
   pending: { intent: any; extractedData: Partial<ExtractedData>; clarificationQuestion: string }
 ): ParsedIntent {
-  // Start with pending data
   const mergedData: ExtractedData = {
     ...pending.extractedData,
     rawText: newMessage
   } as ExtractedData;
   
-  const lower = newMessage.toLowerCase();
+  const lower = newMessage.toLowerCase().trim();
+  console.log('Merging with pending intent:', pending.intent);
+  console.log('New message:', newMessage);
   
-  // Extract time if missing - multiple patterns
-  if (!mergedData.startTime) {
-    // Pattern: "alle 10", "alle 14:30", "alle 9.00"
-    let timeMatch = newMessage.match(/alle?\s*(\d{1,2})(?:[:.:](\d{2}))?/i);
-    if (!timeMatch) {
-      // Pattern: just "10", "14:30", "9.00"
-      timeMatch = newMessage.match(/^(\d{1,2})(?:[:.:](\d{2}))?$/);
+  // ========== HANDLE CREATE_GENERIC RESPONSE ==========
+  if (pending.intent === 'CREATE_GENERIC') {
+    // User responding to "task o evento?"
+    if (/task/i.test(lower)) {
+      console.log('User chose TASK');
+      return {
+        intent: 'CREATE_TASK',
+        confidence: 0.95,
+        extractedData: mergedData,
+        requiresClarification: false
+      };
     }
-    if (!timeMatch) {
-      // Pattern: "ore 10"
-      timeMatch = newMessage.match(/ore\s*(\d{1,2})(?:[:.:](\d{2}))?/i);
+    if (/evento/i.test(lower)) {
+      console.log('User chose EVENT');
+      // For event we need more data (date, time)
+      return {
+        intent: 'CREATE_EVENT',
+        confidence: 0.6,
+        extractedData: mergedData,
+        requiresClarification: true,
+        clarificationQuestion: 'Quando?'
+      };
     }
-    if (timeMatch) {
-      mergedData.startTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2] || '00'}`;
-      console.log('Extracted time from follow-up:', mergedData.startTime);
-    }
+    // If neither, treat the new message as the choice (default to task)
+    console.log('Default to TASK');
+    return {
+      intent: 'CREATE_TASK',
+      confidence: 0.95,
+      extractedData: mergedData,
+      requiresClarification: false
+    };
   }
   
-  // Extract amount if missing
-  if (!mergedData.amount) {
-    const amountMatch = newMessage.match(/€?\s*(\d+(?:[.,]\d{2})?)/);
-    if (amountMatch) {
-      mergedData.amount = parseFloat(amountMatch[1].replace(',', '.'));
-      console.log('Extracted amount from follow-up:', mergedData.amount);
+  // ========== HANDLE RECORD_EXPENSE FOLLOW-UP ==========
+  if (pending.intent === 'RECORD_EXPENSE') {
+    // Extract amount from follow-up
+    if (!mergedData.amount) {
+      const numMatch = newMessage.match(/€?\s*(\d+(?:[.,]\d+)?)/);
+      if (numMatch) {
+        mergedData.amount = parseFloat(numMatch[1].replace(',', '.'));
+        console.log('Extracted amount:', mergedData.amount);
+      }
     }
+    
+    // If still no amount but message has no number, it's the category
+    if (!mergedData.amount && !/\d/.test(newMessage)) {
+      if (!mergedData.category) {
+        mergedData.category = newMessage.trim();
+        console.log('Set category:', mergedData.category);
+      }
+    }
+    
+    // If we have amount but no category, use message as category
+    if (mergedData.amount && !mergedData.category && !/\d/.test(newMessage)) {
+      mergedData.category = newMessage.trim();
+    }
+    
+    const hasAmount = mergedData.amount !== undefined && mergedData.amount > 0;
+    const hasCategory = mergedData.category && mergedData.category.length > 1;
+    
+    if (hasAmount && hasCategory) {
+      return {
+        intent: 'RECORD_EXPENSE',
+        confidence: 0.95,
+        extractedData: mergedData,
+        requiresClarification: false
+      };
+    }
+    
+    return {
+      intent: 'RECORD_EXPENSE',
+      confidence: 0.6,
+      extractedData: mergedData,
+      requiresClarification: true,
+      clarificationQuestion: !hasAmount ? 'Quanto hai speso?' : 'Per cosa?'
+    };
   }
   
-  // Use new message as title if we don't have one and it's not just a number/time
-  if (!mergedData.title && newMessage.length > 2 && newMessage.length < 100) {
-    if (!/^\d+(?:[:.]\d+)?$/.test(newMessage.trim()) && 
-        !/^alle?\s*\d+/i.test(newMessage.trim()) &&
-        !/^ore\s*\d+/i.test(newMessage.trim())) {
-      mergedData.title = newMessage.trim();
-      console.log('Using message as title:', mergedData.title);
-    }
-  }
-  
-  // Calculate new confidence based on completeness
-  let confidence = 0.5;
+  // ========== HANDLE CREATE_EVENT FOLLOW-UP ==========
   if (pending.intent === 'CREATE_EVENT') {
+    // Extract time
+    if (!mergedData.startTime) {
+      let timeMatch = newMessage.match(/alle?\s*(\d{1,2})(?:[:.:](\d{2}))?/i);
+      if (!timeMatch) timeMatch = newMessage.match(/^(\d{1,2})(?:[:.:](\d{2}))?$/);
+      if (!timeMatch) timeMatch = newMessage.match(/ore\s*(\d{1,2})(?:[:.:](\d{2}))?/i);
+      
+      if (timeMatch) {
+        mergedData.startTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2] || '00'}`;
+        console.log('Extracted time:', mergedData.startTime);
+      }
+    }
+    
+    // Extract date
+    if (!mergedData.date) {
+      if (/oggi/i.test(lower)) {
+        mergedData.date = format(new Date(), 'yyyy-MM-dd');
+      } else if (/domani/i.test(lower)) {
+        mergedData.date = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+      }
+    }
+    
+    let confidence = 0.5;
     if (mergedData.title) confidence += 0.2;
     if (mergedData.date) confidence += 0.2;
     if (mergedData.startTime) confidence += 0.2;
-  } else if (pending.intent === 'CREATE_TASK') {
-    if (mergedData.title) confidence = 0.9;
-  } else if (pending.intent === 'CREATE_EXPENSE') {
-    if (mergedData.amount) confidence = 0.9;
+    
+    return {
+      intent: 'CREATE_EVENT',
+      confidence: Math.min(confidence, 1),
+      extractedData: mergedData,
+      requiresClarification: confidence < 0.8,
+      clarificationQuestion: confidence < 0.8 ? getMissingDataQuestion('CREATE_EVENT', mergedData) : undefined
+    };
   }
   
-  console.log('Merged confidence:', confidence);
+  // ========== HANDLE CREATE_TASK FOLLOW-UP ==========
+  if (pending.intent === 'CREATE_TASK') {
+    if (!mergedData.title) {
+      mergedData.title = newMessage.trim();
+    }
+    
+    return {
+      intent: 'CREATE_TASK',
+      confidence: mergedData.title ? 0.95 : 0.6,
+      extractedData: mergedData,
+      requiresClarification: !mergedData.title,
+      clarificationQuestion: !mergedData.title ? 'Cosa vuoi aggiungere?' : undefined
+    };
+  }
   
+  // Default: return with current intent
   return {
     intent: pending.intent,
-    confidence: Math.min(confidence, 1),
+    confidence: 0.6,
     extractedData: mergedData,
-    requiresClarification: confidence < 0.8,
-    clarificationQuestion: confidence < 0.8 ? getMissingDataQuestion(pending.intent, mergedData) : undefined
+    requiresClarification: true,
+    clarificationQuestion: pending.clarificationQuestion
   };
 }
 

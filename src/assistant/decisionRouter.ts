@@ -1,19 +1,19 @@
 /**
- * Decision Router - Deterministic routing between Local Executor and AI Advisor
+ * Decision Router - Deterministic, action-driven routing
  * 
  * PHASE 3 of the Assistant Pipeline
  * 
- * ROUTING RULES (NON-NEGOTIABLE):
- * A) CREATE_* intents → LOCAL EXECUTOR ONLY, AI cannot speak
- * B) QUERY_* intents → LOCAL EXECUTOR ONLY, no AI
- * C) ADVICE_CONTEXTUAL → Analyze context first, AI only if needed
- * D) ADVICE_GENERAL / SMALL_TALK → AI ADVISOR allowed
- * E) UNKNOWN → ONE clarification question, never loop
+ * RULES (NON-NEGOTIABLE):
+ * 1. If active intent exists → ALWAYS continue it
+ * 2. CREATE_GENERIC → Ask "task o evento?"
+ * 3. RECORD_EXPENSE → Process expense or ask missing field
+ * 4. NEVER use generic fallbacks
+ * 5. NEVER say "non ho capito"
+ * 6. Every input produces action OR clarification question
  */
 
 import type { ParsedIntent, AssistantIntent, ExtractedData } from './intentParser';
 import type { UserContext } from './contextLoader';
-import type { ExecutionResult } from './localExecutor';
 import { 
   createEvent, 
   createTask, 
@@ -37,13 +37,9 @@ export interface RouterResponse {
   clarificationQuestion?: string;
 }
 
-// Track unknown count per user to prevent loops
-const unknownCounts = new Map<string, number>();
-const MAX_UNKNOWN_ATTEMPTS = 2;
-
 /**
  * Route the parsed intent to the appropriate handler
- * Returns a response ONLY after proper execution/analysis
+ * NEVER returns empty or generic responses
  */
 export async function routeDecision(
   userId: string,
@@ -55,16 +51,11 @@ export async function routeDecision(
   console.log('=== Decision Router ===');
   console.log('Intent:', intent);
   console.log('Confidence:', confidence);
-  console.log('Extracted:', JSON.stringify(extractedData, null, 2));
-  
-  // Reset unknown count on valid intent
-  if (intent !== 'UNKNOWN') {
-    unknownCounts.set(userId, 0);
-  }
+  console.log('Data:', JSON.stringify(extractedData, null, 2));
   
   // Route based on intent
   switch (intent) {
-    // ============ CREATE INTENTS → LOCAL EXECUTOR ONLY ============
+    // ============ CREATE INTENTS ============
     case 'CREATE_EVENT':
       return handleCreateEvent(userId, extractedData, confidence, requiresClarification, clarificationQuestion);
     
@@ -72,9 +63,13 @@ export async function routeDecision(
       return handleCreateTask(userId, extractedData, confidence, requiresClarification, clarificationQuestion);
     
     case 'CREATE_EXPENSE':
-      return handleCreateExpense(userId, extractedData, confidence, requiresClarification, clarificationQuestion);
+    case 'RECORD_EXPENSE':
+      return handleRecordExpense(userId, extractedData, confidence, requiresClarification, clarificationQuestion);
     
-    // ============ QUERY INTENTS → LOCAL EXECUTOR ONLY ============
+    case 'CREATE_GENERIC':
+      return handleCreateGeneric(userId, extractedData, clarificationQuestion);
+    
+    // ============ QUERY INTENTS ============
     case 'QUERY_DAY':
       return handleQueryDay(context, extractedData);
     
@@ -101,12 +96,9 @@ export async function routeDecision(
     case 'SMALL_TALK':
       return handleSmallTalk(context, extractedData.rawText);
     
-    // ============ UNKNOWN ============
-    case 'UNKNOWN':
-      return handleUnknown(userId, clarificationQuestion);
-    
     default:
-      return handleUnknown(userId, clarificationQuestion);
+      // Default: treat as CREATE_GENERIC
+      return handleCreateGeneric(userId, extractedData, 'Vuoi creare un task o un evento?');
   }
 }
 
@@ -119,7 +111,6 @@ async function handleCreateEvent(
   requiresClarification: boolean,
   clarificationQuestion?: string
 ): Promise<RouterResponse> {
-  // Confidence gate: < 0.8 requires clarification - SET PENDING INTENT
   if (confidence < 0.8 || requiresClarification) {
     const question = clarificationQuestion || getMissingFieldQuestion('CREATE_EVENT', data);
     setPendingIntent(userId, 'CREATE_EVENT', data, question);
@@ -132,10 +123,7 @@ async function handleCreateEvent(
     };
   }
   
-  // Clear pending on success attempt
   clearPendingIntent(userId);
-  
-  // Execute create
   const result = await createEvent(userId, data);
   
   return {
@@ -176,25 +164,45 @@ async function handleCreateTask(
   };
 }
 
-async function handleCreateExpense(
+/**
+ * Handle RECORD_EXPENSE - number detected, process or ask for missing data
+ */
+async function handleRecordExpense(
   userId: string,
   data: ExtractedData,
   confidence: number,
   requiresClarification: boolean,
   clarificationQuestion?: string
 ): Promise<RouterResponse> {
-  if (confidence < 0.8 || requiresClarification) {
-    const question = clarificationQuestion || 'Qual è l\'importo della spesa?';
-    setPendingIntent(userId, 'CREATE_EXPENSE', data, question);
+  console.log('handleRecordExpense - data:', JSON.stringify(data));
+  
+  // Check what's missing
+  const hasAmount = data.amount !== undefined && data.amount > 0;
+  const hasCategory = data.category && data.category.length > 1;
+  
+  if (!hasAmount) {
+    setPendingIntent(userId, 'RECORD_EXPENSE', data, 'Quanto hai speso?');
     return {
-      message: question,
+      message: 'Quanto hai speso?',
       source: 'local',
       actionPerformed: false,
       requiresClarification: true,
-      clarificationQuestion: question
+      clarificationQuestion: 'Quanto hai speso?'
     };
   }
   
+  if (!hasCategory) {
+    setPendingIntent(userId, 'RECORD_EXPENSE', data, 'Per cosa?');
+    return {
+      message: 'Per cosa?',
+      source: 'local',
+      actionPerformed: false,
+      requiresClarification: true,
+      clarificationQuestion: 'Per cosa?'
+    };
+  }
+  
+  // We have all data - execute
   clearPendingIntent(userId);
   const result = await createExpense(userId, data);
   
@@ -207,6 +215,29 @@ async function handleCreateExpense(
 }
 
 /**
+ * Handle CREATE_GENERIC - user said something that's not expense or question
+ * ALWAYS ask: "Vuoi creare un task o un evento?"
+ */
+function handleCreateGeneric(
+  userId: string,
+  data: ExtractedData,
+  clarificationQuestion?: string
+): RouterResponse {
+  const question = clarificationQuestion || 'Vuoi creare un task o un evento?';
+  
+  // Store pending with the title
+  setPendingIntent(userId, 'CREATE_GENERIC', data, question);
+  
+  return {
+    message: question,
+    source: 'local',
+    actionPerformed: false,
+    requiresClarification: true,
+    clarificationQuestion: question
+  };
+}
+
+/**
  * Get specific question based on what's missing
  */
 function getMissingFieldQuestion(intent: string, data: ExtractedData): string {
@@ -215,6 +246,10 @@ function getMissingFieldQuestion(intent: string, data: ExtractedData): string {
     if (!data.date) return 'Quando?';
     if (!data.startTime) return 'A che ora?';
     return 'Mi servono titolo, data e ora.';
+  }
+  if (intent === 'RECORD_EXPENSE') {
+    if (!data.amount) return 'Quanto hai speso?';
+    if (!data.category) return 'Per cosa?';
   }
   return 'Mi servono più dettagli.';
 }
@@ -238,7 +273,6 @@ function handleQueryTasks(context: UserContext): RouterResponse {
   
   return {
     message: result.message,
-    suggestions: ['Aggiungi task', 'Segna come fatto'],
     source: 'local',
     actionPerformed: false,
     requiresClarification: false
@@ -250,7 +284,6 @@ function handleQueryEvents(context: UserContext): RouterResponse {
   
   return {
     message: result.message,
-    suggestions: ['Aggiungi evento', 'Vedi domani'],
     source: 'local',
     actionPerformed: false,
     requiresClarification: false
@@ -262,7 +295,6 @@ function handleQueryExpenses(context: UserContext): RouterResponse {
   
   return {
     message: result.message,
-    suggestions: ['Registra spesa', 'Vedi budget'],
     source: 'local',
     actionPerformed: false,
     requiresClarification: false
@@ -287,7 +319,6 @@ async function handleAdviceContextual(
   message: string,
   context: UserContext
 ): Promise<RouterResponse> {
-  // Get AI advice with context
   const advice = await getContextualAdvice(message, context, context.recentMessages);
   
   return {
@@ -304,7 +335,6 @@ async function handleAdviceGeneral(
   message: string,
   context: UserContext
 ): Promise<RouterResponse> {
-  // Get general AI answer
   const answer = await getGeneralAnswer(message, context.recentMessages);
   
   return {
@@ -321,11 +351,10 @@ function handleSmallTalk(context: UserContext, message: string): RouterResponse 
   const lowerMessage = message.toLowerCase();
   
   // Greetings
-  if (/^(?:ciao|salve|buongiorno|buonasera|hey|hi|hello)/i.test(lowerMessage)) {
+  if (/^(?:ciao|salve|buongiorno|buonasera|hey|hi|hello)$/i.test(lowerMessage)) {
     const greeting = getContextualGreeting(context);
     return {
       message: greeting,
-      suggestions: ['Mostra i task', 'Cosa ho oggi?', 'Suggerimenti'],
       source: 'local',
       actionPerformed: false,
       requiresClarification: false
@@ -333,9 +362,9 @@ function handleSmallTalk(context: UserContext, message: string): RouterResponse 
   }
   
   // Thanks
-  if (/^(?:grazie|thanks|ok|perfetto|ottimo)/i.test(lowerMessage)) {
+  if (/^(?:grazie|ok|perfetto|ottimo)$/i.test(lowerMessage)) {
     return {
-      message: 'Prego! Sono qui se hai bisogno. 😊',
+      message: 'Prego!',
       source: 'local',
       actionPerformed: false,
       requiresClarification: false
@@ -343,67 +372,18 @@ function handleSmallTalk(context: UserContext, message: string): RouterResponse 
   }
   
   // How are you
-  if (/come\s+(?:stai|va)/i.test(lowerMessage)) {
+  if (/^come\s+stai\??$/i.test(lowerMessage)) {
     return {
-      message: 'Tutto bene, grazie! Tu come stai? Come posso aiutarti?',
+      message: 'Tutto bene! Come posso aiutarti?',
       source: 'local',
       actionPerformed: false,
       requiresClarification: false
     };
   }
   
-  // Farewell
-  if (/^(?:arrivederci|a\s+dopo|ciao\s+ciao|bye)/i.test(lowerMessage)) {
-    return {
-      message: 'A presto! 👋',
-      source: 'local',
-      actionPerformed: false,
-      requiresClarification: false
-    };
-  }
-  
-  // Default
+  // Default greeting
   return {
-    message: 'Ciao! Come posso aiutarti?',
-    suggestions: ['Mostra i task', 'Eventi di oggi', 'Registra spesa'],
-    source: 'local',
-    actionPerformed: false,
-    requiresClarification: false
-  };
-}
-
-// ============ UNKNOWN HANDLER - NO GENERIC FALLBACKS ============
-
-function handleUnknown(userId: string, clarificationQuestion?: string): RouterResponse {
-  // Check if there's a pending intent we can reference
-  const pending = getPendingIntent(userId);
-  
-  if (pending) {
-    const attempts = incrementPendingAttempts(userId);
-    if (attempts <= 2) {
-      // Continue asking for pending intent data
-      return {
-        message: pending.clarificationQuestion,
-        source: 'local',
-        actionPerformed: false,
-        requiresClarification: true,
-        clarificationQuestion: pending.clarificationQuestion
-      };
-    } else {
-      // Too many attempts, clear and give up - NO generic fallback
-      clearPendingIntent(userId);
-      return {
-        message: '',
-        source: 'local',
-        actionPerformed: false,
-        requiresClarification: false
-      };
-    }
-  }
-  
-  // NO pending intent and UNKNOWN - return EMPTY (no generic response)
-  return {
-    message: '',
+    message: 'Ciao! Aggiungi un task, un evento o una spesa.',
     source: 'local',
     actionPerformed: false,
     requiresClarification: false
@@ -411,8 +391,8 @@ function handleUnknown(userId: string, clarificationQuestion?: string): RouterRe
 }
 
 /**
- * Reset unknown count for user
+ * Reset unknown count for user (kept for compatibility)
  */
 export function resetUnknownCount(userId: string): void {
-  unknownCounts.set(userId, 0);
+  // No-op - no longer using unknown counts
 }
