@@ -60,6 +60,29 @@ export function setPendingIntent(
 }
 
 /**
+ * Update an existing pending intent without resetting attempts/createdAt
+ */
+export function updatePendingIntent(
+  userId: string,
+  updates: {
+    extractedData?: Partial<ExtractedData>;
+    clarificationQuestion?: string;
+  }
+): PendingIntent | null {
+  const pending = pendingIntents.get(userId);
+  if (!pending) return null;
+
+  const next: PendingIntent = {
+    ...pending,
+    extractedData: updates.extractedData ? { ...pending.extractedData, ...updates.extractedData } : pending.extractedData,
+    clarificationQuestion: updates.clarificationQuestion ?? pending.clarificationQuestion,
+  };
+
+  pendingIntents.set(userId, next);
+  return next;
+}
+
+/**
  * Increment pending intent attempts
  */
 export function incrementPendingAttempts(userId: string): number {

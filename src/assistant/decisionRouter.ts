@@ -15,9 +15,7 @@
 import type { ParsedIntent, AssistantIntent, ExtractedData } from './intentParser';
 import type { UserContext } from './contextLoader';
 import { 
-  createEvent, 
   createTask, 
-  createExpense,
   queryDaySummary,
   queryTasks,
   queryEvents,
@@ -26,7 +24,10 @@ import {
 } from './localExecutor';
 import { getContextualAdvice, getGeneralAnswer } from './aiAdvisor';
 import { getContextualGreeting } from './contextLoader';
-import { setPendingIntent, clearPendingIntent, incrementPendingAttempts, getPendingIntent } from './contextStore';
+import { setPendingIntent, clearPendingIntent, incrementPendingAttempts, getPendingIntent, updatePendingIntent } from './contextStore';
+import { parseNaturalDate, formatEventDate, formatEventTime } from '@/utils/dateParser';
+import { createEvent as actionCreateEvent, recordExpense as actionRecordExpense } from '@/engine/ActionEngine';
+import { recalculateBudgetForUser } from '@/services/budgetService';
 
 export interface RouterResponse {
   message: string;
@@ -111,26 +112,85 @@ async function handleCreateEvent(
   requiresClarification: boolean,
   clarificationQuestion?: string
 ): Promise<RouterResponse> {
-  if (confidence < 0.8 || requiresClarification) {
-    const question = clarificationQuestion || getMissingFieldQuestion('CREATE_EVENT', data);
-    setPendingIntent(userId, 'CREATE_EVENT', data, question);
+  // Enrich from rawText (weekday + time) deterministically
+  const parsed = parseNaturalDate(data.rawText || '');
+  if (parsed) {
+    const isoDate = parsed.date.toISOString().split('T')[0];
+    data.date = data.date ?? isoDate;
+
+    // Only treat time as present if user provided a specific time
+    if (parsed.hasSpecificTime) {
+      data.startTime = data.startTime ?? formatEventTime(parsed.date);
+    }
+  }
+
+  const hasTitle = !!data.title && data.title.trim().length > 0;
+  const hasDate = !!data.date;
+  const hasTime = !!data.startTime;
+
+  // If minimum fields are present, create immediately via ActionEngine
+  if (hasTitle && hasDate && hasTime) {
+    clearPendingIntent(userId);
+
+    const result = await actionCreateEvent({
+      user_id: userId,
+      title: data.title!.trim(),
+      date: data.date!,
+      start_time: data.startTime,
+      end_time: data.endTime,
+      category: data.category,
+    });
+
+    if (!result.success) {
+      return {
+        message: 'Errore nella creazione dell\'evento. Riprova.',
+        source: 'local',
+        actionPerformed: false,
+        requiresClarification: false,
+      };
+    }
+
+    const humanDate = parsed ? formatEventDate(parsed.date) : data.date!;
+    const humanTime = data.startTime!;
+
     return {
-      message: question,
+      message: `✅ Evento creato: "${data.title!.trim()}" ${humanDate} ${humanTime}`,
       source: 'local',
-      actionPerformed: false,
-      requiresClarification: true,
-      clarificationQuestion: question
+      actionPerformed: true,
+      requiresClarification: false,
     };
   }
-  
-  clearPendingIntent(userId);
-  const result = await createEvent(userId, data);
-  
+
+  // Otherwise, clarify deterministically without looping "Quando?"
+  const pending = getPendingIntent(userId);
+  const lastQ = pending?.clarificationQuestion;
+
+  let nextQuestion: string;
+  if (!hasDate && !hasTime) nextQuestion = 'Quando?';
+  else if (!hasDate) nextQuestion = 'Mi serve solo la data (es: venerdì).';
+  else nextQuestion = 'Mi serve solo l\'orario (es: 8:30).';
+
+  // If we already asked "Quando?" and user replied, never ask "Quando?" again
+  if (lastQ === 'Quando?' && nextQuestion === 'Quando?') {
+    const attempts = incrementPendingAttempts(userId);
+    // After a "Quando?" attempt, be more specific
+    nextQuestion = attempts <= 2 ? 'Mi serve solo la data e l\'orario (es: venerdì 8:30).' : 'Mi serve solo l\'orario (es: 8:30).';
+  } else {
+    incrementPendingAttempts(userId);
+  }
+
+  if (pending) {
+    updatePendingIntent(userId, { extractedData: data, clarificationQuestion: nextQuestion });
+  } else {
+    setPendingIntent(userId, 'CREATE_EVENT', data, nextQuestion);
+  }
+
   return {
-    message: result.message,
+    message: nextQuestion,
     source: 'local',
-    actionPerformed: result.success,
-    requiresClarification: !result.success
+    actionPerformed: false,
+    requiresClarification: true,
+    clarificationQuestion: nextQuestion,
   };
 }
 
@@ -175,42 +235,77 @@ async function handleRecordExpense(
   clarificationQuestion?: string
 ): Promise<RouterResponse> {
   console.log('handleRecordExpense - data:', JSON.stringify(data));
-  
-  // Check what's missing
+
+  // Required: amount + category
   const hasAmount = data.amount !== undefined && data.amount > 0;
   const hasCategory = data.category && data.category.length > 1;
-  
+
   if (!hasAmount) {
-    setPendingIntent(userId, 'RECORD_EXPENSE', data, 'Quanto hai speso?');
+    const q = 'Quanto hai speso?';
+    const pending = getPendingIntent(userId);
+    if (pending) updatePendingIntent(userId, { extractedData: data, clarificationQuestion: q });
+    else setPendingIntent(userId, 'RECORD_EXPENSE', data, q);
+
     return {
-      message: 'Quanto hai speso?',
+      message: q,
       source: 'local',
       actionPerformed: false,
       requiresClarification: true,
-      clarificationQuestion: 'Quanto hai speso?'
+      clarificationQuestion: q,
     };
   }
-  
+
   if (!hasCategory) {
-    setPendingIntent(userId, 'RECORD_EXPENSE', data, 'Per cosa?');
+    const q = 'Per cosa?';
+    const pending = getPendingIntent(userId);
+    if (pending) updatePendingIntent(userId, { extractedData: data, clarificationQuestion: q });
+    else setPendingIntent(userId, 'RECORD_EXPENSE', data, q);
+
     return {
-      message: 'Per cosa?',
+      message: q,
       source: 'local',
       actionPerformed: false,
       requiresClarification: true,
-      clarificationQuestion: 'Per cosa?'
+      clarificationQuestion: q,
     };
   }
-  
-  // We have all data - execute
+
+  // Execute via ActionEngine
   clearPendingIntent(userId);
-  const result = await createExpense(userId, data);
-  
+
+  const note = (() => {
+    // Prefer user text without the amount as note/description
+    const raw = (data.rawText || '').trim();
+    if (!raw) return undefined;
+    const cleaned = raw.replace(/€?\s*\d+(?:[.,]\d+)?\s*(?:euro|€)?/gi, '').trim();
+    return cleaned.length > 0 ? cleaned : undefined;
+  })();
+
+  const result = await actionRecordExpense({
+    user_id: userId,
+    amount: data.amount!,
+    category: String(data.category).trim(),
+    date: data.date,
+    note,
+  });
+
+  if (!result.success) {
+    return {
+      message: 'Errore nella registrazione della spesa. Riprova.',
+      source: 'local',
+      actionPerformed: false,
+      requiresClarification: false,
+    };
+  }
+
+  // Recalculate budget for next context load
+  await recalculateBudgetForUser(userId);
+
   return {
-    message: result.message,
+    message: `✅ Spesa registrata: ${data.amount}€ per ${note || String(data.category).trim()}`,
     source: 'local',
-    actionPerformed: result.success,
-    requiresClarification: !result.success
+    actionPerformed: true,
+    requiresClarification: false,
   };
 }
 
