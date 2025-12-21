@@ -8,12 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
-import { useSettings } from '@/hooks/useSettings';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BudgetCard } from '@/components/BudgetCard';
 import { BudgetEditModal } from '@/components/BudgetEditModal';
+import { getMonthlyBudget, upsertMonthlyBudget } from '@/services/budgetService';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#f43f5e'];
 
@@ -22,34 +22,50 @@ export default function ExpensesPage() {
   const { toast } = useToast();
   const [userId, setUserId] = useState<string | undefined>();
   const { expenses, isLoading, addExpense, deleteExpense } = useExpenses(userId);
-  const { settings } = useSettings(userId);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [isSavingBudget, setIsSavingBudget] = useState(false);
+  const [isLoadingBudget, setIsLoadingBudget] = useState(true);
   
   // Budget state
   const [budget, setBudget] = useState(0);
   const [budgetNote, setBudgetNote] = useState('');
 
-  // Load budget from settings when available
+  // Current month/year for budget
+  const currentMonth = new Date().getMonth() + 1; // 1-indexed
+  const currentYear = new Date().getFullYear();
+
+  // Load user ID
   useEffect(() => {
-    if (settings) {
-      const budgetValue = (settings as any)?.monthly_budget ?? 0;
-      setBudget(budgetValue);
-    }
-  }, [settings]);
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data?.user?.id);
+    });
+  }, []);
+
+  // Load budget from budgets table when userId is available
+  useEffect(() => {
+    if (!userId) return;
+    
+    setIsLoadingBudget(true);
+    getMonthlyBudget(userId, currentMonth, currentYear)
+      .then((amount) => {
+        setBudget(amount);
+      })
+      .finally(() => {
+        setIsLoadingBudget(false);
+      });
+  }, [userId, currentMonth, currentYear]);
 
   const handleSaveBudget = useCallback(async (newBudget: number, note: string) => {
     if (!userId) return;
     
     setIsSavingBudget(true);
     try {
-      const { error } = await supabase
-        .from('settings')
-        .upsert({ user_id: userId, monthly_budget: newBudget })
-        .eq('user_id', userId);
-
-      if (error) throw error;
+      const result = await upsertMonthlyBudget(userId, currentMonth, currentYear, newBudget);
+      
+      if (!result.success) {
+        throw new Error(result.error || "Errore sconosciuto");
+      }
       
       setBudget(newBudget);
       setBudgetNote(note);
@@ -67,13 +83,8 @@ export default function ExpensesPage() {
     } finally {
       setIsSavingBudget(false);
     }
-  }, [userId, toast]);
+  }, [userId, currentMonth, currentYear, toast]);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data?.user?.id);
-    });
-  }, []);
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -152,7 +163,7 @@ export default function ExpensesPage() {
   const monthlyBudget = budget;
   const remaining = monthlyBudget - totalExpenses;
 
-  if (isLoading) {
+  if (isLoading || isLoadingBudget) {
     return (
       <div className="min-h-screen bg-muted/30">
         <div className="page-container">
