@@ -49,11 +49,29 @@ export function parseAIResponse(rawText: string): { success: boolean; response: 
   }
 }
 
+// ============ MANDATORY EVENT KEYWORDS ============
+// If message contains ANY of these words → intent MUST be CREATE_EVENT
+const EVENT_KEYWORDS = [
+  'riunione', 'evento', 'appuntamento', 'incontro', 'call', 'meeting',
+  'conferenza', 'colloquio', 'visita', 'dentista', 'dottore', 'medico'
+];
+
+// Italian weekdays for date extraction
+const WEEKDAYS: Record<string, number> = {
+  'lunedì': 1, 'lunedi': 1,
+  'martedì': 2, 'martedi': 2,
+  'mercoledì': 3, 'mercoledi': 3,
+  'giovedì': 4, 'giovedi': 4,
+  'venerdì': 5, 'venerdi': 5,
+  'sabato': 6,
+  'domenica': 0
+};
+
 const CREATE_EVENT_PATTERNS = [
   /(?:lavoro|lavorare)\s+(?:domani|oggi|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)/i,
   /(?:dentista|dottore|medico|veterinario)\s+(?:domani|oggi|alle?)/i,
   /(?:domani|oggi).*(?:alle?\s*\d|ore\s*\d)/i,
-  /(?:aggiungi|crea|programma)\s+(?:un\s+)?(?:evento|appuntamento)/i,
+  /(?:aggiungi|crea|programma|fissa|metti)\s+(?:un[ao]?\s+)?(?:evento|appuntamento|riunione|meeting|call|incontro)/i,
   /(?:alle?\s*\d{1,2}[:.]\d{0,2})/i,
 ];
 
@@ -86,13 +104,44 @@ export function parseIntent(message: string): ParsedIntent {
   const lower = normalized.toLowerCase();
   const extractedData = extractData(normalized);
   
+  // Small talk first (only very short messages)
   if (SMALL_TALK_PATTERNS.some(p => p.test(lower)) && normalized.length < 30) {
     return { intent: 'SMALL_TALK', confidence: 0.95, extractedData, requiresClarification: false };
   }
   
+  // ============ MANDATORY: CHECK EVENT KEYWORDS FIRST ============
+  // If message contains event keywords, FORCE CREATE_EVENT intent
+  const hasEventKeyword = EVENT_KEYWORDS.some(keyword => lower.includes(keyword));
+  
+  if (hasEventKeyword) {
+    // Calculate confidence based on available data
+    let conf = 0.6; // Base confidence for keyword match
+    if (extractedData.title) conf += 0.15;
+    if (extractedData.date) conf += 0.15;
+    if (extractedData.startTime) conf += 0.1;
+    
+    const requiresClarification = !extractedData.startTime;
+    const question = !extractedData.startTime ? 'A che ora?' : undefined;
+    
+    return { 
+      intent: 'CREATE_EVENT', 
+      confidence: Math.min(conf, 1), 
+      extractedData, 
+      requiresClarification, 
+      clarificationQuestion: question 
+    };
+  }
+  
+  // Check pattern-based event detection
   if (CREATE_EVENT_PATTERNS.some(p => p.test(lower)) || (extractedData.date && extractedData.startTime)) {
     const conf = (extractedData.title ? 0.3 : 0) + (extractedData.date ? 0.3 : 0) + (extractedData.startTime ? 0.3 : 0) + 0.1;
-    return { intent: 'CREATE_EVENT', confidence: Math.min(conf, 1), extractedData, requiresClarification: conf < 0.8, clarificationQuestion: !extractedData.title ? 'Come si chiama l\'evento?' : undefined };
+    return { 
+      intent: 'CREATE_EVENT', 
+      confidence: Math.min(conf, 1), 
+      extractedData, 
+      requiresClarification: conf < 0.8, 
+      clarificationQuestion: !extractedData.startTime ? 'A che ora?' : (!extractedData.title ? 'Come si chiama l\'evento?' : undefined) 
+    };
   }
   
   if (CREATE_EXPENSE_PATTERNS.some(p => p.test(lower)) || extractedData.amount) {
@@ -117,7 +166,8 @@ export function parseIntent(message: string): ParsedIntent {
     return { intent: 'ADVICE_GENERAL', confidence: 0.8, extractedData, requiresClarification: false };
   }
   
-  return { intent: 'UNKNOWN', confidence: 0.3, extractedData, requiresClarification: true, clarificationQuestion: 'Vuoi creare un evento, un task, registrare una spesa, o hai bisogno di consigli?' };
+  // UNKNOWN - but NO generic clarification question
+  return { intent: 'UNKNOWN', confidence: 0.3, extractedData, requiresClarification: false };
 }
 
 function extractData(message: string): ExtractedData {
@@ -125,16 +175,47 @@ function extractData(message: string): ExtractedData {
   const lower = message.toLowerCase();
   const today = new Date();
   
-  if (/\boggi\b/.test(lower)) { data.date = format(today, 'yyyy-MM-dd'); data.timeRange = 'today'; }
-  else if (/\bdomani\b/.test(lower)) { data.date = format(addDays(today, 1), 'yyyy-MM-dd'); data.timeRange = 'tomorrow'; }
+  // Today/tomorrow
+  if (/\boggi\b/.test(lower)) { 
+    data.date = format(today, 'yyyy-MM-dd'); 
+    data.timeRange = 'today'; 
+  } else if (/\bdomani\b/.test(lower)) { 
+    data.date = format(addDays(today, 1), 'yyyy-MM-dd'); 
+    data.timeRange = 'tomorrow'; 
+  } else {
+    // Check for weekday names
+    for (const [weekday, dayNum] of Object.entries(WEEKDAYS)) {
+      if (lower.includes(weekday)) {
+        const currentDay = today.getDay();
+        let daysToAdd = dayNum - currentDay;
+        if (daysToAdd <= 0) daysToAdd += 7; // Next week if today or past
+        data.date = format(addDays(today, daysToAdd), 'yyyy-MM-dd');
+        break;
+      }
+    }
+  }
   
+  // Time extraction
   const timeMatch = message.match(/alle?\s*(\d{1,2})(?:[:.:](\d{2}))?/i);
   if (timeMatch) data.startTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2] || '00'}`;
   
+  // Amount extraction
   const amountMatch = message.match(/€\s*(\d+(?:[.,]\d{2})?)|(\d+(?:[.,]\d{2})?)\s*(?:euro|€)/i);
   if (amountMatch) data.amount = parseFloat((amountMatch[1] || amountMatch[2]).replace(',', '.'));
   
-  let title = message.replace(/^(?:aggiungi|crea|registra|ho|devo)\s*/i, '').replace(/\b(?:alle?\s*\d+|oggi|domani)\b/gi, '').trim();
+  // Title extraction - extract the event name from keywords
+  let title = message;
+  
+  // Remove common prefixes
+  title = title.replace(/^(?:aggiungi|crea|registra|ho|devo|fissa|metti)\s*/i, '');
+  
+  // Remove articles before event types
+  title = title.replace(/\b(?:un[ao]?|il|la|l[''])\s*/gi, '');
+  
+  // Remove time/date references
+  title = title.replace(/\b(?:alle?\s*\d+(?:[:.]\d+)?|oggi|domani|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)\b/gi, '');
+  
+  title = title.trim();
   if (title.length > 2) data.title = title;
   
   return data;

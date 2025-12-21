@@ -40,24 +40,29 @@ export async function processMessage(
   console.log('User:', userId);
   console.log('Message:', message);
   
-  // ========== PHASE 0: CHECK PENDING INTENT ==========
+  // ========== PHASE 0: CHECK PENDING INTENT FIRST (ABSOLUTE PRIORITY) ==========
   console.log('--- Phase 0: Pending Intent Check ---');
   const pendingIntent = getPendingIntent(userId);
   let parsedIntent: ParsedIntent;
   
   if (pendingIntent) {
+    // PRIORITY: If pending intent exists, ALWAYS continue it
     console.log('Found pending intent:', pendingIntent.intent);
+    console.log('Pending data:', JSON.stringify(pendingIntent.extractedData));
+    
     // Merge new message data with pending intent
     parsedIntent = mergeWithPendingIntent(message, pendingIntent);
     console.log('Merged intent:', parsedIntent.intent);
     console.log('Merged confidence:', parsedIntent.confidence);
+    console.log('Merged data:', JSON.stringify(parsedIntent.extractedData));
     
-    // Clear pending if we now have enough data
+    // Clear pending if we now have enough data (>=0.8 confidence)
     if (parsedIntent.confidence >= 0.8) {
+      console.log('Sufficient data - clearing pending intent');
       clearPendingIntent(userId);
     }
   } else {
-    // ========== PHASE 1: INTENT PARSING ==========
+    // ========== PHASE 1: INTENT PARSING (only if no pending intent) ==========
     console.log('--- Phase 1: Intent Parsing ---');
     parsedIntent = parseIntent(message);
   }
@@ -81,7 +86,8 @@ export async function processMessage(
   console.log('Router Response:', {
     source: routerResponse.source,
     actionPerformed: routerResponse.actionPerformed,
-    requiresClarification: routerResponse.requiresClarification
+    requiresClarification: routerResponse.requiresClarification,
+    message: routerResponse.message?.substring(0, 50)
   });
   
   // ========== PHASE 4: LOOP PREVENTION ==========
@@ -111,7 +117,7 @@ export async function processMessage(
   };
   
   console.log('=== AI Engine Pipeline End ===');
-  console.log('Final message:', result.message?.substring(0, 100) + '...');
+  console.log('Final message:', result.message?.substring(0, 100));
   
   return result;
 }
@@ -123,20 +129,29 @@ function mergeWithPendingIntent(
   newMessage: string,
   pending: { intent: any; extractedData: Partial<ExtractedData>; clarificationQuestion: string }
 ): ParsedIntent {
-  const newParsed = parseIntent(newMessage);
+  // Start with pending data
   const mergedData: ExtractedData = {
     ...pending.extractedData,
     rawText: newMessage
   } as ExtractedData;
   
-  // Extract additional data from new message
   const lower = newMessage.toLowerCase();
   
-  // Extract time if missing
+  // Extract time if missing - multiple patterns
   if (!mergedData.startTime) {
-    const timeMatch = newMessage.match(/(\d{1,2})(?:[:.:](\d{2}))?/);
+    // Pattern: "alle 10", "alle 14:30", "alle 9.00"
+    let timeMatch = newMessage.match(/alle?\s*(\d{1,2})(?:[:.:](\d{2}))?/i);
+    if (!timeMatch) {
+      // Pattern: just "10", "14:30", "9.00"
+      timeMatch = newMessage.match(/^(\d{1,2})(?:[:.:](\d{2}))?$/);
+    }
+    if (!timeMatch) {
+      // Pattern: "ore 10"
+      timeMatch = newMessage.match(/ore\s*(\d{1,2})(?:[:.:](\d{2}))?/i);
+    }
     if (timeMatch) {
       mergedData.startTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2] || '00'}`;
+      console.log('Extracted time from follow-up:', mergedData.startTime);
     }
   }
   
@@ -145,14 +160,17 @@ function mergeWithPendingIntent(
     const amountMatch = newMessage.match(/€?\s*(\d+(?:[.,]\d{2})?)/);
     if (amountMatch) {
       mergedData.amount = parseFloat(amountMatch[1].replace(',', '.'));
+      console.log('Extracted amount from follow-up:', mergedData.amount);
     }
   }
   
-  // Use new message as title if we don't have one
+  // Use new message as title if we don't have one and it's not just a number/time
   if (!mergedData.title && newMessage.length > 2 && newMessage.length < 100) {
-    // Don't use if it's just a number or time
-    if (!/^\d+(?:[:.]\d+)?$/.test(newMessage.trim())) {
+    if (!/^\d+(?:[:.]\d+)?$/.test(newMessage.trim()) && 
+        !/^alle?\s*\d+/i.test(newMessage.trim()) &&
+        !/^ore\s*\d+/i.test(newMessage.trim())) {
       mergedData.title = newMessage.trim();
+      console.log('Using message as title:', mergedData.title);
     }
   }
   
@@ -167,6 +185,8 @@ function mergeWithPendingIntent(
   } else if (pending.intent === 'CREATE_EXPENSE') {
     if (mergedData.amount) confidence = 0.9;
   }
+  
+  console.log('Merged confidence:', confidence);
   
   return {
     intent: pending.intent,

@@ -375,28 +375,13 @@ function handleSmallTalk(context: UserContext, message: string): RouterResponse 
 // ============ UNKNOWN HANDLER - NO GENERIC FALLBACKS ============
 
 function handleUnknown(userId: string, clarificationQuestion?: string): RouterResponse {
-  const count = unknownCounts.get(userId) || 0;
-  
-  // Increment count
-  unknownCounts.set(userId, count + 1);
-  
-  // After MAX attempts, return empty - NO GENERIC RESPONSES
-  if (count >= MAX_UNKNOWN_ATTEMPTS) {
-    unknownCounts.set(userId, 0);
-    return {
-      message: '', // Empty = no response, no generic fallback
-      source: 'local',
-      actionPerformed: false,
-      requiresClarification: false
-    };
-  }
-  
   // Check if there's a pending intent we can reference
   const pending = getPendingIntent(userId);
+  
   if (pending) {
     const attempts = incrementPendingAttempts(userId);
     if (attempts <= 2) {
-      // Rephrase the question based on pending intent
+      // Continue asking for pending intent data
       return {
         message: pending.clarificationQuestion,
         source: 'local',
@@ -405,10 +390,10 @@ function handleUnknown(userId: string, clarificationQuestion?: string): RouterRe
         clarificationQuestion: pending.clarificationQuestion
       };
     } else {
-      // Too many attempts, clear and give up
+      // Too many attempts, clear and give up - NO generic fallback
       clearPendingIntent(userId);
       return {
-        message: '', // No generic fallback
+        message: '',
         source: 'local',
         actionPerformed: false,
         requiresClarification: false
@@ -416,10 +401,9 @@ function handleUnknown(userId: string, clarificationQuestion?: string): RouterRe
     }
   }
   
-  // First attempt only: one specific clarification, not generic menu
-  // NO "Come posso aiutarti?" or similar generic phrases
+  // NO pending intent and UNKNOWN - return EMPTY (no generic response)
   return {
-    message: '', // Empty = no generic response
+    message: '',
     source: 'local',
     actionPerformed: false,
     requiresClarification: false
