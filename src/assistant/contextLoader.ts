@@ -7,7 +7,8 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { format, addDays, startOfMonth } from 'date-fns';
-import { getConversationHistory, getRecentMessages } from './contextStore';
+import { getRecentMessages } from './contextStore';
+import { ensureUserSettings } from '@/services/settingsService';
 import type { ConversationMessage } from './types';
 
 export interface UserContext {
@@ -60,20 +61,22 @@ export interface UserPreferences {
 /**
  * Load complete user context from Supabase
  * Called BEFORE generating any response
+ * 
+ * USA ensureUserSettings per garantire che settings esista sempre
  */
 export async function loadUserContext(userId: string): Promise<UserContext> {
   const today = format(new Date(), 'yyyy-MM-dd');
   const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
   
-  // Parallel fetch all data
+  // Parallel fetch all data - settings usa ensureUserSettings (NO 406!)
   const [
     tasksResult,
     todayEventsResult,
     tomorrowEventsResult,
     expensesResult,
     budgetResult,
-    settingsResult,
+    settings,
     recentMessages
   ] = await Promise.all([
     // All tasks
@@ -110,7 +113,7 @@ export async function loadUserContext(userId: string): Promise<UserContext> {
       .gte('date', monthStart)
       .order('date', { ascending: false }),
     
-    // Budget
+    // Budget from budgets table
     supabase
       .from('budgets')
       .select('amount')
@@ -119,12 +122,8 @@ export async function loadUserContext(userId: string): Promise<UserContext> {
       .or(`month.eq.${new Date().getMonth() + 1},month.is.null`)
       .limit(1),
     
-    // Settings
-    supabase
-      .from('settings')
-      .select('*')
-      .eq('user_id', userId)
-      .single(),
+    // Settings - USA ensureUserSettings (garantisce esistenza, NO 406)
+    ensureUserSettings(userId),
     
     // Recent conversation
     getRecentMessages(userId, 5)
@@ -150,16 +149,16 @@ export async function loadUserContext(userId: string): Promise<UserContext> {
   const monthlyExpenses = (expensesResult.data || []) as ExpenseData[];
   const totalSpent = monthlyExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
   
-  // Budget
-  const budget = budgetResult.data?.[0]?.amount || settingsResult.data?.monthly_budget || 1000;
+  // Budget - usa SOLO la tabella budgets (NON settings.monthly_budget)
+  const budget = budgetResult.data?.[0]?.amount || 1000;
   const budgetRemaining = budget - totalSpent;
-  const budgetPercentage = (totalSpent / budget) * 100;
+  const budgetPercentage = budget > 0 ? (totalSpent / budget) * 100 : 0;
   
-  // Preferences
+  // Preferences - settings è già un oggetto UserSettings (grazie a ensureUserSettings)
   const preferences: UserPreferences = {
-    language: settingsResult.data?.language || 'it',
+    language: settings.language || 'it',
     monthlyBudget: budget,
-    notificationsEnabled: settingsResult.data?.notifications_enabled ?? true
+    notificationsEnabled: settings.notifications_enabled ?? true
   };
   
   return {
