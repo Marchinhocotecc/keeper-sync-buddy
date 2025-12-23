@@ -25,10 +25,12 @@ export type LastActionType =
 
 export interface IntentPayload {
   title?: string;
-  date?: string;      // ISO date string
-  time?: string;      // HH:mm format
-  start_at?: string;  // Full ISO datetime
-  end_at?: string;    // Full ISO datetime
+  date?: string;           // ISO date string (legacy)
+  time?: string;           // HH:mm format (legacy)
+  pending_date?: string;   // ISO date string (pending merge)
+  pending_time?: string;   // HH:mm format (pending merge)
+  start_at?: string;       // Full ISO datetime
+  end_at?: string;         // Full ISO datetime
   priority?: string;
   category?: string;
   description?: string;
