@@ -83,6 +83,36 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_state: {
+        Row: {
+          active_intent: string
+          intent_payload: Json
+          last_action_payload: Json
+          last_action_type: string
+          missing_fields: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_intent?: string
+          intent_payload?: Json
+          last_action_payload?: Json
+          last_action_type?: string
+          missing_fields?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_intent?: string
+          intent_payload?: Json
+          last_action_payload?: Json
+          last_action_type?: string
+          missing_fields?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           amount: number

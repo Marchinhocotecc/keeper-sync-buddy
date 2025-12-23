@@ -3,15 +3,14 @@
  * 
  * STRICT PIPELINE (NON-NEGOTIABLE):
  * 
- * INPUT → PENDING CHECK → INTENT PARSER → CONTEXT LOADER → DECISION ROUTER → RESPONSE
+ * INPUT → SUPABASE STATE CHECK → STATEFUL HANDLER OR LEGACY PIPELINE
  * 
  * Rules:
- * 1. NEVER respond without going through the pipeline
- * 2. NEVER skip context loading
- * 3. NEVER claim actions without DB confirmation
- * 4. External AI can ONLY advise, never execute
- * 5. Follow-up messages complete pending intents
- * 6. NO generic fallback responses
+ * 1. ALWAYS check Supabase state first
+ * 2. If active intent in Supabase → use stateful handler
+ * 3. If stateful handler handles it → return its response
+ * 4. Otherwise fall back to legacy pipeline
+ * 5. NO generic fallback responses
  */
 
 import { format, addDays } from 'date-fns';
@@ -27,6 +26,11 @@ import {
   setPendingIntent,
   type PendingIntent
 } from './contextStore';
+import {
+  handleStatefulMessage,
+  userHasActiveIntent,
+  shouldUseStatefulHandler
+} from '@/services/statefulHandler';
 
 // Response hash tracking for loop prevention
 const responseHashes = new Map<string, Set<string>>();
@@ -43,20 +47,51 @@ export async function processMessage(
   console.log('User:', userId);
   console.log('Message:', message);
   
-  // ========== PHASE 0: CHECK PENDING INTENT FIRST (ABSOLUTE PRIORITY) ==========
-  console.log('--- Phase 0: Pending Intent Check ---');
+  // ========== PHASE 0: CHECK SUPABASE STATE FIRST (ABSOLUTE PRIORITY) ==========
+  console.log('--- Phase 0: Supabase State Check ---');
+  
+  try {
+    // Check if user has active intent in Supabase
+    const hasActive = await userHasActiveIntent(userId);
+    
+    if (hasActive || shouldUseStatefulHandler(message)) {
+      console.log('Using stateful handler');
+      const statefulResponse = await handleStatefulMessage(userId, message);
+      
+      // If stateful handler produced a response, use it
+      if (statefulResponse.message) {
+        console.log('Stateful handler response:', statefulResponse.message.substring(0, 50));
+        
+        // Save to conversation history
+        await saveConversation(userId, message, statefulResponse.message);
+        
+        return {
+          message: statefulResponse.message,
+          source: statefulResponse.source === 'stateful' ? 'local' : statefulResponse.source,
+          suggestions: statefulResponse.suggestions,
+          actionExecuted: statefulResponse.actionExecuted,
+          actionResult: statefulResponse.actionResult
+        };
+      }
+      console.log('Stateful handler returned empty, falling back to legacy');
+    }
+  } catch (error) {
+    console.error('Stateful handler error, falling back to legacy:', error);
+  }
+  
+  // ========== LEGACY PIPELINE (when stateful doesn't handle it) ==========
+  console.log('--- Legacy Pipeline ---');
+  
+  // Check in-memory pending intent
   const pendingIntent = getPendingIntent(userId);
   let parsedIntent: ParsedIntent;
   
   if (pendingIntent) {
-    // PRIORITY: If pending intent exists, ALWAYS continue it
-    console.log('Found pending intent:', pendingIntent.intent);
+    console.log('Found legacy pending intent:', pendingIntent.intent);
     console.log('Pending data:', JSON.stringify(pendingIntent.extractedData));
     
-    // Store userId mapping for later
     pendingToUserMap.set(pendingIntent, userId);
     
-    // Merge new message data with pending intent
     parsedIntent = mergeWithPendingIntent(message, pendingIntent);
     console.log('Merged intent:', parsedIntent.intent);
     console.log('Merged confidence:', parsedIntent.confidence);
