@@ -216,9 +216,14 @@ export async function getConversationHistory(userId: string): Promise<Conversati
       .from('assistant_memory')
       .select('messages')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
+      console.error('Error getting conversation history:', error);
+      return [];
+    }
+
+    if (!data) {
       return [];
     }
 

@@ -286,6 +286,12 @@ async function handleCreateTaskFollowUp(
 
 /**
  * Handle follow-up for CREATE_EVENT
+ * 
+ * MERGE LOGIC:
+ * - PROVIDE_DATETIME: extract both date & time, complete if possible
+ * - PROVIDE_DATE: store in pending_date, ask for time if missing
+ * - PROVIDE_TIME: store in pending_time, ask for date if missing
+ * - When both pending_date + pending_time exist, merge to start_at
  */
 async function handleCreateEventFollowUp(
   userId: string,
@@ -295,95 +301,167 @@ async function handleCreateEventFollowUp(
 ): Promise<StatefulResponse> {
   const payload = { ...state.intent_payload };
   
+  // Helper to merge pending date/time into start_at
+  const tryMergeDateTime = () => {
+    if (payload.pending_date && payload.pending_time && !payload.start_at) {
+      payload.start_at = buildDateTime(payload.pending_date, payload.pending_time);
+      payload.date = payload.pending_date;
+      payload.time = payload.pending_time;
+    }
+    // Also check date + time (for backward compatibility)
+    if (payload.date && payload.time && !payload.start_at) {
+      payload.start_at = buildDateTime(payload.date, payload.time);
+    }
+  };
+  
   switch (followUpType) {
     case 'CONFIRM_NO':
       await clearActiveIntent(userId);
       return { message: 'Ok, annullato.', source: 'stateful' };
     
-    case 'PROVIDE_DATETIME':
-    case 'PROVIDE_DATE':
-    case 'PROVIDE_TIME':
-      // Extract date/time from message
+    case 'PROVIDE_DATETIME': {
+      // Extract both date AND time from the message
       const date = extractDate(message);
       const time = extractTime(message);
       
-      if (date) payload.date = date;
-      if (time) payload.time = time;
-      
-      // Build full datetime if we have both
-      if (payload.date && payload.time && !payload.start_at) {
-        payload.start_at = buildDateTime(payload.date, payload.time);
+      if (date) {
+        payload.pending_date = date;
+        payload.date = date;
+      }
+      if (time) {
+        payload.pending_time = time;
+        payload.time = time;
       }
       
+      tryMergeDateTime();
       await updateIntentPayload(userId, payload);
       
-      // Check if we have everything
+      // If we have everything, create the event
       if (payload.title && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // Ask for what's missing
+      // Ask for what's still missing
       if (!payload.title) {
         return { message: 'Come si chiama l\'evento?', source: 'stateful' };
       }
-      if (!payload.date) {
+      if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
       }
-      if (!payload.time) {
+      if (!payload.pending_time && !payload.time) {
         return { message: 'A che ora?', source: 'stateful' };
       }
       break;
+    }
+    
+    case 'PROVIDE_DATE': {
+      const date = extractDate(message);
+      if (date) {
+        payload.pending_date = date;
+        payload.date = date;
+      }
+      
+      tryMergeDateTime();
+      await updateIntentPayload(userId, payload);
+      
+      if (payload.title && payload.start_at) {
+        return await executeCreateEvent(userId, payload.title, payload.start_at);
+      }
+      
+      // Date received, now ask for time only
+      if (!payload.pending_time && !payload.time) {
+        return { message: 'A che ora?', source: 'stateful' };
+      }
+      
+      if (!payload.title) {
+        return { message: 'Come si chiama l\'evento?', source: 'stateful' };
+      }
+      break;
+    }
+    
+    case 'PROVIDE_TIME': {
+      const time = extractTime(message);
+      if (time) {
+        payload.pending_time = time;
+        payload.time = time;
+      }
+      
+      tryMergeDateTime();
+      await updateIntentPayload(userId, payload);
+      
+      if (payload.title && payload.start_at) {
+        return await executeCreateEvent(userId, payload.title, payload.start_at);
+      }
+      
+      // Time received, now ask for date only
+      if (!payload.pending_date && !payload.date) {
+        return { message: 'Che giorno?', source: 'stateful' };
+      }
+      
+      if (!payload.title) {
+        return { message: 'Come si chiama l\'evento?', source: 'stateful' };
+      }
+      break;
+    }
     
     case 'CONFIRM_YES':
-      // Check if we have enough to create
+      tryMergeDateTime();
+      
       if (payload.title && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       // Ask for missing
-      if (!payload.date) {
-        return { message: 'Quando?', source: 'stateful' };
+      if (!payload.pending_date && !payload.date) {
+        return { message: 'Che giorno?', source: 'stateful' };
       }
-      if (!payload.time) {
+      if (!payload.pending_time && !payload.time) {
         return { message: 'A che ora?', source: 'stateful' };
       }
       break;
     
-    default:
-      // Try to extract any date/time info
+    default: {
+      // Try to extract any date/time info from the message
       const dateFromMsg = extractDate(message);
       const timeFromMsg = extractTime(message);
       
-      if (dateFromMsg) payload.date = dateFromMsg;
-      if (timeFromMsg) payload.time = timeFromMsg;
+      if (dateFromMsg) {
+        payload.pending_date = dateFromMsg;
+        payload.date = dateFromMsg;
+      }
+      if (timeFromMsg) {
+        payload.pending_time = timeFromMsg;
+        payload.time = timeFromMsg;
+      }
       
-      // If no title yet, maybe message is the title
+      // If no title yet and no date/time extracted, maybe message is the title
       if (!payload.title && !dateFromMsg && !timeFromMsg) {
         payload.title = message.trim();
       }
       
-      if (payload.date && payload.time) {
-        payload.start_at = buildDateTime(payload.date, payload.time);
-      }
-      
+      tryMergeDateTime();
       await updateIntentPayload(userId, payload);
       
       if (payload.title && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // Ask for what's missing (one at a time)
+      // Ask for what's missing (one question at a time)
       if (!payload.title) {
         return { message: 'Come si chiama l\'evento?', source: 'stateful' };
       }
-      if (!payload.date && !payload.time) {
-        return { message: 'Quando?', source: 'stateful' };
-      }
-      if (!payload.date) {
+      if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
       }
-      if (!payload.time) {
+      if (!payload.pending_time && !payload.time) {
         return { message: 'A che ora?', source: 'stateful' };
       }
+    }
+  }
+  
+  // Final fallback - should rarely reach here
+  tryMergeDateTime();
+  if (payload.title && payload.start_at) {
+    return await executeCreateEvent(userId, payload.title, payload.start_at);
   }
   
   return { message: 'Quando vuoi metterlo?', source: 'stateful' };

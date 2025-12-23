@@ -30,14 +30,15 @@ export async function loadMemory(userId: string): Promise<ConversationEntry[]> {
       .from('assistant_memory')
       .select('messages')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No record found, return empty array
-        return [];
-      }
       console.error('Error loading memory:', error);
+      return [];
+    }
+
+    // No record found, return empty array (no error, just missing)
+    if (!data) {
       return [];
     }
 
