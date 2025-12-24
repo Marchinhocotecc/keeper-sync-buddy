@@ -13,6 +13,7 @@
  */
 
 import { format, addDays } from 'date-fns';
+import { it } from 'date-fns/locale';
 import {
   getState,
   setActiveIntent,
@@ -632,7 +633,7 @@ async function executeCreateEvent(
   await clearActiveIntent(userId);
   
   if (result.success) {
-    const formattedDate = format(startDate, 'EEEE d MMMM', { locale: require('date-fns/locale/it').it });
+    const formattedDate = format(startDate, 'EEEE d MMMM', { locale: it });
     const formattedTime = format(startDate, 'HH:mm');
     return {
       message: `✅ Evento creato: "${title}" - ${formattedDate} alle ${formattedTime}`,
@@ -710,7 +711,7 @@ async function handleQueryEvents(userId: string): Promise<StatefulResponse> {
   
   const eventList = events.slice(0, 5).map((e: any) => {
     const date = new Date(e.start_time);
-    return `⏰ ${format(date, 'EEE d', { locale: require('date-fns/locale/it').it })} ${format(date, 'HH:mm')} - ${e.title}`;
+    return `⏰ ${format(date, 'EEE d', { locale: it })} ${format(date, 'HH:mm')} - ${e.title}`;
   }).join('\n');
   
   return {

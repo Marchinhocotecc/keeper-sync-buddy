@@ -98,11 +98,29 @@ const QUESTION_PATTERNS = [
   /(?:puoi|potresti|mi\s+dici|dimmi)\s+/i,
 ];
 
-// ============ DELETE/REMOVE PATTERNS - NOT CREATE_GENERIC ============
+// ============ DELETE/REMOVE/MANAGE PATTERNS - NEVER CREATE_GENERIC ============
 const DELETE_PATTERNS = [
   /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:le\s+)?spese?/i,
   /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:i\s+)?task/i,
   /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:gli\s+)?eventi?/i,
+];
+
+// Short delete commands (after showing a list)
+const DELETE_SHORT_PATTERNS = [
+  /^eliminala?$/i,
+  /^eliminal[ie]$/i,
+  /^cancellala?$/i,
+  /^cancellal[ie]$/i,
+  /^rimuovila?$/i,
+  /^rimuovil[ie]$/i,
+  /^toglila?$/i,
+  /^toglil[ie]$/i,
+  /^chiudila?$/i,
+  /^chiudil[ie]$/i,
+  /^spuntala?$/i,
+  /^spuntal[ie]$/i,
+  /^completala?$/i,
+  /^completal[ie]$/i,
 ];
 
 /**
@@ -146,12 +164,23 @@ export function parseIntent(message: string): ParsedIntent {
     }
   }
   
-  // ========== RULE 3: DELETE COMMANDS - NOT CREATE_GENERIC ==========
+  // ========== RULE 3: DELETE COMMANDS - NEVER CREATE_GENERIC ==========
   if (DELETE_PATTERNS.some(p => p.test(lower))) {
-    console.log('Matched: DELETE command (not supported yet)');
+    console.log('Matched: DELETE command');
     return {
       intent: 'ADVICE_GENERAL',
       confidence: 0.9,
+      extractedData: { ...extractedData, rawText: message },
+      requiresClarification: false
+    };
+  }
+  
+  // Short delete commands (eliminala, eliminali, etc.) - route to MANAGE
+  if (DELETE_SHORT_PATTERNS.some(p => p.test(lower))) {
+    console.log('Matched: SHORT DELETE command - routing to management');
+    return {
+      intent: 'ADVICE_GENERAL',
+      confidence: 0.95,
       extractedData: { ...extractedData, rawText: message },
       requiresClarification: false
     };

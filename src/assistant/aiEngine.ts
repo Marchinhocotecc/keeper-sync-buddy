@@ -50,11 +50,13 @@ export async function processMessage(
   // ========== PHASE 0: CHECK SUPABASE STATE FIRST (ABSOLUTE PRIORITY) ==========
   console.log('--- Phase 0: Supabase State Check ---');
   
+  let hasActiveIntent = false;
+  
   try {
     // Check if user has active intent in Supabase
-    const hasActive = await userHasActiveIntent(userId);
+    hasActiveIntent = await userHasActiveIntent(userId);
     
-    if (hasActive || shouldUseStatefulHandler(message)) {
+    if (hasActiveIntent || shouldUseStatefulHandler(message)) {
       console.log('Using stateful handler');
       const statefulResponse = await handleStatefulMessage(userId, message);
       
@@ -76,7 +78,18 @@ export async function processMessage(
       console.log('Stateful handler returned empty, falling back to legacy');
     }
   } catch (error) {
-    console.error('Stateful handler error, falling back to legacy:', error);
+    console.error('Stateful handler error:', error);
+    
+    // CRITICAL FIX: If there's an active intent, DO NOT use legacy pipeline
+    // This prevents "venerdì 8:30" from being recorded as expense
+    if (hasActiveIntent) {
+      console.log('Active intent exists - returning safe error message, NOT using legacy');
+      return {
+        message: '⚠️ Problema tecnico. Riprova (es: "venerdì 8:30").',
+        source: 'local'
+      };
+    }
+    // Only fall through to legacy if no active intent
   }
   
   // ========== LEGACY PIPELINE (when stateful doesn't handle it) ==========
