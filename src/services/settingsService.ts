@@ -71,19 +71,17 @@ export async function ensureUserSettings(userId: string): Promise<UserSettings> 
       return existing as UserSettings;
     }
 
-    // Step 3: Se non esiste, creala con defaults
+    // Step 3: Se non esiste, creala con UPSERT (evita duplicati)
     console.log('[SettingsService] Creo settings per utente:', userId);
     
     const newSettings = {
       user_id: userId,
-      ...DEFAULT_SETTINGS,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      ...DEFAULT_SETTINGS
     };
 
     const { data: inserted, error: insertError } = await supabase
       .from('settings')
-      .insert(newSettings)
+      .upsert(newSettings, { onConflict: 'user_id' })
       .select()
       .maybeSingle();
 
