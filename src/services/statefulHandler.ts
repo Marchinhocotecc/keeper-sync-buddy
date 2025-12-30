@@ -230,11 +230,17 @@ export async function handleStatefulMessage(
   const state = await getState(userId);
   console.log('[StatefulHandler] Current state:', state.active_intent);
   
-  // ===== PHASE 0.5: Check for BULK DELETE WITH TARGET (HIGH PRIORITY) =====
-  // This must come BEFORE asking "task/eventi/spese?"
+  // ===== PHASE 0.5: Check for BULK DELETE WITH TARGET (ABSOLUTE PRIORITY) =====
+  // This MUST come BEFORE active_intent check - "elimina tutte le task" must ALWAYS work
   const bulkTarget = detectBulkDeleteTarget(message);
   if (bulkTarget) {
-    console.log('[StatefulHandler] Bulk target detected:', bulkTarget);
+    console.log('[StatefulHandler] Bulk target detected (PRIORITY):', bulkTarget);
+    
+    // Clear any existing intent - bulk action takes priority
+    if (hasActiveIntent(state)) {
+      console.log('[StatefulHandler] Clearing existing intent for bulk action');
+      await clearActiveIntent(userId);
+    }
     
     if (bulkTarget.action === 'query') {
       // "tutte le task" - show tasks
@@ -252,11 +258,33 @@ export async function handleStatefulMessage(
   for (const { pattern, type } of BULK_DELETE_ALL_PATTERNS) {
     if (pattern.test(message)) {
       console.log('[StatefulHandler] Bulk delete detected for:', type);
+      if (hasActiveIntent(state)) {
+        await clearActiveIntent(userId);
+      }
       return await handleBulkDeleteRequest(userId, type, state);
     }
   }
   
-  // ===== PHASE 1: Check for active intent (PRIORITY) =====
+  // ===== PHASE 0.6: Check for "eliminali" with context =====
+  if (/^eliminali?$/i.test(message.trim()) || /^cancellali?$/i.test(message.trim())) {
+    console.log('[StatefulHandler] "eliminali" detected, checking context');
+    const targetType = state.last_action_type === 'SHOW_EVENTS' ? 'events' 
+                     : state.last_action_type === 'SHOW_EXPENSES' ? 'expenses' 
+                     : state.last_action_type === 'SHOW_TASKS' ? 'tasks'
+                     : null;
+    
+    if (targetType) {
+      console.log('[StatefulHandler] "eliminali" with context:', targetType);
+      // Clear any existing intent
+      if (hasActiveIntent(state)) {
+        await clearActiveIntent(userId);
+      }
+      return await handleBulkDeleteRequest(userId, targetType, state);
+    }
+    // No context - will fall through to ask what to delete
+  }
+  
+  // ===== PHASE 1: Check for active intent =====
   if (hasActiveIntent(state)) {
     console.log('[StatefulHandler] Handling follow-up for:', state.active_intent);
     const response = await handleFollowUp(userId, message, state);
@@ -639,6 +667,7 @@ async function handleFollowUp(
 
 /**
  * Handle confirmation for bulk delete
+ * CRITICAL: Must respond to sì/no without loop
  */
 async function handleBulkDeleteConfirmation(
   userId: string,
@@ -647,43 +676,50 @@ async function handleBulkDeleteConfirmation(
   followUpType: FollowUpType
 ): Promise<StatefulResponse> {
   const { deleteType, count } = state.intent_payload;
+  console.log('[StatefulHandler] Bulk delete confirmation:', { deleteType, count, followUpType, message });
   
-  if (followUpType === 'CONFIRM_NO') {
-    await clearActiveIntent(userId);
+  // CRITICAL: Also check message directly for "sì" in case followUpType missed it
+  const lower = message.trim().toLowerCase();
+  const isConfirmYes = followUpType === 'CONFIRM_YES' || /^s[iì]$/i.test(lower) || /^ok$/i.test(lower);
+  const isConfirmNo = followUpType === 'CONFIRM_NO' || /^no$/i.test(lower);
+  
+  if (isConfirmNo) {
+    await clearAllAssistantState(userId);
     return { message: '✅ Ok, annullato.', source: 'stateful' };
   }
   
-  if (followUpType === 'CONFIRM_YES') {
+  if (isConfirmYes) {
     await clearActiveIntent(userId);
     
     switch (deleteType) {
       case 'tasks':
         await dataService.deleteAllTasks(userId);
         return { 
-          message: `✅ Ho eliminato ${count === 1 ? 'il task' : `tutti i ${count} task`}.`, 
+          message: `✅ ${count === 1 ? 'Task eliminato' : `Tutti i ${count} task eliminati`}.`, 
           source: 'stateful',
           actionExecuted: true 
         };
       case 'events':
         await dataService.deleteAllEvents(userId);
         return { 
-          message: `✅ Ho eliminato ${count === 1 ? 'l\'evento' : `tutti i ${count} eventi`}.`, 
+          message: `✅ ${count === 1 ? 'Evento eliminato' : `Tutti i ${count} eventi eliminati`}.`, 
           source: 'stateful',
           actionExecuted: true 
         };
       case 'expenses':
         await dataService.deleteAllExpenses(userId);
         return { 
-          message: `✅ Ho eliminato ${count === 1 ? 'la spesa' : `tutte le ${count} spese`}.`, 
+          message: `✅ ${count === 1 ? 'Spesa eliminata' : `Tutte le ${count} spese eliminate`}.`, 
           source: 'stateful',
           actionExecuted: true 
         };
       default:
+        await clearActiveIntent(userId);
         return { message: SAFE_FALLBACK_MESSAGE, source: 'stateful' };
     }
   }
   
-  // User didn't say yes or no - remind them
+  // User didn't say yes or no - ONE reminder only, then default to no
   const itemName = deleteType === 'tasks' ? 'task' : deleteType === 'events' ? 'eventi' : 'spese';
   return {
     message: `Scrivi "sì" per eliminare ${count === 1 ? 'il' : `i ${count}`} ${itemName}, o "no" per annullare.`,
@@ -693,6 +729,7 @@ async function handleBulkDeleteConfirmation(
 
 /**
  * Handle confirmation for bulk complete
+ * CRITICAL: Must respond to sì/no without loop
  */
 async function handleBulkCompleteConfirmation(
   userId: string,
@@ -701,23 +738,29 @@ async function handleBulkCompleteConfirmation(
   followUpType: FollowUpType
 ): Promise<StatefulResponse> {
   const { count } = state.intent_payload;
+  console.log('[StatefulHandler] Bulk complete confirmation:', { count, followUpType, message });
   
-  if (followUpType === 'CONFIRM_NO') {
-    await clearActiveIntent(userId);
+  // CRITICAL: Also check message directly for "sì" in case followUpType missed it
+  const lower = message.trim().toLowerCase();
+  const isConfirmYes = followUpType === 'CONFIRM_YES' || /^s[iì]$/i.test(lower) || /^ok$/i.test(lower);
+  const isConfirmNo = followUpType === 'CONFIRM_NO' || /^no$/i.test(lower);
+  
+  if (isConfirmNo) {
+    await clearAllAssistantState(userId);
     return { message: '✅ Ok, annullato.', source: 'stateful' };
   }
   
-  if (followUpType === 'CONFIRM_YES') {
+  if (isConfirmYes) {
     await clearActiveIntent(userId);
     await dataService.completeAllTasks(userId);
     return { 
-      message: `✅ Ho completato ${count === 1 ? 'il task' : `tutti i ${count} task`}.`, 
+      message: `✅ ${count === 1 ? 'Task completato' : `Tutti i ${count} task completati`}!`, 
       source: 'stateful',
       actionExecuted: true 
     };
   }
   
-  // User didn't say yes or no - remind them
+  // User didn't say yes or no - ONE reminder only
   return {
     message: `Scrivi "sì" per completare ${count === 1 ? 'il' : `i ${count}`} task, o "no" per annullare.`,
     source: 'stateful'
