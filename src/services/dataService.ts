@@ -287,3 +287,128 @@ export async function getNotes(userId: string): Promise<DataServiceResponse<any[
     return { success: false, error: error.message };
   }
 }
+
+// ============ LIST OPERATIONS (for assistant) ============
+
+export async function listTasks(userId: string): Promise<any[]> {
+  const result = await getTasks(userId, 'pending');
+  return result.data || [];
+}
+
+export async function listEvents(userId: string): Promise<any[]> {
+  const result = await getEvents(userId, 'week');
+  return result.data || [];
+}
+
+export async function listExpenses(userId: string): Promise<any[]> {
+  const result = await getExpenses(userId, 'month');
+  return result.data || [];
+}
+
+// ============ DELETE OPERATIONS ============
+
+export async function deleteTask(userId: string, taskId: string): Promise<DataServiceResponse<any>> {
+  try {
+    const { error } = await supabase
+      .from('todos')
+      .delete()
+      .eq('user_id', userId)
+      .eq('id', taskId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteEvent(userId: string, eventId: string): Promise<DataServiceResponse<any>> {
+  try {
+    const { error } = await supabase
+      .from('calendar_events')
+      .delete()
+      .eq('user_id', userId)
+      .eq('id', eventId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteExpense(userId: string, expenseId: string): Promise<DataServiceResponse<any>> {
+  try {
+    const { error } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('user_id', userId)
+      .eq('id', expenseId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteAllTasks(userId: string): Promise<DataServiceResponse<any>> {
+  try {
+    const { error } = await supabase
+      .from('todos')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteAllEvents(userId: string): Promise<DataServiceResponse<any>> {
+  try {
+    const { error } = await supabase
+      .from('calendar_events')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteAllExpenses(userId: string): Promise<DataServiceResponse<any>> {
+  try {
+    const { error } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============ COMPLETE OPERATIONS ============
+
+export async function completeTask(userId: string, taskId: string): Promise<DataServiceResponse<any>> {
+  try {
+    const { data, error } = await supabase
+      .from('todos')
+      .update({ completed: true })
+      .eq('user_id', userId)
+      .eq('id', taskId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

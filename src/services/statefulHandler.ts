@@ -8,10 +8,11 @@
  * 1. NEVER return empty string or null
  * 2. Confirmation words (no/sì/ok) NEVER create actions
  * 3. "elimina" commands NEVER become CREATE_GENERIC
- * 4. If we don't know what to do, ask a safe clarifying question
+ * 4. Quick actions (buttons) NEVER become free text
+ * 5. If we don't know what to do, ask a safe clarifying question
  * 
  * FLOW:
- * 1. CONFIRMATION PRE-PARSER (cancel/confirm words)
+ * 1. CONFIRMATION PRE-PARSER (cancel/confirm/quick actions)
  * 2. Load state from Supabase
  * 3. If active intent exists → handle as follow-up
  * 4. If no active intent → parse new intent
@@ -25,7 +26,9 @@ import {
   parseConfirmation, 
   isSafetyWord, 
   getCancelResponse, 
-  getConfirmNoIntentResponse 
+  getConfirmNoIntentResponse,
+  getNegativeFeedbackResponse,
+  normalizeTitle
 } from '@/assistant/confirmationParser';
 import {
   getState,
@@ -91,6 +94,13 @@ const BULK_DELETE_PATTERNS = [
 // Safe fallback message
 const SAFE_FALLBACK_MESSAGE = '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
 
+// Bulk delete patterns - require confirmation
+const BULK_DELETE_ALL_PATTERNS = [
+  { pattern: /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutti)\s+(?:i\s+)?task/i, type: 'tasks' },
+  { pattern: /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutti)\s+(?:gli\s+)?eventi/i, type: 'events' },
+  { pattern: /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutte)\s+(?:le\s+)?spese/i, type: 'expenses' },
+];
+
 /**
  * Main stateful message handler
  * 
@@ -115,6 +125,18 @@ export async function handleStatefulMessage(
       // Always clear and return cancel message
       await clearActiveIntent(userId);
       return { message: getCancelResponse(), source: 'stateful' };
+    }
+    
+    if (confirmResult.type === 'NEGATIVE_FEEDBACK') {
+      // User is frustrated - acknowledge and reset
+      await clearActiveIntent(userId);
+      return { message: getNegativeFeedbackResponse(), source: 'stateful' };
+    }
+    
+    if (confirmResult.type === 'QUICK_ACTION') {
+      // Handle quick action directly - NEVER let it become CREATE_GENERIC
+      console.log('[StatefulHandler] Quick action:', confirmResult.quickAction);
+      return await handleQuickAction(userId, confirmResult.quickAction!, state);
     }
     
     if (confirmResult.type === 'CONFIRM') {
@@ -142,6 +164,14 @@ export async function handleStatefulMessage(
   // Load current state from Supabase
   const state = await getState(userId);
   console.log('[StatefulHandler] Current state:', state.active_intent);
+  
+  // ===== PHASE 0.5: Check for BULK DELETE (with confirmation) =====
+  for (const { pattern, type } of BULK_DELETE_ALL_PATTERNS) {
+    if (pattern.test(message)) {
+      console.log('[StatefulHandler] Bulk delete detected for:', type);
+      return await handleBulkDeleteRequest(userId, type, state);
+    }
+  }
   
   // ===== PHASE 1: Check for active intent (PRIORITY) =====
   if (hasActiveIntent(state)) {
@@ -177,6 +207,183 @@ export async function handleStatefulMessage(
   }
   
   return response;
+}
+
+/**
+ * Handle quick action buttons (NEVER create task/event from these)
+ */
+async function handleQuickAction(
+  userId: string,
+  action: string,
+  state: AssistantState
+): Promise<StatefulResponse> {
+  console.log('[StatefulHandler] Handling quick action:', action);
+  
+  switch (action) {
+    case 'SHOW_TASKS': {
+      const tasks = await dataService.listTasks(userId);
+      if (tasks.length === 0) {
+        return { message: '✅ Non hai task in sospeso.', source: 'stateful' };
+      }
+      const taskList = tasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n');
+      await setActiveIntent(userId, 'MANAGE_TASKS', { lastShownIds: tasks.map(t => t.id) }, []);
+      await setLastAction(userId, 'SHOW_TASKS', { ids: tasks.map(t => t.id) });
+      return {
+        message: `📋 I tuoi task (${tasks.length}):\n${taskList}`,
+        source: 'stateful',
+        suggestions: ['Completa uno', 'Elimina uno']
+      };
+    }
+    
+    case 'SHOW_EVENTS': {
+      const events = await dataService.listEvents(userId);
+      if (events.length === 0) {
+        return { message: '✅ Non hai eventi in programma.', source: 'stateful' };
+      }
+      const eventList = events.map((e, i) => `${i + 1}. ${e.title}`).join('\n');
+      await setActiveIntent(userId, 'MANAGE_EVENTS', { lastShownIds: events.map(e => e.id) }, []);
+      await setLastAction(userId, 'SHOW_EVENTS', { ids: events.map(e => e.id) });
+      return {
+        message: `📅 I tuoi eventi (${events.length}):\n${eventList}`,
+        source: 'stateful',
+        suggestions: ['Elimina uno']
+      };
+    }
+    
+    case 'SHOW_EXPENSES': {
+      const expenses = await dataService.listExpenses(userId);
+      if (expenses.length === 0) {
+        return { message: '✅ Non hai spese registrate.', source: 'stateful' };
+      }
+      const expenseList = expenses.slice(0, 10).map((e, i) => `${i + 1}. ${e.category || 'Spesa'}: €${e.amount}`).join('\n');
+      await setActiveIntent(userId, 'MANAGE_EXPENSES', { lastShownIds: expenses.map(e => e.id) }, []);
+      await setLastAction(userId, 'SHOW_EXPENSES', { ids: expenses.map(e => e.id) });
+      return {
+        message: `💰 Le tue spese recenti:\n${expenseList}`,
+        source: 'stateful',
+        suggestions: ['Elimina una']
+      };
+    }
+    
+    case 'DELETE_ONE': {
+      // Check last action to know what to delete
+      if (state.last_action_type === 'SHOW_TASKS') {
+        const ids = (state.last_action_payload as any)?.ids || [];
+        if (ids.length > 0) {
+          // Delete the first one
+          await dataService.deleteTask(userId, ids[0]);
+          await clearActiveIntent(userId);
+          return { 
+            message: '✅ Task eliminato.', 
+            source: 'stateful',
+            actionExecuted: true 
+          };
+        }
+      }
+      if (state.last_action_type === 'SHOW_EVENTS') {
+        const ids = (state.last_action_payload as any)?.ids || [];
+        if (ids.length > 0) {
+          await dataService.deleteEvent(userId, ids[0]);
+          await clearActiveIntent(userId);
+          return { 
+            message: '✅ Evento eliminato.', 
+            source: 'stateful',
+            actionExecuted: true 
+          };
+        }
+      }
+      // No context - ask what to delete
+      return {
+        message: '❓ Cosa vuoi eliminare: un task, un evento o una spesa?',
+        source: 'stateful',
+        suggestions: ['Mostra task', 'Mostra eventi', 'Mostra spese']
+      };
+    }
+    
+    case 'COMPLETE_ONE': {
+      if (state.last_action_type === 'SHOW_TASKS') {
+        const ids = (state.last_action_payload as any)?.ids || [];
+        if (ids.length > 0) {
+          await dataService.completeTask(userId, ids[0]);
+          await clearActiveIntent(userId);
+          return { 
+            message: '✅ Task completato!', 
+            source: 'stateful',
+            actionExecuted: true 
+          };
+        }
+      }
+      // No context - show tasks first
+      const tasks = await dataService.listTasks(userId);
+      if (tasks.length === 0) {
+        return { message: '✅ Non hai task da completare.', source: 'stateful' };
+      }
+      const taskList = tasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n');
+      await setActiveIntent(userId, 'MANAGE_TASKS', { lastShownIds: tasks.map(t => t.id) }, []);
+      await setLastAction(userId, 'SHOW_TASKS', { ids: tasks.map(t => t.id) });
+      return {
+        message: `📋 Quale task vuoi completare?\n${taskList}`,
+        source: 'stateful'
+      };
+    }
+    
+    case 'CREATE_TASK':
+      await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
+      return { message: 'Cosa devi fare?', source: 'stateful' };
+    
+    case 'CREATE_EVENT':
+      await setActiveIntent(userId, 'CREATE_EVENT', {}, ['title', 'date', 'time']);
+      return { message: 'Come si chiama l\'evento e quando?', source: 'stateful' };
+    
+    default:
+      return { message: SAFE_FALLBACK_MESSAGE, source: 'stateful' };
+  }
+}
+
+/**
+ * Handle bulk delete requests with confirmation
+ */
+async function handleBulkDeleteRequest(
+  userId: string,
+  type: string,
+  state: AssistantState
+): Promise<StatefulResponse> {
+  // Get count of items
+  let count = 0;
+  let itemName = '';
+  
+  switch (type) {
+    case 'tasks': {
+      const tasks = await dataService.listTasks(userId);
+      count = tasks.length;
+      itemName = 'task';
+      break;
+    }
+    case 'events': {
+      const events = await dataService.listEvents(userId);
+      count = events.length;
+      itemName = 'eventi';
+      break;
+    }
+    case 'expenses': {
+      const expenses = await dataService.listExpenses(userId);
+      count = expenses.length;
+      itemName = 'spese';
+      break;
+    }
+  }
+  
+  if (count === 0) {
+    return { message: `✅ Non hai ${itemName} da eliminare.`, source: 'stateful' };
+  }
+  
+  // Set pending confirmation state
+  await setActiveIntent(userId, 'CONFIRM_BULK_DELETE', { deleteType: type as 'tasks' | 'events' | 'expenses', count }, []);
+  
+  return {
+    message: `⚠️ Vuoi eliminare ${count === 1 ? 'il' : 'tutti i'} ${count} ${itemName}? Scrivi "sì" per confermare o "no" per annullare.`,
+    source: 'stateful'
+  };
 }
 
 interface IntentClassification {
@@ -267,11 +474,68 @@ async function handleFollowUp(
     case 'MANAGE_EVENTS':
       return await handleManageEventsFollowUp(userId, message, state, followUpType);
     
+    case 'CONFIRM_BULK_DELETE':
+      return await handleBulkDeleteConfirmation(userId, message, state, followUpType);
+    
     default:
       // Unknown active intent, clear and process as new
       await clearActiveIntent(userId);
       return handleStatefulMessage(userId, message);
   }
+}
+
+/**
+ * Handle confirmation for bulk delete
+ */
+async function handleBulkDeleteConfirmation(
+  userId: string,
+  message: string,
+  state: AssistantState,
+  followUpType: FollowUpType
+): Promise<StatefulResponse> {
+  const { deleteType, count } = state.intent_payload;
+  
+  if (followUpType === 'CONFIRM_NO') {
+    await clearActiveIntent(userId);
+    return { message: '✅ Ok, annullato.', source: 'stateful' };
+  }
+  
+  if (followUpType === 'CONFIRM_YES') {
+    await clearActiveIntent(userId);
+    
+    switch (deleteType) {
+      case 'tasks':
+        await dataService.deleteAllTasks(userId);
+        return { 
+          message: `✅ Ho eliminato ${count === 1 ? 'il task' : `tutti i ${count} task`}.`, 
+          source: 'stateful',
+          actionExecuted: true 
+        };
+      case 'events':
+        await dataService.deleteAllEvents(userId);
+        return { 
+          message: `✅ Ho eliminato ${count === 1 ? 'l\'evento' : `tutti i ${count} eventi`}.`, 
+          source: 'stateful',
+          actionExecuted: true 
+        };
+      case 'expenses':
+        await dataService.deleteAllExpenses(userId);
+        return { 
+          message: `✅ Ho eliminato ${count === 1 ? 'la spesa' : `tutte le ${count} spese`}.`, 
+          source: 'stateful',
+          actionExecuted: true 
+        };
+      default:
+        return { message: SAFE_FALLBACK_MESSAGE, source: 'stateful' };
+    }
+  }
+  
+  // User didn't say yes or no - remind them
+  const itemName = deleteType === 'tasks' ? 'task' : deleteType === 'events' ? 'eventi' : 'spese';
+  return {
+    message: `Scrivi "sì" per eliminare ${count === 1 ? 'il' : `i ${count}`} ${itemName}, o "no" per annullare.`,
+    source: 'stateful'
+  };
 }
 
 /**
