@@ -4,16 +4,29 @@
  * Manages conversational state with Supabase persistence.
  * Handles follow-ups deterministically without external AI.
  * 
+ * INVARIANTS (NON-NEGOTIABLE):
+ * 1. NEVER return empty string or null
+ * 2. Confirmation words (no/sì/ok) NEVER create actions
+ * 3. "elimina" commands NEVER become CREATE_GENERIC
+ * 4. If we don't know what to do, ask a safe clarifying question
+ * 
  * FLOW:
- * 1. Load state from Supabase
- * 2. If active intent exists → handle as follow-up
- * 3. If no active intent → parse new intent
- * 4. Execute actions or ask for missing data
- * 5. Save state back to Supabase
+ * 1. CONFIRMATION PRE-PARSER (cancel/confirm words)
+ * 2. Load state from Supabase
+ * 3. If active intent exists → handle as follow-up
+ * 4. If no active intent → parse new intent
+ * 5. Execute actions or ask for missing data
+ * 6. Save state back to Supabase
  */
 
 import { format, addDays } from 'date-fns';
 import { it } from 'date-fns/locale';
+import { 
+  parseConfirmation, 
+  isSafetyWord, 
+  getCancelResponse, 
+  getConfirmNoIntentResponse 
+} from '@/assistant/confirmationParser';
 import {
   getState,
   setActiveIntent,
@@ -63,8 +76,25 @@ const QUERY_EVENT_PATTERNS = [
   /eventi.*(oggi|domani|settimana)/i
 ];
 
+// Delete/manage patterns - NEVER CREATE_GENERIC
+const DELETE_MANAGE_PATTERNS = [
+  /(?:elimina|cancella|rimuovi|togli|chiudi|spunta|completa)/i
+];
+
+// Bulk delete patterns - require confirmation
+const BULK_DELETE_PATTERNS = [
+  /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutti)\s+(?:i\s+)?task/i,
+  /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutti)\s+(?:gli\s+)?eventi/i,
+  /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutte)\s+(?:le\s+)?spese/i,
+];
+
+// Safe fallback message
+const SAFE_FALLBACK_MESSAGE = '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
+
 /**
  * Main stateful message handler
+ * 
+ * INVARIANT: NEVER returns empty string
  */
 export async function handleStatefulMessage(
   userId: string,
@@ -72,22 +102,81 @@ export async function handleStatefulMessage(
 ): Promise<StatefulResponse> {
   console.log('[StatefulHandler] Processing:', message);
   
+  // ===== PHASE -1: CONFIRMATION PRE-PARSER (ABSOLUTE FIRST) =====
+  const confirmResult = parseConfirmation(message);
+  
+  if (confirmResult.shouldBypass) {
+    console.log('[StatefulHandler] Confirmation detected:', confirmResult.type);
+    
+    // Load state to check if there's an active intent
+    const state = await getState(userId);
+    
+    if (confirmResult.type === 'CANCEL') {
+      // Always clear and return cancel message
+      await clearActiveIntent(userId);
+      return { message: getCancelResponse(), source: 'stateful' };
+    }
+    
+    if (confirmResult.type === 'CONFIRM') {
+      if (hasActiveIntent(state)) {
+        // Let the follow-up handler process the confirmation
+        console.log('[StatefulHandler] Confirm with active intent:', state.active_intent);
+        return await handleFollowUp(userId, message, state);
+      } else {
+        // No active intent - safe response
+        return { message: getConfirmNoIntentResponse(), source: 'stateful' };
+      }
+    }
+  }
+  
+  // ===== PHASE 0: SAFETY WORD CHECK =====
+  if (isSafetyWord(message)) {
+    console.log('[StatefulHandler] Safety word detected, not creating action');
+    const state = await getState(userId);
+    if (hasActiveIntent(state)) {
+      await clearActiveIntent(userId);
+    }
+    return { message: getConfirmNoIntentResponse(), source: 'stateful' };
+  }
+  
   // Load current state from Supabase
   const state = await getState(userId);
   console.log('[StatefulHandler] Current state:', state.active_intent);
   
-  // ===== PHASE 0: Check for active intent (PRIORITY) =====
+  // ===== PHASE 1: Check for active intent (PRIORITY) =====
   if (hasActiveIntent(state)) {
     console.log('[StatefulHandler] Handling follow-up for:', state.active_intent);
-    return await handleFollowUp(userId, message, state);
+    const response = await handleFollowUp(userId, message, state);
+    
+    // INVARIANT: Never return empty
+    if (!response.message || response.message.trim() === '') {
+      console.log('[StatefulHandler] Follow-up returned empty, using safe fallback');
+      return { message: SAFE_FALLBACK_MESSAGE, source: 'stateful' };
+    }
+    
+    return response;
   }
   
-  // ===== PHASE 1: Classify new intent =====
+  // ===== PHASE 2: Check for delete/manage commands =====
+  if (DELETE_MANAGE_PATTERNS.some(p => p.test(message))) {
+    console.log('[StatefulHandler] Delete/manage command detected');
+    return await handleDeleteCommand(userId, message, state);
+  }
+  
+  // ===== PHASE 3: Classify new intent =====
   const intentResult = classifyNewIntent(message);
   console.log('[StatefulHandler] New intent:', intentResult.intent);
   
-  // ===== PHASE 2: Route based on intent =====
-  return await routeIntent(userId, message, intentResult);
+  // ===== PHASE 4: Route based on intent =====
+  const response = await routeIntent(userId, message, intentResult);
+  
+  // INVARIANT: Never return empty
+  if (!response.message || response.message.trim() === '') {
+    console.log('[StatefulHandler] Route returned empty, using safe fallback');
+    return { message: SAFE_FALLBACK_MESSAGE, source: 'stateful' };
+  }
+  
+  return response;
 }
 
 interface IntentClassification {
@@ -589,6 +678,95 @@ async function routeIntent(
         source: 'local'
       };
   }
+}
+
+/**
+ * Handle delete/manage commands
+ * Routes based on last_action_type context
+ */
+async function handleDeleteCommand(
+  userId: string,
+  message: string,
+  state: AssistantState
+): Promise<StatefulResponse> {
+  const lower = message.toLowerCase();
+  
+  // Check for bulk delete (needs confirmation)
+  if (BULK_DELETE_PATTERNS.some(p => p.test(lower))) {
+    // Determine what type
+    let deleteType: 'tasks' | 'events' | 'expenses' = 'tasks';
+    if (/eventi/i.test(lower)) deleteType = 'events';
+    if (/spese/i.test(lower)) deleteType = 'expenses';
+    
+    // Set active intent to await confirmation
+    await setActiveIntent(userId, 'CONFIRM_BULK_DELETE' as any, { deleteType }, []);
+    
+    const typeText = deleteType === 'tasks' ? 'TUTTI i task' : 
+                     deleteType === 'events' ? 'TUTTI gli eventi' : 'TUTTE le spese';
+    
+    return {
+      message: `⚠️ Vuoi eliminare ${typeText}? Scrivi "sì" per confermare o "no" per annullare.`,
+      source: 'stateful',
+      suggestions: ['Sì', 'No']
+    };
+  }
+  
+  // Deterministic routing based on last action
+  const lastAction = state.last_action_type;
+  
+  if (lastAction === 'SHOW_TASKS') {
+    // User saw tasks, now wants to delete them
+    const ids = state.last_action_payload?.ids || [];
+    if (ids.length > 0) {
+      // Set intent and ask for confirmation if multiple
+      if (ids.length > 1) {
+        await setActiveIntent(userId, 'MANAGE_TASKS', { action: 'delete', ids }, []);
+        return {
+          message: `Vuoi eliminare tutti i ${ids.length} task mostrati?`,
+          source: 'stateful',
+          suggestions: ['Sì, eliminali', 'No']
+        };
+      }
+      // Single task, ask which action
+      await setActiveIntent(userId, 'MANAGE_TASKS', { action: 'manage', ids }, []);
+      return {
+        message: 'Vuoi completare o eliminare questo task?',
+        source: 'stateful',
+        suggestions: ['Completa', 'Elimina']
+      };
+    }
+  }
+  
+  if (lastAction === 'SHOW_EVENTS') {
+    const ids = state.last_action_payload?.ids || [];
+    if (ids.length > 0) {
+      await setActiveIntent(userId, 'MANAGE_EVENTS', { action: 'delete', ids }, []);
+      return {
+        message: `Vuoi eliminare ${ids.length > 1 ? 'tutti gli' : 'l\''} eventi mostrati?`,
+        source: 'stateful',
+        suggestions: ['Sì', 'No']
+      };
+    }
+  }
+  
+  if (lastAction === 'SHOW_EXPENSES') {
+    const ids = state.last_action_payload?.ids || [];
+    if (ids.length > 0) {
+      await setActiveIntent(userId, 'MANAGE_EXPENSES' as any, { action: 'delete', ids }, []);
+      return {
+        message: `Vuoi eliminare ${ids.length > 1 ? 'tutte le' : 'la'} spese mostrate?`,
+        source: 'stateful',
+        suggestions: ['Sì', 'No']
+      };
+    }
+  }
+  
+  // No context - ask what to delete
+  return {
+    message: '❓ Cosa vuoi eliminare: task, eventi o spese?',
+    source: 'stateful',
+    suggestions: ['Task', 'Eventi', 'Spese']
+  };
 }
 
 // ===== ACTION EXECUTORS =====

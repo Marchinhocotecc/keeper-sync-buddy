@@ -61,7 +61,8 @@ export async function processMessage(
       const statefulResponse = await handleStatefulMessage(userId, message);
       
       // If stateful handler produced a response, use it
-      if (statefulResponse.message) {
+      // INVARIANT: stateful handler should NEVER return empty (it has safe fallback)
+      if (statefulResponse.message && statefulResponse.message.trim() !== '') {
         console.log('Stateful handler response:', statefulResponse.message.substring(0, 50));
         
         // Save to conversation history
@@ -75,6 +76,19 @@ export async function processMessage(
           actionResult: statefulResponse.actionResult
         };
       }
+      
+      // If stateful returned empty (should not happen with new invariant)
+      // but DO NOT fall back to legacy if there was an active intent
+      if (hasActiveIntent) {
+        console.log('Stateful handler returned empty but active intent exists - NOT using legacy');
+        const safeMessage = '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
+        await saveConversation(userId, message, safeMessage);
+        return {
+          message: safeMessage,
+          source: 'local'
+        };
+      }
+      
       console.log('Stateful handler returned empty, falling back to legacy');
     }
   } catch (error) {
@@ -371,7 +385,10 @@ function getMissingDataQuestion(intent: string, data: Partial<ExtractedData>): s
 }
 
 /**
- * Generate alternative response when loop detected - NO GENERIC FALLBACKS
+ * Generate alternative response when loop detected - DETERMINISTIC, CONTEXT-SPECIFIC
+ * 
+ * RULE: Alternatives must be related to the current intent context.
+ * NEVER suggest budget/expenses when talking about tasks.
  */
 function getAlternativeResponse(
   parsedIntent: ParsedIntent,
@@ -379,38 +396,65 @@ function getAlternativeResponse(
 ): { message: string; suggestions?: string[] } {
   const { intent } = parsedIntent;
   
-  // Context-specific responses only - no generic fallbacks
+  // Context-specific responses - NEVER cross-pollinate
   switch (intent) {
-    case 'ADVICE_CONTEXTUAL':
+    case 'CREATE_TASK':
+    case 'QUERY_TASKS':
+      // Stay in task context
       if (context.pendingTasks.length > 0) {
         return {
-          message: `Hai ${context.pendingTasks.length} task in sospeso. Vuoi che ti aiuti a organizzarli?`,
-          suggestions: ['Mostra i task', 'Priorità del giorno']
-        };
-      }
-      if (context.todayEvents.length > 0) {
-        return {
-          message: `Hai ${context.todayEvents.length} eventi oggi. Vuoi vedere il programma?`,
-          suggestions: ['Eventi di oggi']
+          message: `Hai ${context.pendingTasks.length} task in sospeso. Quale vuoi gestire?`,
+          suggestions: ['Mostra task', 'Completa uno', 'Elimina uno']
         };
       }
       return {
-        message: 'Giornata libera! Aggiungi un task o un evento.',
-        suggestions: ['Aggiungi task', 'Aggiungi evento']
+        message: 'Non hai task in sospeso. Vuoi aggiungerne uno?',
+        suggestions: ['Aggiungi task']
       };
     
-    case 'QUERY_TASKS':
+    case 'CREATE_EVENT':
     case 'QUERY_EVENTS':
+      // Stay in events context
+      if (context.todayEvents.length > 0) {
+        return {
+          message: `Hai ${context.todayEvents.length} eventi oggi. Vuoi vederne i dettagli?`,
+          suggestions: ['Mostra eventi']
+        };
+      }
       return {
-        message: 'Vuoi vedere il budget o le spese?',
-        suggestions: ['Budget', 'Spese']
+        message: 'Nessun evento in programma. Vuoi aggiungerne uno?',
+        suggestions: ['Aggiungi evento']
+      };
+    
+    case 'RECORD_EXPENSE':
+    case 'QUERY_EXPENSES':
+    case 'QUERY_BUDGET':
+      // Stay in expenses/budget context
+      return {
+        message: 'Per registrare una spesa, dimmi importo e descrizione (es: "50€ pranzo").',
+        suggestions: ['Vedi spese', 'Vedi budget']
+      };
+    
+    case 'ADVICE_CONTEXTUAL':
+    case 'ADVICE_GENERAL':
+      // Stay in advice context
+      return {
+        message: 'Posso aiutarti a organizzare la giornata. Cosa vuoi fare?',
+        suggestions: ['Cosa fare oggi', 'Priorità', 'Aiutami a decidere']
+      };
+    
+    case 'CREATE_GENERIC':
+      // Generic - ask for clarification
+      return {
+        message: 'Non ho capito bene. Vuoi creare un task, un evento o registrare una spesa?',
+        suggestions: ['Task', 'Evento', 'Spesa']
       };
     
     default:
-      // Return empty to avoid generic response
+      // Safe fallback - but NEVER suggest unrelated topics
       return {
-        message: '',
-        suggestions: []
+        message: '❓ Cosa vorresti fare? (task, evento, spesa o elimina)',
+        suggestions: ['Nuovo task', 'Nuovo evento', 'Registra spesa']
       };
   }
 }

@@ -128,9 +128,15 @@ const DELETE_SHORT_PATTERNS = [
  * 
  * Priority:
  * 1. SMALL_TALK (only exact matches)
- * 2. QUERIES (explicit patterns)
- * 3. EXPENSE (contains number, not a question)
- * 4. ACTION → CREATE_GENERIC
+ * 2. CONFIRMATION WORDS (no/sì/ok) - safety check
+ * 3. QUERIES (explicit patterns)
+ * 4. DELETE commands - never CREATE_GENERIC
+ * 5. EXPENSE (contains number, not a question, not in event context)
+ * 6. ACTION → CREATE_GENERIC
+ * 
+ * INVARIANTS:
+ * - Confirmation words NEVER become CREATE_GENERIC/CREATE_TASK/RECORD_EXPENSE
+ * - Delete commands NEVER become CREATE_GENERIC
  */
 export function parseIntent(message: string): ParsedIntent {
   const normalized = message.trim();
@@ -139,6 +145,24 @@ export function parseIntent(message: string): ParsedIntent {
   
   console.log('=== Intent Parser ===');
   console.log('Input:', normalized);
+  
+  // ========== RULE 0: SAFETY WORDS - NEVER CREATE ACTIONS ==========
+  const SAFETY_WORDS = [
+    /^no$/i, /^n$/i, /^nope$/i, /^annulla$/i, /^stop$/i,
+    /^s[iì]$/i, /^si$/i, /^yes$/i, /^y$/i, /^ok$/i, /^okay$/i,
+    /^va\s*bene$/i, /^perfetto$/i, /^procedi$/i, /^conferm[ao]$/i,
+    /^fallo$/i, /^certo$/i, /^basta$/i, /^niente$/i
+  ];
+  
+  if (SAFETY_WORDS.some(p => p.test(lower))) {
+    console.log('Matched: SAFETY WORD - routing to SMALL_TALK (safe)');
+    return { 
+      intent: 'SMALL_TALK', 
+      confidence: 1.0, 
+      extractedData, 
+      requiresClarification: false 
+    };
+  }
   
   // ========== RULE 1: PURE SMALL TALK (exact matches only) ==========
   if (PURE_SMALL_TALK_PATTERNS.some(p => p.test(lower))) {
@@ -166,7 +190,7 @@ export function parseIntent(message: string): ParsedIntent {
   
   // ========== RULE 3: DELETE COMMANDS - NEVER CREATE_GENERIC ==========
   if (DELETE_PATTERNS.some(p => p.test(lower))) {
-    console.log('Matched: DELETE command');
+    console.log('Matched: DELETE command - routing to ADVICE_GENERAL (stateful will handle)');
     return {
       intent: 'ADVICE_GENERAL',
       confidence: 0.9,
@@ -177,7 +201,7 @@ export function parseIntent(message: string): ParsedIntent {
   
   // Short delete commands (eliminala, eliminali, etc.) - route to MANAGE
   if (DELETE_SHORT_PATTERNS.some(p => p.test(lower))) {
-    console.log('Matched: SHORT DELETE command - routing to management');
+    console.log('Matched: SHORT DELETE command - routing to ADVICE_GENERAL (stateful will handle)');
     return {
       intent: 'ADVICE_GENERAL',
       confidence: 0.95,
@@ -199,12 +223,16 @@ export function parseIntent(message: string): ParsedIntent {
     };
   }
   
-  // ========== RULE 4: EXPENSE (number present, not question) ==========
-  // If message contains a number → ALWAYS classify as RECORD_EXPENSE
+  // ========== RULE 5: EXPENSE (number present, not question) ==========
+  // SAFETY: If message looks like time (e.g., "8:30", "alle 15") don't classify as expense
+  const looksLikeTime = /^(\d{1,2})[:.:](\d{2})$/.test(normalized) || 
+                        /alle?\s*\d{1,2}/i.test(lower) ||
+                        /ore\s*\d{1,2}/i.test(lower);
+  
   const hasNumber = /\d+(?:[.,]\d+)?/.test(normalized);
   
-  if (hasNumber) {
-    console.log('Matched: RECORD_EXPENSE (number detected)');
+  if (hasNumber && !looksLikeTime) {
+    console.log('Matched: RECORD_EXPENSE (number detected, not time)');
     
     // Extract amount more aggressively
     if (!extractedData.amount) {
@@ -243,7 +271,7 @@ export function parseIntent(message: string): ParsedIntent {
     };
   }
   
-  // ========== RULE 5: ACTION → CREATE_GENERIC ==========
+  // ========== RULE 6: ACTION → CREATE_GENERIC ==========
   // Everything else that's not a question is an ACTION
   // User wants to add something (task or event)
   console.log('Matched: CREATE_GENERIC (action)');

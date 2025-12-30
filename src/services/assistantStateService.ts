@@ -13,7 +13,9 @@ export type ActiveIntent =
   | 'QUERY_TASKS'       // Querying tasks
   | 'QUERY_EVENTS'      // Querying events
   | 'MANAGE_TASKS'      // Managing shown tasks (delete, complete)
-  | 'MANAGE_EVENTS';    // Managing shown events (delete, modify)
+  | 'MANAGE_EVENTS'     // Managing shown events (delete, modify)
+  | 'MANAGE_EXPENSES'   // Managing shown expenses (delete)
+  | 'CONFIRM_BULK_DELETE'; // Awaiting confirmation for bulk delete
 
 export type LastActionType = 
   | 'NONE'
@@ -34,6 +36,10 @@ export interface IntentPayload {
   priority?: string;
   category?: string;
   description?: string;
+  // Management fields
+  action?: 'delete' | 'complete' | 'manage';
+  ids?: string[];
+  deleteType?: 'tasks' | 'events' | 'expenses';
 }
 
 export interface LastActionPayload {
