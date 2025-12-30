@@ -27,6 +27,7 @@ import {
   isSafetyWord,
   isCancelSafetyWord,
   isConfirmSafetyWord,
+  isCancelPattern,
   getCancelResponse, 
   getConfirmNoIntentResponse,
   getNegativeFeedbackResponse,
@@ -97,8 +98,8 @@ const BULK_DELETE_PATTERNS = [
   /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutte)\s+(?:le\s+)?spese/i,
 ];
 
-// Safe fallback message - ALWAYS returned when we don't know what to do
-const SAFE_FALLBACK_MESSAGE = '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
+// Import centralized constants
+import { SAFE_FALLBACK_MESSAGE } from '@/assistant/constants';
 
 // Bulk delete patterns - require confirmation
 const BULK_DELETE_ALL_PATTERNS = [
@@ -1360,8 +1361,8 @@ export function shouldUseStatefulHandler(message: string): boolean {
     return true;
   }
   
-  // Cancel patterns MUST be handled by stateful
-  if (/^no\s*[,.]?\s*/i.test(lower) || /^annulla/i.test(lower) || /^stop/i.test(lower)) {
+  // Cancel patterns MUST be handled by stateful - use centralized function
+  if (isCancelPattern(message)) {
     return true;
   }
   
