@@ -44,8 +44,9 @@ export async function analyzeTasksRules(userId: string): Promise<EngineOutput[]>
   const insights: EngineOutput[] = [];
 
   try {
+    console.log('[TaskRepo] SELECT todos (rules engine)', { user_id: userId });
     const { data: tasks } = await supabase
-      .from('tasks')
+      .from('todos')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });

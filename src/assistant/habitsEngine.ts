@@ -21,8 +21,9 @@ export async function getProductivityPatterns(userId: string): Promise<Productiv
     // Get tasks from last 30 days
     const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
     
+    console.log('[TaskRepo] SELECT todos (habits engine)', { user_id: userId });
     const { data: tasks } = await supabase
-      .from('tasks')
+      .from('todos')
       .select('*')
       .eq('user_id', userId)
       .gte('created_at', thirtyDaysAgo);

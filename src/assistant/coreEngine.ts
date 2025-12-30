@@ -20,8 +20,9 @@ export async function runDailyAnalysis(userId: string): Promise<DailyAnalysis> {
   const today = format(now, 'yyyy-MM-dd');
 
   // Fetch tasks
+  console.log('[TaskRepo] SELECT todos (daily analysis)', { user_id: userId });
   const { data: tasks } = await supabase
-    .from('tasks')
+    .from('todos')
     .select('*')
     .eq('user_id', userId);
 
@@ -91,8 +92,9 @@ export async function runMorningBriefing(userId: string): Promise<MorningBriefin
   const patterns = await getUserPatterns(userId);
 
   // Get high priority tasks
+  console.log('[TaskRepo] SELECT todos (morning briefing)', { user_id: userId });
   const { data: tasks } = await supabase
-    .from('tasks')
+    .from('todos')
     .select('title, priority')
     .eq('user_id', userId)
     .eq('completed', false)
@@ -132,15 +134,16 @@ export async function runEveningReview(userId: string): Promise<EveningReview> {
   const todayStart = format(now, 'yyyy-MM-dd 00:00:00');
 
   // Get today's completed tasks
+  console.log('[TaskRepo] SELECT todos (evening review)', { user_id: userId });
   const { data: completedToday } = await supabase
-    .from('tasks')
+    .from('todos')
     .select('title')
     .eq('user_id', userId)
     .eq('completed', true)
     .gte('created_at', todayStart);
 
   const { data: pendingTasks } = await supabase
-    .from('tasks')
+    .from('todos')
     .select('title, priority')
     .eq('user_id', userId)
     .eq('completed', false);

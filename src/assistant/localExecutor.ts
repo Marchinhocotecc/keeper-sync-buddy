@@ -82,8 +82,9 @@ export async function createTask(
     return { success: false, message: 'Manca il titolo del task', error: 'missing_title' };
   }
   
+  console.log('[TaskRepo] INSERT todos', { user_id: userId, title: data.title });
   const { data: result, error } = await supabase
-    .from('tasks')
+    .from('todos')
     .insert({
       user_id: userId,
       title: data.title,

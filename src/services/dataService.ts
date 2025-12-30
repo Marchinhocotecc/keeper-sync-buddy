@@ -18,6 +18,7 @@ export async function createTask(
   dueDate?: string
 ): Promise<DataServiceResponse<any>> {
   try {
+    console.log('[TaskRepo] INSERT todos', { user_id: userId, title });
     const { data, error } = await supabase
       .from('todos')
       .insert({
@@ -31,8 +32,10 @@ export async function createTask(
       .single();
 
     if (error) throw error;
+    console.log('[TaskRepo] INSERT todos SUCCESS', { id: data.id });
     return { success: true, data };
   } catch (error: any) {
+    console.error('[TaskRepo] INSERT todos ERROR', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -145,6 +148,7 @@ export async function getTasks(
   filter: 'all' | 'pending' | 'completed' = 'all'
 ): Promise<DataServiceResponse<any[]>> {
   try {
+    console.log('[TaskRepo] SELECT todos', { user_id: userId, filter });
     let query = supabase
       .from('todos')
       .select('*')
@@ -160,8 +164,10 @@ export async function getTasks(
     const { data, error } = await query;
 
     if (error) throw error;
+    console.log('[TaskRepo] SELECT todos SUCCESS', { count: data?.length || 0 });
     return { success: true, data: data || [] };
   } catch (error: any) {
+    console.error('[TaskRepo] SELECT todos ERROR', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -309,6 +315,7 @@ export async function listExpenses(userId: string): Promise<any[]> {
 
 export async function deleteTask(userId: string, taskId: string): Promise<DataServiceResponse<any>> {
   try {
+    console.log('[TaskRepo] DELETE todos', { user_id: userId, id: taskId });
     const { error } = await supabase
       .from('todos')
       .delete()
@@ -316,8 +323,10 @@ export async function deleteTask(userId: string, taskId: string): Promise<DataSe
       .eq('id', taskId);
 
     if (error) throw error;
+    console.log('[TaskRepo] DELETE todos SUCCESS');
     return { success: true };
   } catch (error: any) {
+    console.error('[TaskRepo] DELETE todos ERROR', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -354,14 +363,17 @@ export async function deleteExpense(userId: string, expenseId: string): Promise<
 
 export async function deleteAllTasks(userId: string): Promise<DataServiceResponse<any>> {
   try {
+    console.log('[TaskRepo] DELETE ALL todos', { user_id: userId });
     const { error } = await supabase
       .from('todos')
       .delete()
       .eq('user_id', userId);
 
     if (error) throw error;
+    console.log('[TaskRepo] DELETE ALL todos SUCCESS');
     return { success: true };
   } catch (error: any) {
+    console.error('[TaskRepo] DELETE ALL todos ERROR', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -398,6 +410,7 @@ export async function deleteAllExpenses(userId: string): Promise<DataServiceResp
 
 export async function completeTask(userId: string, taskId: string): Promise<DataServiceResponse<any>> {
   try {
+    console.log('[TaskRepo] UPDATE todos (complete)', { user_id: userId, id: taskId });
     const { data, error } = await supabase
       .from('todos')
       .update({ completed: true })
@@ -407,14 +420,17 @@ export async function completeTask(userId: string, taskId: string): Promise<Data
       .single();
 
     if (error) throw error;
+    console.log('[TaskRepo] UPDATE todos SUCCESS');
     return { success: true, data };
   } catch (error: any) {
+    console.error('[TaskRepo] UPDATE todos ERROR', error.message);
     return { success: false, error: error.message };
   }
 }
 
 export async function completeAllTasks(userId: string): Promise<DataServiceResponse<any>> {
   try {
+    console.log('[TaskRepo] UPDATE ALL todos (complete)', { user_id: userId });
     const { error } = await supabase
       .from('todos')
       .update({ completed: true })
@@ -422,8 +438,10 @@ export async function completeAllTasks(userId: string): Promise<DataServiceRespo
       .eq('completed', false);
 
     if (error) throw error;
+    console.log('[TaskRepo] UPDATE ALL todos SUCCESS');
     return { success: true };
   } catch (error: any) {
+    console.error('[TaskRepo] UPDATE ALL todos ERROR', error.message);
     return { success: false, error: error.message };
   }
 }

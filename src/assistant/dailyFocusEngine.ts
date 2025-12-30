@@ -160,13 +160,7 @@ async function calculateFreeTime(userId: string): Promise<TimeBlock[]> {
  * Get pending tasks prioritized by urgency
  */
 async function getPendingTasks(userId: string) {
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('completed', false)
-    .order('created_at', { ascending: true });
-
+  console.log('[TaskRepo] SELECT todos (daily focus)', { user_id: userId });
   const { data: todos } = await supabase
     .from('todos')
     .select('*')
@@ -174,21 +168,13 @@ async function getPendingTasks(userId: string) {
     .eq('completed', false)
     .order('due_date', { ascending: true, nullsFirst: false });
 
-  // Combine and score tasks
-  const allTasks = [
-    ...(tasks || []).map(t => ({
-      ...t,
-      source: 'tasks' as const,
-      daysOverdue: 0,
-      urgencyScore: calculateUrgencyScore(t)
-    })),
-    ...(todos || []).map(t => ({
-      ...t,
-      source: 'todos' as const,
-      daysOverdue: t.due_date ? calculateDaysOverdue(t.due_date) : 0,
-      urgencyScore: calculateUrgencyScore(t)
-    }))
-  ];
+  // Score and return tasks from todos only (single source of truth)
+  const allTasks = (todos || []).map(t => ({
+    ...t,
+    source: 'todos' as const,
+    daysOverdue: t.due_date ? calculateDaysOverdue(t.due_date) : 0,
+    urgencyScore: calculateUrgencyScore(t)
+  }));
 
   return allTasks.sort((a, b) => b.urgencyScore - a.urgencyScore);
 }

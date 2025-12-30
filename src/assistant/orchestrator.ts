@@ -407,8 +407,9 @@ export async function getAssistantResponse(
 async function handleQueryTasks(userId: string): Promise<OrchestratorResponse> {
   const sessionState = getSessionState(userId);
   
+  console.log('[TaskRepo] SELECT todos', { user_id: userId });
   const { data: tasks } = await supabase
-    .from('tasks')
+    .from('todos')
     .select('*')
     .eq('user_id', userId)
     .eq('completed', false)
