@@ -110,8 +110,9 @@ async function createEvent(userId: string, payload: EventPayload): Promise<Bridg
  * Create a new task
  */
 async function createTask(userId: string, payload: TaskPayload): Promise<BridgeResult> {
+  console.log('[TaskRepo] INSERT todos', { user_id: userId, title: payload.title });
   const { data, error } = await supabase
-    .from('tasks')
+    .from('todos')
     .insert({
       user_id: userId,
       title: payload.title || 'Nuovo task',
@@ -199,8 +200,9 @@ async function updateTask(userId: string, payload: any): Promise<BridgeResult> {
   if (!taskId) {
     // Try to find task by title
     if (payload.title) {
+      console.log('[TaskRepo] SELECT todos (find by title)', { user_id: userId, title: payload.title });
       const { data: tasks } = await supabase
-        .from('tasks')
+        .from('todos')
         .select('id')
         .eq('user_id', userId)
         .ilike('title', `%${payload.title}%`)
@@ -211,8 +213,9 @@ async function updateTask(userId: string, payload: any): Promise<BridgeResult> {
         if (payload.completed !== undefined) updateData.completed = payload.completed;
         if (payload.priority) updateData.priority = payload.priority;
 
+        console.log('[TaskRepo] UPDATE todos', { id: tasks[0].id });
         const { error } = await supabase
-          .from('tasks')
+          .from('todos')
           .update(updateData)
           .eq('id', tasks[0].id);
 
@@ -231,8 +234,9 @@ async function updateTask(userId: string, payload: any): Promise<BridgeResult> {
   if (payload.priority) updateData.priority = payload.priority;
   if (payload.newTitle) updateData.title = payload.newTitle;
 
+  console.log('[TaskRepo] UPDATE todos', { id: taskId, user_id: userId });
   const { error } = await supabase
-    .from('tasks')
+    .from('todos')
     .update(updateData)
     .eq('id', taskId)
     .eq('user_id', userId);
@@ -254,8 +258,9 @@ async function deleteTask(userId: string, payload: any): Promise<BridgeResult> {
     return { success: false, message: 'ID task non specificato', error: 'Missing task ID' };
   }
 
+  console.log('[TaskRepo] DELETE todos', { id: taskId, user_id: userId });
   const { error } = await supabase
-    .from('tasks')
+    .from('todos')
     .delete()
     .eq('id', taskId)
     .eq('user_id', userId);
@@ -271,8 +276,9 @@ async function deleteTask(userId: string, payload: any): Promise<BridgeResult> {
  * Query tasks
  */
 async function queryTasks(userId: string, payload: any): Promise<BridgeResult> {
+  console.log('[TaskRepo] SELECT todos', { user_id: userId, filter: payload?.filter });
   let query = supabase
-    .from('tasks')
+    .from('todos')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });

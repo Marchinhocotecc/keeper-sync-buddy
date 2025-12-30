@@ -81,7 +81,7 @@ export async function loadUserContext(userId: string): Promise<UserContext> {
   ] = await Promise.all([
     // All tasks
     supabase
-      .from('tasks')
+      .from('todos')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })

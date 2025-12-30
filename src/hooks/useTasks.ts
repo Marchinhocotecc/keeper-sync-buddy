@@ -26,6 +26,7 @@ export const useTasks = (userId?: string) => {
     queryFn: async () => {
       if (!userId) return [];
       
+      console.log('[TaskRepo] SELECT todos (useTasks hook)', { user_id: userId });
       const { data, error } = await supabase
         .from("todos")
         .select("*")
@@ -33,6 +34,7 @@ export const useTasks = (userId?: string) => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
+      console.log('[TaskRepo] SELECT todos SUCCESS', { count: data?.length || 0 });
       return Array.isArray(data) ? data : [];
     },
     enabled: !!userId,
@@ -42,6 +44,7 @@ export const useTasks = (userId?: string) => {
     mutationFn: async (task: { title: string; priority: "low" | "medium" | "high"; due_date?: string }) => {
       if (!userId) throw new Error("User ID required");
       
+      console.log('[TaskRepo] INSERT todos (useTasks hook)', { user_id: userId, title: task.title });
       const { data, error } = await supabase
         .from("todos")
         .insert([{ ...task, completed: false, user_id: userId }])
@@ -49,6 +52,7 @@ export const useTasks = (userId?: string) => {
         .single();
 
       if (error) throw error;
+      console.log('[TaskRepo] INSERT todos SUCCESS', { id: data.id });
       return data;
     },
     onSuccess: async (data) => {
