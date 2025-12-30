@@ -38,17 +38,12 @@ const CANCEL_PATTERNS_STANDALONE = [
 // CRITICAL: These MUST be detected to clear pending intent and process remainder
 const CANCEL_PREFIX_PATTERNS = [
   /^no\s*,\s*/i,       // "no, consigliami..."
-  /^no\s+(?!task|evento|spesa)/i,  // "no consigliami..." (no comma, but not "no task")
+  /^no\s+(?!task|evento|spesa|grazie)/i,  // "no consigliami..." (no comma, but not "no task")
   /^annulla\s*,?\s*/i, // "annulla, fammi vedere..."
   /^lascia\s*(?:stare|perdere)\s*,?\s*/i, // "lascia stare, dimmi..."
-];
-
-// Inline cancel detection - message CONTAINS cancel intent mid-sentence
-// e.g., "no, invece consigliami cosa fare oggi"
-const CANCEL_INLINE_INDICATORS = [
-  /\bannulla\b/i,
-  /\blascia\s*(?:stare|perdere)\b/i,
-  /\bstop\b/i,
+  /^niente\s*,?\s*/i,  // "niente, consigliami..."
+  /^basta\s*,?\s*/i,   // "basta, dimmi..."
+  /^stop\s*,?\s*/i,    // "stop, consigliami..."
 ];
 
 // ========== CONFIRM PATTERNS ==========
@@ -198,13 +193,18 @@ export function parseConfirmation(message: string): ConfirmationWithContinuation
       const continuation = original.replace(pattern, '').trim();
       if (continuation.length > 2) {
         // There's meaningful content after "no, " - return cancel with continuation
+        console.log('[ConfirmationParser] CANCEL with continuation detected:', continuation);
         return { type: 'CANCEL', shouldBypass: true, continuation };
       }
+      // Short continuation (e.g., "no, ok") - still CANCEL but no continuation
+      console.log('[ConfirmationParser] CANCEL prefix detected, no meaningful continuation');
+      return { type: 'CANCEL', shouldBypass: true };
     }
   }
   
   // Check standalone cancel patterns
   if (CANCEL_PATTERNS_STANDALONE.some(p => p.test(trimmed))) {
+    console.log('[ConfirmationParser] Standalone CANCEL detected');
     return { type: 'CANCEL', shouldBypass: true };
   }
   

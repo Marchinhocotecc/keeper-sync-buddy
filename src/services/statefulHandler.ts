@@ -111,17 +111,30 @@ const BULK_DELETE_ALL_PATTERNS = [
  * CRITICAL: Clear ALL assistant state (stateful + legacy)
  * This is the ONLY function that should be called when user says "no/cancel"
  * It ensures NO pending data leaks to the next message
+ * 
+ * INVARIANT: After this function, there MUST be no pending intent anywhere
  */
-async function clearAllAssistantState(userId: string): Promise<void> {
-  console.log('[StatefulHandler] Clearing ALL assistant state for user:', userId);
+export async function clearAllAssistantState(userId: string): Promise<void> {
+  console.log('[StatefulHandler] ===== CLEARING ALL STATE =====');
+  console.log('[StatefulHandler] User:', userId);
   
-  // 1. Clear Supabase stateful state
-  await clearActiveIntent(userId);
+  // 1. Clear Supabase stateful state (active_intent + intent_payload)
+  try {
+    await clearActiveIntent(userId);
+    console.log('[StatefulHandler] Supabase state cleared');
+  } catch (e) {
+    console.error('[StatefulHandler] Error clearing Supabase state:', e);
+  }
   
   // 2. Clear legacy in-memory pending intent
-  clearLegacyPendingIntent(userId);
+  try {
+    clearLegacyPendingIntent(userId);
+    console.log('[StatefulHandler] Legacy pending intent cleared');
+  } catch (e) {
+    console.error('[StatefulHandler] Error clearing legacy state:', e);
+  }
   
-  console.log('[StatefulHandler] All state cleared');
+  console.log('[StatefulHandler] ===== ALL STATE CLEARED =====');
 }
 
 /**
@@ -137,23 +150,28 @@ export async function handleStatefulMessage(
   
   // ===== PHASE -1: CONFIRMATION PRE-PARSER (ABSOLUTE FIRST) =====
   const confirmResult = parseConfirmation(message) as ConfirmationWithContinuation;
+  console.log('[StatefulHandler] Confirmation parse result:', JSON.stringify(confirmResult));
   
   if (confirmResult.shouldBypass) {
     console.log('[StatefulHandler] Confirmation detected:', confirmResult.type);
     
     if (confirmResult.type === 'CANCEL') {
       // CRITICAL: Clear ALL state (stateful + legacy) - NO DATA LEAKAGE
+      // This MUST happen BEFORE any processing
+      console.log('[StatefulHandler] CANCEL detected - clearing ALL state FIRST');
       await clearAllAssistantState(userId);
       
       // If there's a continuation (e.g., "no, consigliami cosa fare oggi")
       // Process the continuation as a NEW message (with fully cleared state)
       if (confirmResult.continuation && confirmResult.continuation.length > 2) {
-        console.log('[StatefulHandler] Cancel with continuation:', confirmResult.continuation);
-        // Process the rest as a completely new message - recursive call
-        // State is ALREADY cleared, so no pending data will leak
+        console.log('[StatefulHandler] Processing continuation AFTER state cleared:', confirmResult.continuation);
+        // INVARIANT: State is already cleared, so no pending data will leak
+        // Process continuation as completely fresh message
         return await handleStatefulMessage(userId, confirmResult.continuation);
       }
       
+      // No continuation - just return cancel response
+      console.log('[StatefulHandler] CANCEL complete - returning ok annullato');
       return { message: getCancelResponse(), source: 'stateful' };
     }
     
