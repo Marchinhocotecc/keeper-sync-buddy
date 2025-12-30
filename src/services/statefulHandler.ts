@@ -24,7 +24,9 @@ import { format, addDays } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { 
   parseConfirmation, 
-  isSafetyWord, 
+  isSafetyWord,
+  isCancelSafetyWord,
+  isConfirmSafetyWord,
   getCancelResponse, 
   getConfirmNoIntentResponse,
   getNegativeFeedbackResponse,
@@ -53,6 +55,8 @@ import {
   type FollowUpType
 } from '@/services/followUpClassifier';
 import * as dataService from '@/services/dataService';
+// CRITICAL: Import legacy pending intent management for full cleanup
+import { clearPendingIntent as clearLegacyPendingIntent } from '@/assistant/contextStore';
 
 export interface StatefulResponse {
   message: string;
@@ -93,7 +97,7 @@ const BULK_DELETE_PATTERNS = [
   /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutte)\s+(?:le\s+)?spese/i,
 ];
 
-// Safe fallback message
+// Safe fallback message - ALWAYS returned when we don't know what to do
 const SAFE_FALLBACK_MESSAGE = '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
 
 // Bulk delete patterns - require confirmation
@@ -102,6 +106,23 @@ const BULK_DELETE_ALL_PATTERNS = [
   { pattern: /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutti)\s+(?:gli\s+)?eventi/i, type: 'events' },
   { pattern: /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutte)\s+(?:le\s+)?spese/i, type: 'expenses' },
 ];
+
+/**
+ * CRITICAL: Clear ALL assistant state (stateful + legacy)
+ * This is the ONLY function that should be called when user says "no/cancel"
+ * It ensures NO pending data leaks to the next message
+ */
+async function clearAllAssistantState(userId: string): Promise<void> {
+  console.log('[StatefulHandler] Clearing ALL assistant state for user:', userId);
+  
+  // 1. Clear Supabase stateful state
+  await clearActiveIntent(userId);
+  
+  // 2. Clear legacy in-memory pending intent
+  clearLegacyPendingIntent(userId);
+  
+  console.log('[StatefulHandler] All state cleared');
+}
 
 /**
  * Main stateful message handler
@@ -120,27 +141,28 @@ export async function handleStatefulMessage(
   if (confirmResult.shouldBypass) {
     console.log('[StatefulHandler] Confirmation detected:', confirmResult.type);
     
-    // Load state to check if there's an active intent
-    const state = await getState(userId);
-    
     if (confirmResult.type === 'CANCEL') {
-      // CRITICAL: Always clear active intent when user says "no"
-      await clearActiveIntent(userId);
+      // CRITICAL: Clear ALL state (stateful + legacy) - NO DATA LEAKAGE
+      await clearAllAssistantState(userId);
       
       // If there's a continuation (e.g., "no, consigliami cosa fare oggi")
-      // Process the continuation as a NEW message (without pending data)
+      // Process the continuation as a NEW message (with fully cleared state)
       if (confirmResult.continuation && confirmResult.continuation.length > 2) {
         console.log('[StatefulHandler] Cancel with continuation:', confirmResult.continuation);
         // Process the rest as a completely new message - recursive call
+        // State is ALREADY cleared, so no pending data will leak
         return await handleStatefulMessage(userId, confirmResult.continuation);
       }
       
       return { message: getCancelResponse(), source: 'stateful' };
     }
     
+    // Load state for other confirmation types
+    const state = await getState(userId);
+    
     if (confirmResult.type === 'NEGATIVE_FEEDBACK') {
       // User is frustrated - acknowledge and reset
-      await clearActiveIntent(userId);
+      await clearAllAssistantState(userId);
       return { message: getNegativeFeedbackResponse(), source: 'stateful' };
     }
     
@@ -162,13 +184,26 @@ export async function handleStatefulMessage(
     }
   }
   
-  // ===== PHASE 0: SAFETY WORD CHECK =====
+  // ===== PHASE 0: SAFETY WORD CHECK (CRITICAL - BEFORE ANY INTENT CLASSIFICATION) =====
+  // These words should NEVER create tasks/events/expenses
   if (isSafetyWord(message)) {
-    console.log('[StatefulHandler] Safety word detected, not creating action');
+    console.log('[StatefulHandler] Safety word detected:', message);
     const state = await getState(userId);
+    
+    // If there's an active intent, clear it
     if (hasActiveIntent(state)) {
-      await clearActiveIntent(userId);
+      await clearAllAssistantState(userId);
     }
+    
+    // Return appropriate response based on word type
+    if (isCancelSafetyWord(message)) {
+      return { message: getCancelResponse(), source: 'stateful' };
+    }
+    if (isConfirmSafetyWord(message)) {
+      return { message: getConfirmNoIntentResponse(), source: 'stateful' };
+    }
+    
+    // Fallback for any other safety word
     return { message: getConfirmNoIntentResponse(), source: 'stateful' };
   }
   
@@ -1297,9 +1332,25 @@ async function handleQueryEvents(userId: string): Promise<StatefulResponse> {
 
 /**
  * Check if message should be handled by stateful system
+ * CRITICAL: Safety words MUST go through stateful to prevent task creation
  */
 export function shouldUseStatefulHandler(message: string): boolean {
   const lower = message.toLowerCase().trim();
+  
+  // FIRST: Safety words MUST be handled by stateful (to prevent legacy creating tasks)
+  if (isSafetyWord(message)) {
+    return true;
+  }
+  
+  // Cancel patterns MUST be handled by stateful
+  if (/^no\s*[,.]?\s*/i.test(lower) || /^annulla/i.test(lower) || /^stop/i.test(lower)) {
+    return true;
+  }
+  
+  // Delete commands MUST be handled by stateful
+  if (/(?:elimina|cancella|rimuovi|togli)/i.test(lower)) {
+    return true;
+  }
   
   // Stateful patterns
   const patterns = [
@@ -1307,7 +1358,7 @@ export function shouldUseStatefulHandler(message: string): boolean {
     ...QUERY_TASK_PATTERNS,
     ...QUERY_EVENT_PATTERNS,
     // Simple responses that might be follow-ups
-    /^(s[iì]|no|ok|task|evento|domani|oggi|annulla)$/i
+    /^(s[iì]|no|ok|task|evento|domani|oggi)$/i
   ];
   
   return patterns.some(p => p.test(lower));
