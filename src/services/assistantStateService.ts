@@ -15,7 +15,8 @@ export type ActiveIntent =
   | 'MANAGE_TASKS'      // Managing shown tasks (delete, complete)
   | 'MANAGE_EVENTS'     // Managing shown events (delete, modify)
   | 'MANAGE_EXPENSES'   // Managing shown expenses (delete)
-  | 'CONFIRM_BULK_DELETE'; // Awaiting confirmation for bulk delete
+  | 'CONFIRM_BULK_DELETE'   // Awaiting confirmation for bulk delete
+  | 'CONFIRM_BULK_COMPLETE'; // Awaiting confirmation for bulk complete
 
 export type LastActionType = 
   | 'NONE'

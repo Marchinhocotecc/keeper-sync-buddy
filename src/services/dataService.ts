@@ -412,3 +412,18 @@ export async function completeTask(userId: string, taskId: string): Promise<Data
     return { success: false, error: error.message };
   }
 }
+
+export async function completeAllTasks(userId: string): Promise<DataServiceResponse<any>> {
+  try {
+    const { error } = await supabase
+      .from('todos')
+      .update({ completed: true })
+      .eq('user_id', userId)
+      .eq('completed', false);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

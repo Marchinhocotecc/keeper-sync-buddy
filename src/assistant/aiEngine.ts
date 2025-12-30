@@ -114,8 +114,22 @@ export async function processMessage(
   const isDeleteCommand = /(?:elimina|cancella|rimuovi|togli)/i.test(message);
   if (isDeleteCommand) {
     console.log('Delete command detected - blocking legacy pipeline');
+    // Clear any pending intent to prevent data leakage
+    clearPendingIntent(userId);
     return {
       message: '❓ Cosa vuoi eliminare: task, eventi o spese?',
+      source: 'local'
+    };
+  }
+  
+  // CRITICAL: Check for CANCEL words - must clear pending intent
+  const isCancelWord = /^no\s*[,.]?\s*|^annulla|^stop|^lascia\s*(?:stare|perdere)/i.test(message.trim());
+  if (isCancelWord) {
+    console.log('Cancel word detected in legacy - clearing pending intent');
+    clearPendingIntent(userId);
+    // Let stateful handle it (or return cancel response)
+    return {
+      message: '✅ Ok, annullato.',
       source: 'local'
     };
   }
@@ -127,16 +141,6 @@ export async function processMessage(
   if (pendingIntent) {
     console.log('Found legacy pending intent:', pendingIntent.intent);
     console.log('Pending data:', JSON.stringify(pendingIntent.extractedData));
-    
-    // CRITICAL: If message contains delete command, don't merge with CREATE intent
-    if (isDeleteCommand) {
-      console.log('Delete command in follow-up - clearing pending and routing to stateful');
-      clearPendingIntent(userId);
-      return {
-        message: '❓ Cosa vuoi eliminare: task, eventi o spese?',
-        source: 'local'
-      };
-    }
     
     pendingToUserMap.set(pendingIntent, userId);
     

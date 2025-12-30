@@ -28,7 +28,9 @@ import {
   getCancelResponse, 
   getConfirmNoIntentResponse,
   getNegativeFeedbackResponse,
-  normalizeTitle
+  normalizeTitle,
+  detectBulkDeleteTarget,
+  type ConfirmationWithContinuation
 } from '@/assistant/confirmationParser';
 import {
   getState,
@@ -113,7 +115,7 @@ export async function handleStatefulMessage(
   console.log('[StatefulHandler] Processing:', message);
   
   // ===== PHASE -1: CONFIRMATION PRE-PARSER (ABSOLUTE FIRST) =====
-  const confirmResult = parseConfirmation(message);
+  const confirmResult = parseConfirmation(message) as ConfirmationWithContinuation;
   
   if (confirmResult.shouldBypass) {
     console.log('[StatefulHandler] Confirmation detected:', confirmResult.type);
@@ -122,8 +124,17 @@ export async function handleStatefulMessage(
     const state = await getState(userId);
     
     if (confirmResult.type === 'CANCEL') {
-      // Always clear and return cancel message
+      // CRITICAL: Always clear active intent when user says "no"
       await clearActiveIntent(userId);
+      
+      // If there's a continuation (e.g., "no, consigliami cosa fare oggi")
+      // Process the continuation as a NEW message (without pending data)
+      if (confirmResult.continuation && confirmResult.continuation.length > 2) {
+        console.log('[StatefulHandler] Cancel with continuation:', confirmResult.continuation);
+        // Process the rest as a completely new message - recursive call
+        return await handleStatefulMessage(userId, confirmResult.continuation);
+      }
+      
       return { message: getCancelResponse(), source: 'stateful' };
     }
     
@@ -165,7 +176,25 @@ export async function handleStatefulMessage(
   const state = await getState(userId);
   console.log('[StatefulHandler] Current state:', state.active_intent);
   
-  // ===== PHASE 0.5: Check for BULK DELETE (with confirmation) =====
+  // ===== PHASE 0.5: Check for BULK DELETE WITH TARGET (HIGH PRIORITY) =====
+  // This must come BEFORE asking "task/eventi/spese?"
+  const bulkTarget = detectBulkDeleteTarget(message);
+  if (bulkTarget) {
+    console.log('[StatefulHandler] Bulk target detected:', bulkTarget);
+    
+    if (bulkTarget.action === 'query') {
+      // "tutte le task" - show tasks
+      return await handleQueryTasks(userId);
+    }
+    
+    if (bulkTarget.action === 'complete') {
+      return await handleBulkCompleteRequest(userId, 'tasks', state);
+    }
+    
+    return await handleBulkDeleteRequest(userId, bulkTarget.type, state);
+  }
+  
+  // Legacy bulk delete patterns (fallback)
   for (const { pattern, type } of BULK_DELETE_ALL_PATTERNS) {
     if (pattern.test(message)) {
       console.log('[StatefulHandler] Bulk delete detected for:', type);
@@ -335,6 +364,45 @@ async function handleQuickAction(
       await setActiveIntent(userId, 'CREATE_EVENT', {}, ['title', 'date', 'time']);
       return { message: 'Come si chiama l\'evento e quando?', source: 'stateful' };
     
+    // ========== BULK ACTIONS ==========
+    case 'DELETE_ALL':
+    case 'DELETE_ALL_TASKS': {
+      // Use last action context if available, otherwise default to tasks
+      const targetType = state.last_action_type === 'SHOW_EVENTS' ? 'events' 
+                       : state.last_action_type === 'SHOW_EXPENSES' ? 'expenses' 
+                       : 'tasks';
+      return await handleBulkDeleteRequest(userId, targetType, state);
+    }
+    
+    case 'DELETE_ALL_EVENTS':
+      return await handleBulkDeleteRequest(userId, 'events', state);
+    
+    case 'DELETE_ALL_EXPENSES':
+      return await handleBulkDeleteRequest(userId, 'expenses', state);
+    
+    case 'COMPLETE_ALL':
+    case 'COMPLETE_ALL_TASKS':
+      return await handleBulkCompleteRequest(userId, 'tasks', state);
+    
+    case 'DELETE_THESE': {
+      // "eliminali" - use context from last action
+      if (state.last_action_type === 'SHOW_TASKS') {
+        return await handleBulkDeleteRequest(userId, 'tasks', state);
+      }
+      if (state.last_action_type === 'SHOW_EVENTS') {
+        return await handleBulkDeleteRequest(userId, 'events', state);
+      }
+      if (state.last_action_type === 'SHOW_EXPENSES') {
+        return await handleBulkDeleteRequest(userId, 'expenses', state);
+      }
+      // No context - ask
+      return {
+        message: '❓ Cosa vuoi eliminare: task, eventi o spese?',
+        source: 'stateful',
+        suggestions: ['Mostra task', 'Mostra eventi', 'Mostra spese']
+      };
+    }
+    
     default:
       return { message: SAFE_FALLBACK_MESSAGE, source: 'stateful' };
   }
@@ -382,6 +450,34 @@ async function handleBulkDeleteRequest(
   
   return {
     message: `⚠️ Vuoi eliminare ${count === 1 ? 'il' : 'tutti i'} ${count} ${itemName}? Scrivi "sì" per confermare o "no" per annullare.`,
+    source: 'stateful'
+  };
+}
+
+/**
+ * Handle bulk complete requests with confirmation
+ */
+async function handleBulkCompleteRequest(
+  userId: string,
+  type: string,
+  state: AssistantState
+): Promise<StatefulResponse> {
+  if (type !== 'tasks') {
+    return { message: 'Solo i task possono essere completati.', source: 'stateful' };
+  }
+  
+  const tasks = await dataService.listTasks(userId);
+  const count = tasks.length;
+  
+  if (count === 0) {
+    return { message: '✅ Non hai task da completare.', source: 'stateful' };
+  }
+  
+  // Set pending confirmation state for complete
+  await setActiveIntent(userId, 'CONFIRM_BULK_COMPLETE', { deleteType: 'tasks' as const, count }, []);
+  
+  return {
+    message: `⚠️ Vuoi completare ${count === 1 ? 'il' : 'tutti i'} ${count} task? Scrivi "sì" per confermare o "no" per annullare.`,
     source: 'stateful'
   };
 }
@@ -477,6 +573,9 @@ async function handleFollowUp(
     case 'CONFIRM_BULK_DELETE':
       return await handleBulkDeleteConfirmation(userId, message, state, followUpType);
     
+    case 'CONFIRM_BULK_COMPLETE':
+      return await handleBulkCompleteConfirmation(userId, message, state, followUpType);
+    
     default:
       // Unknown active intent, clear and process as new
       await clearActiveIntent(userId);
@@ -534,6 +633,39 @@ async function handleBulkDeleteConfirmation(
   const itemName = deleteType === 'tasks' ? 'task' : deleteType === 'events' ? 'eventi' : 'spese';
   return {
     message: `Scrivi "sì" per eliminare ${count === 1 ? 'il' : `i ${count}`} ${itemName}, o "no" per annullare.`,
+    source: 'stateful'
+  };
+}
+
+/**
+ * Handle confirmation for bulk complete
+ */
+async function handleBulkCompleteConfirmation(
+  userId: string,
+  message: string,
+  state: AssistantState,
+  followUpType: FollowUpType
+): Promise<StatefulResponse> {
+  const { count } = state.intent_payload;
+  
+  if (followUpType === 'CONFIRM_NO') {
+    await clearActiveIntent(userId);
+    return { message: '✅ Ok, annullato.', source: 'stateful' };
+  }
+  
+  if (followUpType === 'CONFIRM_YES') {
+    await clearActiveIntent(userId);
+    await dataService.completeAllTasks(userId);
+    return { 
+      message: `✅ Ho completato ${count === 1 ? 'il task' : `tutti i ${count} task`}.`, 
+      source: 'stateful',
+      actionExecuted: true 
+    };
+  }
+  
+  // User didn't say yes or no - remind them
+  return {
+    message: `Scrivi "sì" per completare ${count === 1 ? 'il' : `i ${count}`} task, o "no" per annullare.`,
     source: 'stateful'
   };
 }
