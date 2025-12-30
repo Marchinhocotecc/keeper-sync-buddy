@@ -63,9 +63,16 @@ export async function processMessage(
   // Use centralized constant
   const SAFE_FALLBACK = SAFE_FALLBACK_MESSAGE;
   
-  // ========== PHASE -1: SAFETY WORD PRE-CHECK (ABSOLUTE FIRST) ==========
-  // This MUST happen before ANY intent parsing or state loading
-  if (isSafetyWord(message)) {
+  // ========== PHASE -1: SAFETY WORD PRE-CHECK ==========
+  // CRITICAL: "si/sì/ok" as confirm words should ONLY be safety words if there's NO active intent
+  // If there IS an active intent waiting for confirmation, these words should be processed by stateful handler
+  const hasActiveIntentEarly = await userHasActiveIntent(userId);
+  const isConfirmWord = /^(?:s[iì]|si|ok|okay|yes|y|va\s*bene|certo|confermo?)$/i.test(message.trim());
+  
+  // Only treat as safety word if:
+  // 1. It's a cancel word (always safe to cancel) OR
+  // 2. It's a confirm word AND there's NO active intent waiting
+  if (isSafetyWord(message) && (!isConfirmWord || !hasActiveIntentEarly)) {
     console.log('[AIEngine] Safety word detected - clearing state and returning safe response');
     await clearAllAssistantState(userId);
     
