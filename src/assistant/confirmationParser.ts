@@ -10,14 +10,44 @@
  * 
  * CRITICAL: Also detects QUICK ACTIONS that should never be free text:
  * - "Elimina uno", "Mostra task", "Completa uno" → QUICK_ACTION
+ * 
+ * UI ACTIONS:
+ * - Messages starting with __UI_ACTION__: are structured payloads from UI buttons
+ * - These BYPASS all NLP parsing and map directly to actions
+ * - Format: __UI_ACTION__:<ACTION_TYPE>
  */
 
-export type ConfirmationType = 'CONFIRM' | 'CANCEL' | 'QUICK_ACTION' | 'NEGATIVE_FEEDBACK' | 'NONE';
+export type ConfirmationType = 'CONFIRM' | 'CANCEL' | 'QUICK_ACTION' | 'UI_ACTION' | 'NEGATIVE_FEEDBACK' | 'NONE';
 
 export interface ConfirmationResult {
   type: ConfirmationType;
   shouldBypass: boolean; // If true, bypass normal intent parsing
   quickAction?: string; // The quick action type if detected
+}
+
+/**
+ * UI_ACTION_PREFIX: Identifies structured payloads from UI buttons.
+ * These bypass all NLP parsing and execute directly.
+ */
+export const UI_ACTION_PREFIX = '__UI_ACTION__:';
+
+/**
+ * Parse UI action payload into action type
+ * Returns the action type if valid, null otherwise
+ */
+export function parseUIAction(message: string): string | null {
+  if (!message.startsWith(UI_ACTION_PREFIX)) {
+    return null;
+  }
+  const action = message.slice(UI_ACTION_PREFIX.length).trim().toUpperCase();
+  // Valid UI actions
+  const validActions = [
+    'SHOW_TASKS', 'SHOW_EVENTS', 'SHOW_EXPENSES',
+    'DELETE_ALL', 'DELETE_ALL_TASKS', 'DELETE_ALL_EVENTS', 'DELETE_ALL_EXPENSES',
+    'COMPLETE_ALL_TASKS', 'COMPLETE_ALL',
+    'CREATE_TASK', 'CREATE_EVENT',
+  ];
+  return validActions.includes(action) ? action : null;
 }
 
 // ========== CANCEL PATTERNS ==========
@@ -174,6 +204,14 @@ export type ConfirmationWithContinuation = ConfirmationResult & {
 export function parseConfirmation(message: string): ConfirmationWithContinuation {
   const trimmed = message.trim().toLowerCase();
   const original = message.trim();
+  
+  // ========== UI ACTION CHECK (HIGHEST PRIORITY) ==========
+  // UI actions from buttons bypass ALL NLP parsing
+  const uiAction = parseUIAction(message);
+  if (uiAction) {
+    console.log('[ConfirmationParser] UI_ACTION detected:', uiAction);
+    return { type: 'UI_ACTION', shouldBypass: true, quickAction: uiAction };
+  }
   
   // Check for negative feedback FIRST
   if (NEGATIVE_FEEDBACK_PATTERNS.some(p => p.test(trimmed))) {

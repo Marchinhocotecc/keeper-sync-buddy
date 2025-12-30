@@ -97,6 +97,8 @@ export default function AssistantPanel() {
       }
       
       // Set default suggestions with focus-related prompts
+      // NOTE: These use display text only - quick actions with special behavior
+      // should use the UI_ACTION_MAP in sendMessage()
       setSuggestions([
         { text: "Cosa dovrei fare oggi?", priority: "high" },
         { text: "Da dove inizio?", priority: "medium" },
@@ -106,6 +108,29 @@ export default function AssistantPanel() {
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
+  };
+
+  /**
+   * UI_ACTION_MAP: Maps UI button labels to structured action payloads.
+   * These payloads bypass NLP parsing and execute actions directly.
+   * Format: __UI_ACTION__:<ACTION_TYPE>
+   */
+  const UI_ACTION_MAP: Record<string, string> = {
+    // Show actions
+    "Mostra task": "__UI_ACTION__:SHOW_TASKS",
+    "Mostra eventi": "__UI_ACTION__:SHOW_EVENTS",
+    "Mostra spese": "__UI_ACTION__:SHOW_EXPENSES",
+    "Le mie task": "__UI_ACTION__:SHOW_TASKS",
+    "I miei eventi": "__UI_ACTION__:SHOW_EVENTS",
+    "Le mie spese": "__UI_ACTION__:SHOW_EXPENSES",
+    // Delete all actions
+    "Elimina tutti": "__UI_ACTION__:DELETE_ALL",
+    "Elimina tutte": "__UI_ACTION__:DELETE_ALL",
+    "Cancella tutti": "__UI_ACTION__:DELETE_ALL",
+    "Cancella tutte": "__UI_ACTION__:DELETE_ALL",
+    // Complete all actions
+    "Completa tutte": "__UI_ACTION__:COMPLETE_ALL_TASKS",
+    "Completa tutti": "__UI_ACTION__:COMPLETE_ALL_TASKS",
   };
 
   const handleClearHistory = async () => {
@@ -128,8 +153,11 @@ export default function AssistantPanel() {
   };
 
   const sendMessage = useCallback(async (messageText?: string) => {
-    const textToSend = messageText || input.trim();
-    if (!textToSend || isLoading || !userId) return;
+    const rawText = messageText || input.trim();
+    if (!rawText || isLoading || !userId) return;
+    
+    // Map UI quick action labels to structured payloads (bypass NLP)
+    const textToSend = UI_ACTION_MAP[rawText] || rawText;
 
     // Prevent parallel requests
     if (isRequestingRef.current) {
@@ -149,9 +177,10 @@ export default function AssistantPanel() {
     lastCallRef.current = now;
     isRequestingRef.current = true;
 
+    // Show user the original label (not the technical payload)
     const userMessage: Message = { 
       role: "user", 
-      content: textToSend,
+      content: rawText,
       timestamp: new Date()
     };
     setMessages((prev) => [...prev, userMessage]);

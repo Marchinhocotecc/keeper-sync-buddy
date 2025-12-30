@@ -24,6 +24,7 @@ import { format, addDays } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { 
   parseConfirmation, 
+  parseUIAction,
   isSafetyWord,
   isCancelSafetyWord,
   isConfirmSafetyWord,
@@ -188,6 +189,13 @@ export async function handleStatefulMessage(
     if (confirmResult.type === 'QUICK_ACTION') {
       // Handle quick action directly - NEVER let it become CREATE_GENERIC
       console.log('[StatefulHandler] Quick action:', confirmResult.quickAction);
+      return await handleQuickAction(userId, confirmResult.quickAction!, state);
+    }
+    
+    if (confirmResult.type === 'UI_ACTION') {
+      // UI_ACTION: Structured payload from UI buttons - bypass ALL NLP
+      // These come from AssistantPanel quick action buttons
+      console.log('[StatefulHandler] UI_ACTION detected:', confirmResult.quickAction);
       return await handleQuickAction(userId, confirmResult.quickAction!, state);
     }
     
