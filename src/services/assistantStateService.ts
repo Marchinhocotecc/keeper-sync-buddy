@@ -40,6 +40,8 @@ export interface IntentPayload {
   action?: 'delete' | 'complete' | 'manage';
   ids?: string[];
   deleteType?: 'tasks' | 'events' | 'expenses';
+  lastShownIds?: string[];  // IDs shown in last list operation
+  count?: number;           // Count for bulk operations
 }
 
 export interface LastActionPayload {

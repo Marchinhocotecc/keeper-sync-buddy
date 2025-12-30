@@ -103,6 +103,8 @@ const DELETE_PATTERNS = [
   /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:le\s+)?spese?/i,
   /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:i\s+)?task/i,
   /(?:elimina|cancella|rimuovi|togli)\s+(?:tutt[eio]?\s+)?(?:gli\s+)?eventi?/i,
+  // Generic delete patterns (should trigger stateful handler)
+  /(?:elimina|cancella|rimuovi|togli)\s+(?:uno|una|il\s+primo|la\s+prima)?/i,
 ];
 
 // Short delete commands (after showing a list)
@@ -121,6 +123,8 @@ const DELETE_SHORT_PATTERNS = [
   /^spuntal[ie]$/i,
   /^completala?$/i,
   /^completal[ie]$/i,
+  // Also match "elimina uno", "elimina il primo" etc.
+  /^(?:elimina|cancella|rimuovi|togli)\s+(?:uno|una|il\s*primo|la\s*prima)$/i,
 ];
 
 /**

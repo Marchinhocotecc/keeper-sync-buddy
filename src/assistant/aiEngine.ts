@@ -109,6 +109,17 @@ export async function processMessage(
   // ========== LEGACY PIPELINE (when stateful doesn't handle it) ==========
   console.log('--- Legacy Pipeline ---');
   
+  // CRITICAL: Block legacy pipeline for messages that look like delete commands
+  // These should ONLY be handled by stateful handler
+  const isDeleteCommand = /(?:elimina|cancella|rimuovi|togli)/i.test(message);
+  if (isDeleteCommand) {
+    console.log('Delete command detected - blocking legacy pipeline');
+    return {
+      message: '❓ Cosa vuoi eliminare: task, eventi o spese?',
+      source: 'local'
+    };
+  }
+  
   // Check in-memory pending intent
   const pendingIntent = getPendingIntent(userId);
   let parsedIntent: ParsedIntent;
@@ -116,6 +127,16 @@ export async function processMessage(
   if (pendingIntent) {
     console.log('Found legacy pending intent:', pendingIntent.intent);
     console.log('Pending data:', JSON.stringify(pendingIntent.extractedData));
+    
+    // CRITICAL: If message contains delete command, don't merge with CREATE intent
+    if (isDeleteCommand) {
+      console.log('Delete command in follow-up - clearing pending and routing to stateful');
+      clearPendingIntent(userId);
+      return {
+        message: '❓ Cosa vuoi eliminare: task, eventi o spese?',
+        source: 'local'
+      };
+    }
     
     pendingToUserMap.set(pendingIntent, userId);
     
