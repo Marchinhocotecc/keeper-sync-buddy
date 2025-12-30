@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Navigation } from "@/components/Navigation";
 import { NotificationInitializer } from "@/components/NotificationInitializer";
+import { suppressAnalyticsErrors } from "@/utils/analytics";
 import HomePage from "./pages/HomePage";
 import CalendarPage from "./pages/CalendarPage";
 import ExpensesPage from "./pages/ExpensesPage";
@@ -20,6 +22,9 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
+
+// Suppress Plausible analytics errors in dev/preview
+suppressAnalyticsErrors();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
