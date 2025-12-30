@@ -35,10 +35,20 @@ const CANCEL_PATTERNS_STANDALONE = [
 ];
 
 // Cancel prefix - "no, consigliami" should cancel pending AND process the rest
+// CRITICAL: These MUST be detected to clear pending intent and process remainder
 const CANCEL_PREFIX_PATTERNS = [
   /^no\s*,\s*/i,       // "no, consigliami..."
-  /^no\s+/i,           // "no consigliami..." (no comma)
+  /^no\s+(?!task|evento|spesa)/i,  // "no consigliami..." (no comma, but not "no task")
   /^annulla\s*,?\s*/i, // "annulla, fammi vedere..."
+  /^lascia\s*(?:stare|perdere)\s*,?\s*/i, // "lascia stare, dimmi..."
+];
+
+// Inline cancel detection - message CONTAINS cancel intent mid-sentence
+// e.g., "no, invece consigliami cosa fare oggi"
+const CANCEL_INLINE_INDICATORS = [
+  /\bannulla\b/i,
+  /\blascia\s*(?:stare|perdere)\b/i,
+  /\bstop\b/i,
 ];
 
 // ========== CONFIRM PATTERNS ==========
@@ -99,7 +109,8 @@ const NEGATIVE_FEEDBACK_PATTERNS = [
 
 // ========== SAFETY WORDS ==========
 // These words should NEVER become CREATE_GENERIC, CREATE_TASK, CREATE_EVENT, RECORD_EXPENSE
-const SAFETY_WORDS = [
+// UNIFIED LIST - used by both confirmationParser and intentParser
+export const SAFETY_WORDS = [
   // Cancel words
   'no', 'n', 'nope', 'annulla', 'stop', 'basta', 'niente',
   // Confirm words
@@ -107,6 +118,12 @@ const SAFETY_WORDS = [
   // Vague words
   'va bene', 'lascia stare', 'lascia perdere', 'non fa niente',
 ];
+
+// Cancel safety words - these should return "Ok, annullato"
+export const CANCEL_SAFETY_WORDS = ['no', 'n', 'nope', 'annulla', 'stop', 'basta', 'niente', 'lascia stare', 'lascia perdere'];
+
+// Confirm safety words - these should return "Ok. Dimmi cosa vuoi fare"
+export const CONFIRM_SAFETY_WORDS = ['sì', 'si', 'yes', 'y', 'ok', 'okay', 'perfetto', 'procedi', 'conferma', 'confermo', 'certo', 'fallo', 'va bene'];
 
 // ========== DELETE COMMAND DETECTION ==========
 // These phrases contain a delete action, so even with "perfetto" prefix they should be delete commands
@@ -225,6 +242,22 @@ export function parseConfirmation(message: string): ConfirmationWithContinuation
 export function isSafetyWord(message: string): boolean {
   const trimmed = message.trim().toLowerCase();
   return SAFETY_WORDS.some(w => trimmed === w || trimmed === w.replace(' ', ''));
+}
+
+/**
+ * Check if message is a CANCEL safety word
+ */
+export function isCancelSafetyWord(message: string): boolean {
+  const trimmed = message.trim().toLowerCase();
+  return CANCEL_SAFETY_WORDS.some(w => trimmed === w || trimmed === w.replace(' ', ''));
+}
+
+/**
+ * Check if message is a CONFIRM safety word (but no active intent)
+ */
+export function isConfirmSafetyWord(message: string): boolean {
+  const trimmed = message.trim().toLowerCase();
+  return CONFIRM_SAFETY_WORDS.some(w => trimmed === w || trimmed === w.replace(' ', ''));
 }
 
 /**

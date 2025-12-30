@@ -38,6 +38,10 @@ const MAX_HASH_HISTORY = 10;
 
 /**
  * Process user message through the strict pipeline
+ * 
+ * CRITICAL INVARIANT:
+ * - If stateful handler is chosen, NEVER fall back to legacy pipeline
+ * - Stateful handler ALWAYS returns non-empty (has SAFE_FALLBACK_MESSAGE)
  */
 export async function processMessage(
   userId: string,
@@ -51,59 +55,51 @@ export async function processMessage(
   console.log('--- Phase 0: Supabase State Check ---');
   
   let hasActiveIntent = false;
+  let useStatefulHandler = false;
   
   try {
     // Check if user has active intent in Supabase
     hasActiveIntent = await userHasActiveIntent(userId);
+    useStatefulHandler = hasActiveIntent || shouldUseStatefulHandler(message);
     
-    if (hasActiveIntent || shouldUseStatefulHandler(message)) {
-      console.log('Using stateful handler');
+    if (useStatefulHandler) {
+      console.log('Using stateful handler (hasActiveIntent:', hasActiveIntent, ')');
       const statefulResponse = await handleStatefulMessage(userId, message);
       
-      // If stateful handler produced a response, use it
-      // INVARIANT: stateful handler should NEVER return empty (it has safe fallback)
-      if (statefulResponse.message && statefulResponse.message.trim() !== '') {
-        console.log('Stateful handler response:', statefulResponse.message.substring(0, 50));
-        
-        // Save to conversation history
-        await saveConversation(userId, message, statefulResponse.message);
-        
-        return {
-          message: statefulResponse.message,
-          source: statefulResponse.source === 'stateful' ? 'local' : statefulResponse.source,
-          suggestions: statefulResponse.suggestions,
-          actionExecuted: statefulResponse.actionExecuted,
-          actionResult: statefulResponse.actionResult
-        };
-      }
+      // INVARIANT: stateful handler should NEVER return empty (it has SAFE_FALLBACK_MESSAGE)
+      // But add guardrail just in case
+      const responseMessage = statefulResponse.message && statefulResponse.message.trim() !== ''
+        ? statefulResponse.message
+        : '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
       
-      // If stateful returned empty (should not happen with new invariant)
-      // but DO NOT fall back to legacy if there was an active intent
-      if (hasActiveIntent) {
-        console.log('Stateful handler returned empty but active intent exists - NOT using legacy');
-        const safeMessage = '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
-        await saveConversation(userId, message, safeMessage);
-        return {
-          message: safeMessage,
-          source: 'local'
-        };
-      }
+      console.log('Stateful handler response:', responseMessage.substring(0, 50));
       
-      console.log('Stateful handler returned empty, falling back to legacy');
+      // Save to conversation history
+      await saveConversation(userId, message, responseMessage);
+      
+      // CRITICAL: Return here - NEVER proceed to legacy pipeline
+      return {
+        message: responseMessage,
+        source: statefulResponse.source === 'stateful' ? 'local' : statefulResponse.source,
+        suggestions: statefulResponse.suggestions,
+        actionExecuted: statefulResponse.actionExecuted,
+        actionResult: statefulResponse.actionResult
+      };
     }
   } catch (error) {
     console.error('Stateful handler error:', error);
     
-    // CRITICAL FIX: If there's an active intent, DO NOT use legacy pipeline
-    // This prevents "venerdì 8:30" from being recorded as expense
-    if (hasActiveIntent) {
-      console.log('Active intent exists - returning safe error message, NOT using legacy');
+    // CRITICAL FIX: If stateful handler was chosen, DO NOT use legacy pipeline
+    if (useStatefulHandler || hasActiveIntent) {
+      console.log('Stateful was chosen but errored - returning safe message, NOT using legacy');
+      const safeMessage = '⚠️ Problema tecnico. Riprova.';
+      await saveConversation(userId, message, safeMessage);
       return {
-        message: '⚠️ Problema tecnico. Riprova (es: "venerdì 8:30").',
+        message: safeMessage,
         source: 'local'
       };
     }
-    // Only fall through to legacy if no active intent
+    // Only fall through to legacy if stateful wasn't chosen
   }
   
   // ========== LEGACY PIPELINE (when stateful doesn't handle it) ==========
@@ -122,14 +118,24 @@ export async function processMessage(
     };
   }
   
-  // CRITICAL: Check for CANCEL words - must clear pending intent
+  // CRITICAL: Check for CANCEL words - must clear pending intent AND return immediately
   const isCancelWord = /^no\s*[,.]?\s*|^annulla|^stop|^lascia\s*(?:stare|perdere)/i.test(message.trim());
   if (isCancelWord) {
     console.log('Cancel word detected in legacy - clearing pending intent');
     clearPendingIntent(userId);
-    // Let stateful handle it (or return cancel response)
     return {
       message: '✅ Ok, annullato.',
+      source: 'local'
+    };
+  }
+  
+  // CRITICAL: Block safety words from legacy pipeline - they should NEVER create tasks
+  const isSafetyWord = /^(no|n|nope|annulla|stop|basta|niente|sì|si|yes|y|ok|okay|va bene|perfetto|procedi|conferma|confermo|certo|fallo)$/i.test(message.trim());
+  if (isSafetyWord) {
+    console.log('Safety word detected in legacy - blocking, NOT creating task');
+    clearPendingIntent(userId);
+    return {
+      message: '✅ Ok. Dimmi cosa vuoi fare (task, evento, spesa o elimina).',
       source: 'local'
     };
   }

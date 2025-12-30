@@ -11,6 +11,7 @@
  */
 
 import { format, addDays } from 'date-fns';
+import { SAFETY_WORDS, isSafetyWord } from './confirmationParser';
 
 export type AssistantIntent = 
   | 'CREATE_EVENT' | 'CREATE_TASK' | 'CREATE_EXPENSE' | 'CREATE_GENERIC'
@@ -151,15 +152,9 @@ export function parseIntent(message: string): ParsedIntent {
   console.log('Input:', normalized);
   
   // ========== RULE 0: SAFETY WORDS - NEVER CREATE ACTIONS ==========
-  const SAFETY_WORDS = [
-    /^no$/i, /^n$/i, /^nope$/i, /^annulla$/i, /^stop$/i,
-    /^s[iì]$/i, /^si$/i, /^yes$/i, /^y$/i, /^ok$/i, /^okay$/i,
-    /^va\s*bene$/i, /^perfetto$/i, /^procedi$/i, /^conferm[ao]$/i,
-    /^fallo$/i, /^certo$/i, /^basta$/i, /^niente$/i
-  ];
-  
-  if (SAFETY_WORDS.some(p => p.test(lower))) {
-    console.log('Matched: SAFETY WORD - routing to SMALL_TALK (safe)');
+  // Use the unified list from confirmationParser
+  if (isSafetyWord(message)) {
+    console.log('Matched: SAFETY WORD - routing to SMALL_TALK (safe, will NOT create task)');
     return { 
       intent: 'SMALL_TALK', 
       confidence: 1.0, 
