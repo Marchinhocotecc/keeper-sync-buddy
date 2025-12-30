@@ -25,6 +25,7 @@ import { it } from 'date-fns/locale';
 import { 
   parseConfirmation, 
   parseUIAction,
+  UI_ACTION_PREFIX,
   isSafetyWord,
   isCancelSafetyWord,
   isConfirmSafetyWord,
@@ -36,6 +37,71 @@ import {
   detectBulkDeleteTarget,
   type ConfirmationWithContinuation
 } from '@/assistant/confirmationParser';
+
+// ========== CONVERSATION GATE CONSTANTS ==========
+/**
+ * Proactive response shown when the Conversation Gate activates.
+ * This is returned when no active intent and message is not an explicit command.
+ * INVARIANT: This response does NOT trigger any DB writes.
+ */
+const CONVERSATION_GATE_RESPONSE = {
+  message: 'Ok 🙂 cosa vuoi fare?',
+  suggestions: [
+    '📋 Mostra task',
+    '➕ Aggiungi task', 
+    '📅 Crea evento',
+    '💸 Registra spesa'
+  ],
+  // These are the structured UI actions that bypass NLP
+  uiActions: {
+    'Mostra task': '__UI_ACTION__:SHOW_TASKS',
+    'Aggiungi task': '__UI_ACTION__:ADD_TASK',
+    'Crea evento': '__UI_ACTION__:CREATE_EVENT',
+    'Registra spesa': '__UI_ACTION__:ADD_EXPENSE'
+  }
+};
+
+/**
+ * isExplicitCommand - Determines if a message is an explicit command.
+ * Returns TRUE if the message contains action verbs, explicit targets, or is a UI action.
+ * 
+ * CRITICAL: Time patterns like "8:30" should NOT trigger expense classification.
+ * 
+ * @param text - The user input to check
+ * @returns true if this is an explicit command, false otherwise
+ */
+export function isExplicitCommand(text: string): boolean {
+  const lower = text.trim().toLowerCase();
+  
+  // UI_ACTION commands are ALWAYS explicit
+  if (text.startsWith(UI_ACTION_PREFIX)) {
+    return true;
+  }
+  
+  // Action verbs (whole word match, case-insensitive)
+  const ACTION_VERBS = /\b(?:crea|aggiungi|segna|registra|elimina|cancella|mostra|vedi|lista|completa|spunta|rimuovi|togli|nuovo|nuova)\b/i;
+  if (ACTION_VERBS.test(lower)) {
+    return true;
+  }
+  
+  // Explicit targets (task, evento, spesa, etc.)
+  const EXPLICIT_TARGETS = /\b(?:task|tasks|evento|eventi|spesa|spese|budget|appuntamento|appuntamenti)\b/i;
+  if (EXPLICIT_TARGETS.test(lower)) {
+    return true;
+  }
+  
+  // Check for amount patterns (expense-like) BUT exclude pure time patterns
+  // Time pattern: 8:30, 08:30, 14:00
+  const TIME_PATTERN = /\b\d{1,2}:\d{2}\b/;
+  const AMOUNT_PATTERN = /€\s*\d+|\d+\s*(?:€|euro|eur)/i;
+  
+  // If message has amount pattern AND is not just a time → explicit
+  if (AMOUNT_PATTERN.test(lower) && !TIME_PATTERN.test(lower.replace(AMOUNT_PATTERN, ''))) {
+    return true;
+  }
+  
+  return false;
+}
 import {
   getState,
   setActiveIntent,
@@ -237,6 +303,23 @@ export async function handleStatefulMessage(
   // Load current state from Supabase
   const state = await getState(userId);
   console.log('[StatefulHandler] Current state:', state.active_intent);
+  
+  // ===== CONVERSATION GATE (BEFORE ANY INTENT ROUTING) =====
+  // Activates when: no active intent, message is not explicit command, and parseConfirmation returned NONE
+  // Result: Proactive menu with 4 options, NO DB writes
+  if (
+    !hasActiveIntent(state) &&
+    confirmResult.type === 'NONE' &&
+    !confirmResult.shouldBypass &&
+    !isExplicitCommand(message)
+  ) {
+    console.log('[StatefulHandler] CONVERSATION GATE activated - returning proactive menu');
+    return {
+      message: CONVERSATION_GATE_RESPONSE.message,
+      source: 'stateful',
+      suggestions: CONVERSATION_GATE_RESPONSE.suggestions
+    };
+  }
   
   // ===== PHASE 0.5: Check for BULK DELETE WITH TARGET (ABSOLUTE PRIORITY) =====
   // This MUST come BEFORE active_intent check - "elimina tutte le task" must ALWAYS work
@@ -446,13 +529,20 @@ async function handleQuickAction(
       };
     }
     
+    // ========== CREATION FLOW STARTERS (from Conversation Gate & buttons) ==========
     case 'CREATE_TASK':
+    case 'ADD_TASK':
       await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
       return { message: 'Cosa devi fare?', source: 'stateful' };
     
     case 'CREATE_EVENT':
       await setActiveIntent(userId, 'CREATE_EVENT', {}, ['title', 'date', 'time']);
       return { message: 'Come si chiama l\'evento e quando?', source: 'stateful' };
+    
+    case 'ADD_EXPENSE':
+      // Use CREATE_GENERIC with expense type pre-selected for expense flow
+      await setActiveIntent(userId, 'CREATE_GENERIC', { type: 'expense' }, ['amount']);
+      return { message: 'Quanto hai speso e per cosa?', source: 'stateful' };
     
     // ========== BULK ACTIONS ==========
     case 'DELETE_ALL':
@@ -777,6 +867,7 @@ async function handleBulkCompleteConfirmation(
 
 /**
  * Handle follow-up for CREATE_GENERIC (user said "crea X", need to know task/event)
+ * Also handles expense flow when type='expense' is pre-set from Conversation Gate
  */
 async function handleCreateGenericFollowUp(
   userId: string,
@@ -785,6 +876,34 @@ async function handleCreateGenericFollowUp(
   followUpType: FollowUpType
 ): Promise<StatefulResponse> {
   const title = state.intent_payload.title || '';
+  const presetType = state.intent_payload.type;
+  
+  // If type is pre-set as 'expense' (from Conversation Gate ADD_EXPENSE)
+  if (presetType === 'expense') {
+    // Try to extract amount from message
+    const amountMatch = message.match(/(\d+(?:[.,]\d{1,2})?)/);
+    if (amountMatch) {
+      const amount = parseFloat(amountMatch[1].replace(',', '.'));
+      // Try to extract category from remaining text
+      const category = message.replace(amountMatch[0], '').replace(/€|euro|eur/gi, '').trim() || 'Altro';
+      
+      try {
+        await dataService.createExpense(userId, amount, category);
+        await clearActiveIntent(userId);
+        return {
+          message: `✅ Registrata spesa di €${amount.toFixed(2)} per "${category}".`,
+          source: 'stateful',
+          actionExecuted: true
+        };
+      } catch (e) {
+        console.error('[StatefulHandler] Error creating expense:', e);
+        return { message: 'Errore nel registrare la spesa.', source: 'stateful' };
+      }
+    }
+    
+    // No amount found - ask again
+    return { message: 'Inserisci l\'importo (es: "15 euro pranzo")', source: 'stateful' };
+  }
   
   switch (followUpType) {
     case 'CHOOSE_TASK':
