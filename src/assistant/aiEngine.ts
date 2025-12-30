@@ -29,8 +29,10 @@ import {
 import {
   handleStatefulMessage,
   userHasActiveIntent,
-  shouldUseStatefulHandler
+  shouldUseStatefulHandler,
+  clearAllAssistantState
 } from '@/services/statefulHandler';
+import { isSafetyWord, isCancelSafetyWord, getCancelResponse, getConfirmNoIntentResponse } from '@/assistant/confirmationParser';
 
 // Response hash tracking for loop prevention
 const responseHashes = new Map<string, Set<string>>();
@@ -51,28 +53,40 @@ export async function processMessage(
   console.log('User:', userId);
   console.log('Message:', message);
   
+  const SAFE_FALLBACK = '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
+  
+  // ========== PHASE -1: SAFETY WORD PRE-CHECK (ABSOLUTE FIRST) ==========
+  // This MUST happen before ANY intent parsing or state loading
+  if (isSafetyWord(message)) {
+    console.log('[AIEngine] Safety word detected - clearing state and returning safe response');
+    await clearAllAssistantState(userId);
+    
+    const response = isCancelSafetyWord(message) ? getCancelResponse() : getConfirmNoIntentResponse();
+    await saveConversation(userId, message, response);
+    return { message: response, source: 'local' };
+  }
+  
   // ========== PHASE 0: CHECK SUPABASE STATE FIRST (ABSOLUTE PRIORITY) ==========
   console.log('--- Phase 0: Supabase State Check ---');
   
-  let hasActiveIntent = false;
+  let hasActiveIntentFlag = false;
   let useStatefulHandler = false;
   
   try {
     // Check if user has active intent in Supabase
-    hasActiveIntent = await userHasActiveIntent(userId);
-    useStatefulHandler = hasActiveIntent || shouldUseStatefulHandler(message);
+    hasActiveIntentFlag = await userHasActiveIntent(userId);
+    useStatefulHandler = hasActiveIntentFlag || shouldUseStatefulHandler(message);
     
     if (useStatefulHandler) {
-      console.log('Using stateful handler (hasActiveIntent:', hasActiveIntent, ')');
+      console.log('[AIEngine] Using stateful handler (hasActiveIntent:', hasActiveIntentFlag, ')');
       const statefulResponse = await handleStatefulMessage(userId, message);
       
       // INVARIANT: stateful handler should NEVER return empty (it has SAFE_FALLBACK_MESSAGE)
-      // But add guardrail just in case
       const responseMessage = statefulResponse.message && statefulResponse.message.trim() !== ''
         ? statefulResponse.message
-        : '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
+        : SAFE_FALLBACK;
       
-      console.log('Stateful handler response:', responseMessage.substring(0, 50));
+      console.log('[AIEngine] Stateful response:', responseMessage.substring(0, 50));
       
       // Save to conversation history
       await saveConversation(userId, message, responseMessage);
@@ -87,17 +101,14 @@ export async function processMessage(
       };
     }
   } catch (error) {
-    console.error('Stateful handler error:', error);
+    console.error('[AIEngine] Stateful handler error:', error);
     
-    // CRITICAL FIX: If stateful handler was chosen, DO NOT use legacy pipeline
-    if (useStatefulHandler || hasActiveIntent) {
-      console.log('Stateful was chosen but errored - returning safe message, NOT using legacy');
+    // CRITICAL: If stateful handler was chosen, DO NOT use legacy pipeline
+    if (useStatefulHandler || hasActiveIntentFlag) {
+      console.log('[AIEngine] Stateful was chosen but errored - returning safe message, NOT using legacy');
       const safeMessage = '⚠️ Problema tecnico. Riprova.';
       await saveConversation(userId, message, safeMessage);
-      return {
-        message: safeMessage,
-        source: 'local'
-      };
+      return { message: safeMessage, source: 'local' };
     }
     // Only fall through to legacy if stateful wasn't chosen
   }
@@ -109,33 +120,32 @@ export async function processMessage(
   // These should ONLY be handled by stateful handler
   const isDeleteCommand = /(?:elimina|cancella|rimuovi|togli)/i.test(message);
   if (isDeleteCommand) {
-    console.log('Delete command detected - blocking legacy pipeline');
-    // Clear any pending intent to prevent data leakage
-    clearPendingIntent(userId);
+    console.log('[AIEngine] Delete command in legacy - clearing state, returning safe message');
+    await clearAllAssistantState(userId);
     return {
       message: '❓ Cosa vuoi eliminare: task, eventi o spese?',
       source: 'local'
     };
   }
   
-  // CRITICAL: Check for CANCEL words - must clear pending intent AND return immediately
-  const isCancelWord = /^no\s*[,.]?\s*|^annulla|^stop|^lascia\s*(?:stare|perdere)/i.test(message.trim());
+  // CRITICAL: Check for CANCEL words - must clear ALL state AND return immediately
+  const isCancelWord = /^no\s*[,.]?\s*|^annulla|^stop|^lascia\s*(?:stare|perdere)|^basta|^niente/i.test(message.trim());
   if (isCancelWord) {
-    console.log('Cancel word detected in legacy - clearing pending intent');
-    clearPendingIntent(userId);
+    console.log('[AIEngine] Cancel word in legacy - clearing ALL state');
+    await clearAllAssistantState(userId);
     return {
-      message: '✅ Ok, annullato.',
+      message: getCancelResponse(),
       source: 'local'
     };
   }
   
-  // CRITICAL: Block safety words from legacy pipeline - they should NEVER create tasks
-  const isSafetyWord = /^(no|n|nope|annulla|stop|basta|niente|sì|si|yes|y|ok|okay|va bene|perfetto|procedi|conferma|confermo|certo|fallo)$/i.test(message.trim());
-  if (isSafetyWord) {
-    console.log('Safety word detected in legacy - blocking, NOT creating task');
-    clearPendingIntent(userId);
+  // NOTE: Safety words are already handled at PHASE -1 before this point
+  // This is a redundant guardrail just in case
+  if (isSafetyWord(message)) {
+    console.log('[AIEngine] Safety word in legacy (guardrail) - clearing state');
+    await clearAllAssistantState(userId);
     return {
-      message: '✅ Ok. Dimmi cosa vuoi fare (task, evento, spesa o elimina).',
+      message: getConfirmNoIntentResponse(),
       source: 'local'
     };
   }
