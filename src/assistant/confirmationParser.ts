@@ -34,18 +34,29 @@ export const UI_ACTION_PREFIX = '__UI_ACTION__:';
 /**
  * Parse UI action payload into action type
  * Returns the action type if valid, null otherwise
+ * 
+ * VALID UI ACTIONS:
+ * - SHOW_TASKS, SHOW_EVENTS, SHOW_EXPENSES: Query and display items
+ * - ADD_TASK, CREATE_EVENT, ADD_EXPENSE: Start creation flows (set active intent)
+ * - DELETE_ALL_*: Bulk delete operations
+ * - COMPLETE_ALL_*: Bulk complete operations
  */
 export function parseUIAction(message: string): string | null {
   if (!message.startsWith(UI_ACTION_PREFIX)) {
     return null;
   }
   const action = message.slice(UI_ACTION_PREFIX.length).trim().toUpperCase();
-  // Valid UI actions
+  // Valid UI actions - extended with conversation gate actions
   const validActions = [
+    // Query/display actions
     'SHOW_TASKS', 'SHOW_EVENTS', 'SHOW_EXPENSES',
+    // Creation flow starters (from Conversation Gate)
+    'ADD_TASK', 'CREATE_EVENT', 'ADD_EXPENSE',
+    // Legacy creation actions
+    'CREATE_TASK',
+    // Bulk operations
     'DELETE_ALL', 'DELETE_ALL_TASKS', 'DELETE_ALL_EVENTS', 'DELETE_ALL_EXPENSES',
     'COMPLETE_ALL_TASKS', 'COMPLETE_ALL',
-    'CREATE_TASK', 'CREATE_EVENT',
   ];
   return validActions.includes(action) ? action : null;
 }

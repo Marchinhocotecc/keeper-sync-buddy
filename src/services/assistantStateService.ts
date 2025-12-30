@@ -37,6 +37,9 @@ export interface IntentPayload {
   priority?: string;
   category?: string;
   description?: string;
+  amount?: number;         // For expense recording
+  // Type disambiguation for CREATE_GENERIC
+  type?: 'task' | 'event' | 'expense';
   // Management fields
   action?: 'delete' | 'complete' | 'manage';
   ids?: string[];
