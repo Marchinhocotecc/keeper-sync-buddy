@@ -21,7 +21,8 @@ export interface ConfirmationResult {
 }
 
 // ========== CANCEL PATTERNS ==========
-const CANCEL_PATTERNS = [
+// Pure cancel - standalone words
+const CANCEL_PATTERNS_STANDALONE = [
   /^no$/i,
   /^n$/i,
   /^nope$/i,
@@ -31,6 +32,13 @@ const CANCEL_PATTERNS = [
   /^basta$/i,
   /^niente$/i,
   /^non\s*(?:fa\s*)?niente$/i,
+];
+
+// Cancel prefix - "no, consigliami" should cancel pending AND process the rest
+const CANCEL_PREFIX_PATTERNS = [
+  /^no\s*,\s*/i,       // "no, consigliami..."
+  /^no\s+/i,           // "no consigliami..." (no comma)
+  /^annulla\s*,?\s*/i, // "annulla, fammi vedere..."
 ];
 
 // ========== CONFIRM PATTERNS ==========
@@ -52,6 +60,14 @@ const CONFIRM_PATTERNS = [
 
 // ========== QUICK ACTIONS (buttons that should never be free text) ==========
 const QUICK_ACTION_PATTERNS: Array<{ pattern: RegExp; action: string }> = [
+  // BULK ACTIONS - must come FIRST (higher priority)
+  { pattern: /^(?:elimina|cancella|rimuovi)\s*tutt[ieoa]$/i, action: 'DELETE_ALL' },
+  { pattern: /^(?:elimina|cancella|rimuovi)\s*tutt[ieoa]\s*(?:i\s*)?(?:task|le\s*task)?$/i, action: 'DELETE_ALL_TASKS' },
+  { pattern: /^(?:elimina|cancella|rimuovi)\s*tutt[ieoa]\s*(?:gli\s*)?eventi?$/i, action: 'DELETE_ALL_EVENTS' },
+  { pattern: /^(?:elimina|cancella|rimuovi)\s*tutt[ieoa]\s*(?:le\s*)?spese?$/i, action: 'DELETE_ALL_EXPENSES' },
+  { pattern: /^(?:completa|spunta|chiudi)\s*tutt[ieoa]$/i, action: 'COMPLETE_ALL' },
+  { pattern: /^(?:completa|spunta|chiudi)\s*tutt[ieoa]\s*(?:i\s*)?(?:task|le\s*task)?$/i, action: 'COMPLETE_ALL_TASKS' },
+  // SINGULAR ACTIONS
   { pattern: /^elimina\s*(?:uno|una|il\s*primo|la\s*prima)?$/i, action: 'DELETE_ONE' },
   { pattern: /^cancella\s*(?:uno|una|il\s*primo|la\s*prima)?$/i, action: 'DELETE_ONE' },
   { pattern: /^rimuovi\s*(?:uno|una|il\s*primo|la\s*prima)?$/i, action: 'DELETE_ONE' },
@@ -63,6 +79,11 @@ const QUICK_ACTION_PATTERNS: Array<{ pattern: RegExp; action: string }> = [
   { pattern: /^nuovo\s*evento$/i, action: 'CREATE_EVENT' },
   { pattern: /^aggiungi\s*task$/i, action: 'CREATE_TASK' },
   { pattern: /^aggiungi\s*evento$/i, action: 'CREATE_EVENT' },
+  // "eliminali" with context
+  { pattern: /^eliminali$/i, action: 'DELETE_THESE' },
+  { pattern: /^eliminali\s*tutt[ieoa]?$/i, action: 'DELETE_ALL' },
+  { pattern: /^cancellali$/i, action: 'DELETE_THESE' },
+  { pattern: /^cancellali\s*tutt[ieoa]?$/i, action: 'DELETE_ALL' },
 ];
 
 // ========== NEGATIVE FEEDBACK PATTERNS ==========
@@ -94,12 +115,53 @@ const DELETE_COMMAND_PATTERNS = [
   /(?:elimina|cancella|rimuovi|togli)l[aie]/i,
 ];
 
+// ========== BULK DELETE DETECTION (HIGH PRIORITY) ==========
+// These patterns MUST be detected before asking "task/eventi/spese?"
+const BULK_DELETE_WITH_TARGET_PATTERNS = [
+  { pattern: /(?:elimina|cancella|rimuovi)\s*tutt[eio]?\s*(?:i\s*|le\s*)?task/i, type: 'tasks' as const },
+  { pattern: /(?:elimina|cancella|rimuovi)\s*tutt[eio]?\s*(?:gli\s*)?eventi?/i, type: 'events' as const },
+  { pattern: /(?:elimina|cancella|rimuovi)\s*tutt[eio]?\s*(?:le\s*)?spese?/i, type: 'expenses' as const },
+  { pattern: /(?:completa|spunta|chiudi)\s*tutt[eio]?\s*(?:i\s*|le\s*)?task/i, type: 'complete_tasks' as const },
+  // "tutte le task" patterns (without explicit action verb, implies query or last action)
+  { pattern: /^tutt[eio]?\s*(?:i\s*|le\s*)?task$/i, type: 'tasks_context' as const },
+];
+
+/**
+ * Check if message is a bulk delete with explicit target
+ * Returns the target type if detected, null otherwise
+ */
+export function detectBulkDeleteTarget(message: string): { type: 'tasks' | 'events' | 'expenses' | 'complete_tasks' | 'tasks_context'; action: 'delete' | 'complete' | 'query' } | null {
+  const trimmed = message.trim().toLowerCase();
+  
+  for (const { pattern, type } of BULK_DELETE_WITH_TARGET_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      if (type === 'complete_tasks') {
+        return { type: 'tasks', action: 'complete' };
+      }
+      if (type === 'tasks_context') {
+        return { type: 'tasks', action: 'query' };
+      }
+      return { type: type as 'tasks' | 'events' | 'expenses', action: 'delete' };
+    }
+  }
+  
+  return null;
+}
+
+export type ConfirmationWithContinuation = ConfirmationResult & {
+  // If cancel had continuation (e.g., "no, consigliami..."), this is the rest
+  continuation?: string;
+};
+
 /**
  * Check if message is a pure confirmation/cancel word
  * Returns ConfirmationResult with type and bypass flag
+ * 
+ * CRITICAL: For "no, consigliami cosa fare" we return CANCEL with continuation
  */
-export function parseConfirmation(message: string): ConfirmationResult {
+export function parseConfirmation(message: string): ConfirmationWithContinuation {
   const trimmed = message.trim().toLowerCase();
+  const original = message.trim();
   
   // Check for negative feedback FIRST
   if (NEGATIVE_FEEDBACK_PATTERNS.some(p => p.test(trimmed))) {
@@ -112,8 +174,20 @@ export function parseConfirmation(message: string): ConfirmationResult {
     return { type: 'NONE', shouldBypass: false };
   }
   
-  // Check cancel patterns
-  if (CANCEL_PATTERNS.some(p => p.test(trimmed))) {
+  // Check for CANCEL PREFIX (e.g., "no, consigliami...")
+  // This is CRITICAL: must clear pending intent AND process the rest
+  for (const pattern of CANCEL_PREFIX_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      const continuation = original.replace(pattern, '').trim();
+      if (continuation.length > 2) {
+        // There's meaningful content after "no, " - return cancel with continuation
+        return { type: 'CANCEL', shouldBypass: true, continuation };
+      }
+    }
+  }
+  
+  // Check standalone cancel patterns
+  if (CANCEL_PATTERNS_STANDALONE.some(p => p.test(trimmed))) {
     return { type: 'CANCEL', shouldBypass: true };
   }
   
