@@ -32,7 +32,14 @@ import {
   shouldUseStatefulHandler,
   clearAllAssistantState
 } from '@/services/statefulHandler';
-import { isSafetyWord, isCancelSafetyWord, getCancelResponse, getConfirmNoIntentResponse } from '@/assistant/confirmationParser';
+import { 
+  isSafetyWord, 
+  isCancelSafetyWord, 
+  isCancelPattern,
+  getCancelResponse, 
+  getConfirmNoIntentResponse 
+} from '@/assistant/confirmationParser';
+import { SAFE_FALLBACK_MESSAGE } from './constants';
 
 // Response hash tracking for loop prevention
 const responseHashes = new Map<string, Set<string>>();
@@ -53,7 +60,8 @@ export async function processMessage(
   console.log('User:', userId);
   console.log('Message:', message);
   
-  const SAFE_FALLBACK = '❓ Ok. Vuoi creare un task, un evento, registrare una spesa o eliminare qualcosa?';
+  // Use centralized constant
+  const SAFE_FALLBACK = SAFE_FALLBACK_MESSAGE;
   
   // ========== PHASE -1: SAFETY WORD PRE-CHECK (ABSOLUTE FIRST) ==========
   // This MUST happen before ANY intent parsing or state loading
@@ -128,10 +136,10 @@ export async function processMessage(
     };
   }
   
-  // CRITICAL: Check for CANCEL words - must clear ALL state AND return immediately
-  const isCancelWord = /^no\s*[,.]?\s*|^annulla|^stop|^lascia\s*(?:stare|perdere)|^basta|^niente/i.test(message.trim());
-  if (isCancelWord) {
-    console.log('[AIEngine] Cancel word in legacy - clearing ALL state');
+  // CRITICAL: Check for CANCEL patterns - must clear ALL state AND return immediately
+  // Use centralized isCancelPattern() from confirmationParser
+  if (isCancelPattern(message)) {
+    console.log('[AIEngine] Cancel pattern in legacy - clearing ALL state');
     await clearAllAssistantState(userId);
     return {
       message: getCancelResponse(),

@@ -263,22 +263,53 @@ export function isConfirmSafetyWord(message: string): boolean {
 /**
  * Get safe response for cancel
  */
+// Import from centralized constants
+import { 
+  CANCEL_RESPONSE, 
+  CONFIRM_NO_INTENT_RESPONSE, 
+  NEGATIVE_FEEDBACK_RESPONSE 
+} from './constants';
+
+/**
+ * Get safe response for cancel
+ */
 export function getCancelResponse(): string {
-  return '✅ Ok, annullato.';
+  return CANCEL_RESPONSE;
 }
 
 /**
  * Get safe response for confirm without active intent
  */
 export function getConfirmNoIntentResponse(): string {
-  return '✅ Ok. Dimmi cosa vuoi fare (task, evento, spesa o elimina).';
+  return CONFIRM_NO_INTENT_RESPONSE;
 }
 
 /**
  * Get response for negative feedback
  */
 export function getNegativeFeedbackResponse(): string {
-  return '😔 Hai ragione, scusa. Dimmi cosa vuoi fare adesso.';
+  return NEGATIVE_FEEDBACK_RESPONSE;
+}
+
+/**
+ * Check if message starts with or is a cancel pattern
+ * SINGLE SOURCE OF TRUTH for cancel detection
+ * Used by: aiEngine.ts, statefulHandler.ts
+ */
+export function isCancelPattern(message: string): boolean {
+  const trimmed = message.trim().toLowerCase();
+  
+  // Check standalone cancel patterns
+  if (CANCEL_PATTERNS_STANDALONE.some(p => p.test(trimmed))) {
+    return true;
+  }
+  
+  // Check cancel prefix patterns (e.g., "no, consigliami...")
+  if (CANCEL_PREFIX_PATTERNS.some(p => p.test(trimmed))) {
+    return true;
+  }
+  
+  return false;
 }
 
 /**
