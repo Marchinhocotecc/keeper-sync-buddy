@@ -36,6 +36,7 @@ import {
   isSafetyWord, 
   isCancelSafetyWord, 
   isCancelPattern,
+  parseConfirmation,
   getCancelResponse, 
   getConfirmNoIntentResponse 
 } from '@/assistant/confirmationParser';
@@ -63,24 +64,47 @@ export async function processMessage(
   // Use centralized constant
   const SAFE_FALLBACK = SAFE_FALLBACK_MESSAGE;
   
-  // ========== PHASE -1: SAFETY WORD PRE-CHECK ==========
-  // CRITICAL: "si/sì/ok" as confirm words should ONLY be safety words if there's NO active intent
-  // If there IS an active intent waiting for confirmation, these words should be processed by stateful handler
-  const hasActiveIntentEarly = await userHasActiveIntent(userId);
-  const isConfirmWord = /^(?:s[iì]|si|ok|okay|yes|y|va\s*bene|certo|confermo?)$/i.test(message.trim());
-  
-  // Only treat as safety word if:
-  // 1. It's a cancel word (always safe to cancel) OR
-  // 2. It's a confirm word AND there's NO active intent waiting
-  if (isSafetyWord(message) && (!isConfirmWord || !hasActiveIntentEarly)) {
+  // ========== PHASE -1: CONFIRM/SAFETY PRE-CHECK ==========
+  // PRIORITY RULE (CRITICAL): CONFIRM > SAFETY
+  // When user writes a pure confirm word (si/sì/ok) we MUST forward it to the stateful handler,
+  // because it may be confirming an in-progress action (e.g. CONFIRM_BULK_DELETE).
+  // Cancel stays cancel.
+  const confirmParse = parseConfirmation(message);
+  if (confirmParse.type === 'CONFIRM') {
+    console.log('[AIEngine] Confirm word detected - forwarding to stateful handler (no safety clear)');
+    try {
+      const statefulResponse = await handleStatefulMessage(userId, message);
+      const responseMessage = statefulResponse.message && statefulResponse.message.trim() !== ''
+        ? statefulResponse.message
+        : SAFE_FALLBACK;
+      await saveConversation(userId, message, responseMessage);
+      return {
+        message: responseMessage,
+        source: statefulResponse.source === 'stateful' ? 'local' : statefulResponse.source,
+        suggestions: statefulResponse.suggestions,
+        actionExecuted: statefulResponse.actionExecuted,
+        actionResult: statefulResponse.actionResult,
+      };
+    } catch (error) {
+      console.error('[AIEngine] Error forwarding CONFIRM to stateful handler:', error);
+      const safeMessage = getConfirmNoIntentResponse();
+      await saveConversation(userId, message, safeMessage);
+      return { message: safeMessage, source: 'local' };
+    }
+  }
+
+  // ========== SAFETY WORD PRE-CHECK ==========
+  // Cancel/vague safety words should clear state early.
+  // NOTE: Pure confirm words are handled above and MUST NOT reach this branch.
+  if (isSafetyWord(message)) {
     console.log('[AIEngine] Safety word detected - clearing state and returning safe response');
     await clearAllAssistantState(userId);
-    
+
     const response = isCancelSafetyWord(message) ? getCancelResponse() : getConfirmNoIntentResponse();
     await saveConversation(userId, message, response);
     return { message: response, source: 'local' };
   }
-  
+
   // ========== PHASE 0: CHECK SUPABASE STATE FIRST (ABSOLUTE PRIORITY) ==========
   console.log('--- Phase 0: Supabase State Check ---');
   
