@@ -24,7 +24,8 @@ export type LastActionType =
   | 'SHOW_EVENTS'
   | 'SHOW_EXPENSES'
   | 'CREATED_TASK'
-  | 'CREATED_EVENT';
+  | 'CREATED_EVENT'
+  | 'ADVICE';  // After giving contextual advice
 
 export interface IntentPayload {
   title?: string;

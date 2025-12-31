@@ -28,6 +28,7 @@ import { setPendingIntent, clearPendingIntent, incrementPendingAttempts, getPend
 import { parseNaturalDate, formatEventDate, formatEventTime } from '@/utils/dateParser';
 import { createEvent as actionCreateEvent, recordExpense as actionRecordExpense } from '@/engine/ActionEngine';
 import { recalculateBudgetForUser } from '@/services/budgetService';
+import { setLastAction } from '@/services/assistantStateService';
 
 export interface RouterResponse {
   message: string;
@@ -422,6 +423,9 @@ async function handleAdviceContextual(
   context: UserContext
 ): Promise<RouterResponse> {
   const advice = await getContextualAdvice(message, context, context.recentMessages);
+  
+  // Set last action to ADVICE so follow-up "ok, pianifichiamo" works
+  await setLastAction(userId, 'ADVICE', {});
   
   return {
     message: advice.message,
