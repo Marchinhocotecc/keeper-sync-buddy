@@ -102,6 +102,75 @@ export function isExplicitCommand(text: string): boolean {
   
   return false;
 }
+
+// ========== ADVICE FOLLOW-UP PATTERNS ==========
+// Detect consent+action patterns after ADVICE (e.g., "ok, pianifichiamo")
+const ADVICE_FOLLOWUP_PATTERNS = [
+  /^(?:ok|okay|va\s*bene|s[iì]|perfetto|certo)\s*,?\s*(?:pianifichiamo|facciamolo|andiamo|procediamo|iniziamo)/i,
+  /^pianifichiamo$/i,
+  /^facciamolo$/i,
+  /^andiamo$/i,
+  /^procediamo$/i,
+  /^iniziamo$/i,
+];
+
+/**
+ * isAdviceFollowUp - Detects consent+action patterns after ADVICE
+ */
+export function isAdviceFollowUp(text: string): boolean {
+  const lower = text.trim().toLowerCase();
+  return ADVICE_FOLLOWUP_PATTERNS.some(p => p.test(lower));
+}
+
+// ========== STOPWORDS FOR TITLE VALIDATION ==========
+// These words alone are NOT valid titles - must ask for real title
+const ITALIAN_STOPWORDS = [
+  'una', 'un', 'uno', 'il', 'lo', 'la', 'i', 'gli', 'le',
+  'questa', 'questo', 'quello', 'quella', 'questi', 'queste',
+  'quelli', 'quelle', 'mio', 'mia', 'miei', 'mie'
+];
+
+/**
+ * isValidTitle - Checks if extracted title is meaningful (not just a stopword)
+ */
+export function isValidTitle(title: string): boolean {
+  const cleaned = title.trim().toLowerCase();
+  
+  // Empty or too short
+  if (cleaned.length < 2) return false;
+  
+  // Pure stopword
+  if (ITALIAN_STOPWORDS.includes(cleaned)) return false;
+  
+  // Just "task" or "evento" without content
+  if (/^(?:task|evento|appuntamento)$/i.test(cleaned)) return false;
+  
+  return true;
+}
+
+/**
+ * extractTitleFromMessage - Extracts meaningful title, filtering stopwords
+ */
+export function extractTitleFromMessage(message: string, intentType: 'task' | 'event'): string | null {
+  let text = message.trim();
+  
+  // Remove common prefixes
+  text = text
+    .replace(/^(?:crea|aggiungi|nuovo|nuova|inserisci|metti)\s+/i, '')
+    .replace(/^(?:un|una|il|la|lo)\s+/i, '')
+    .replace(/^task\s*/i, '')
+    .replace(/^(?:evento|appuntamento)\s*/i, '')
+    .replace(/^[:\-–]\s*/, '')
+    .trim();
+  
+  // If what remains is empty or a stopword, return null
+  if (!isValidTitle(text)) {
+    return null;
+  }
+  
+  // Capitalize first letter
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 import {
   getState,
   setActiveIntent,
@@ -303,6 +372,22 @@ export async function handleStatefulMessage(
   // Load current state from Supabase
   const state = await getState(userId);
   console.log('[StatefulHandler] Current state:', state.active_intent);
+  
+  // ===== ADVICE FOLLOW-UP CHECK (BEFORE CONVERSATION GATE) =====
+  // If last action was ADVICE and user responds with consent+action pattern
+  // → start CREATE_GENERIC flow (task or event choice)
+  if (
+    state.last_action_type === 'ADVICE' &&
+    isAdviceFollowUp(message)
+  ) {
+    console.log('[StatefulHandler] ADVICE follow-up detected - starting task/event choice');
+    await setActiveIntent(userId, 'CREATE_GENERIC', {}, ['type']);
+    return {
+      message: 'Perfetto 🙂 task o evento?',
+      source: 'stateful',
+      suggestions: ['Task', 'Evento']
+    };
+  }
   
   // ===== CONVERSATION GATE (BEFORE ANY INTENT ROUTING) =====
   // Activates when: no active intent, message is not explicit command, and parseConfirmation returned NONE
@@ -590,6 +675,7 @@ async function handleQuickAction(
 
 /**
  * Handle bulk delete requests with confirmation
+ * GRAMMAR: Proper singular/plural in Italian
  */
 async function handleBulkDeleteRequest(
   userId: string,
@@ -598,38 +684,47 @@ async function handleBulkDeleteRequest(
 ): Promise<StatefulResponse> {
   // Get count of items
   let count = 0;
-  let itemName = '';
+  let itemNameSingular = '';
+  let itemNamePlural = '';
   
   switch (type) {
     case 'tasks': {
       const tasks = await dataService.listTasks(userId);
       count = tasks.length;
-      itemName = 'task';
+      itemNameSingular = 'task';
+      itemNamePlural = 'task';
       break;
     }
     case 'events': {
       const events = await dataService.listEvents(userId);
       count = events.length;
-      itemName = 'eventi';
+      itemNameSingular = 'evento';
+      itemNamePlural = 'eventi';
       break;
     }
     case 'expenses': {
       const expenses = await dataService.listExpenses(userId);
       count = expenses.length;
-      itemName = 'spese';
+      itemNameSingular = 'spesa';
+      itemNamePlural = 'spese';
       break;
     }
   }
   
+  // N=0: "Nessun task da eliminare."
   if (count === 0) {
-    return { message: `✅ Non hai ${itemName} da eliminare.`, source: 'stateful' };
+    const noItemText = type === 'expenses' ? `Nessuna ${itemNameSingular}` : `Nessun ${itemNameSingular}`;
+    return { message: `✅ ${noItemText} da eliminare.`, source: 'stateful' };
   }
   
   // Set pending confirmation state
   await setActiveIntent(userId, 'CONFIRM_BULK_DELETE', { deleteType: type as 'tasks' | 'events' | 'expenses', count }, []);
   
+  // N=1: "Vuoi eliminare 1 task?" / N>1: "Vuoi eliminare i 5 task?"
+  const itemText = count === 1 ? `1 ${itemNameSingular}` : `${count} ${itemNamePlural}`;
+  
   return {
-    message: `⚠️ Vuoi eliminare ${count === 1 ? 'il' : 'tutti i'} ${count} ${itemName}? Scrivi "sì" per confermare o "no" per annullare.`,
+    message: `⚠️ Vuoi eliminare ${count === 1 ? '' : 'tutti '}${count === 1 ? 'il' : 'i'} ${itemText}? Scrivi "sì" per confermare o "no" per annullare.`,
     source: 'stateful'
   };
 }
@@ -670,6 +765,7 @@ interface IntentClassification {
 
 /**
  * Classify a new message (when no active intent)
+ * CRITICAL: Uses robust title extraction to avoid "una", "un" as titles
  */
 function classifyNewIntent(message: string): IntentClassification {
   const lower = message.toLowerCase().trim();
@@ -692,7 +788,8 @@ function classifyNewIntent(message: string): IntentClassification {
       
       // Check if it specifies task or event
       if (/task/i.test(content)) {
-        const title = content.replace(/task/i, '').trim();
+        // Use robust title extraction
+        const title = extractTitleFromMessage(content, 'task');
         return {
           intent: 'CREATE_TASK',
           payload: { title: title || undefined },
@@ -701,7 +798,7 @@ function classifyNewIntent(message: string): IntentClassification {
       }
       
       if (/evento|appuntamento/i.test(content)) {
-        const title = content.replace(/evento|appuntamento/i, '').trim();
+        const title = extractTitleFromMessage(content, 'event');
         return {
           intent: 'CREATE_EVENT',
           payload: { title: title || undefined },
@@ -710,9 +807,11 @@ function classifyNewIntent(message: string): IntentClassification {
       }
       
       // Generic create (user said "crea padel" without specifying type)
+      // Validate content is meaningful
+      const validTitle = isValidTitle(content) ? content : undefined;
       return {
         intent: 'CREATE_GENERIC',
-        payload: { title: content },
+        payload: { title: validTitle },
         missingFields: ['type']
       };
     }
@@ -792,22 +891,29 @@ async function handleBulkDeleteConfirmation(
     switch (deleteType) {
       case 'tasks':
         await dataService.deleteAllTasks(userId);
+        // N=1: "1 task eliminato." / N>1: "{N} task eliminati."
         return { 
-          message: `✅ ${count === 1 ? 'Task eliminato' : `Tutti i ${count} task eliminati`}.`, 
+          message: count === 0 ? '✅ Nessun task da eliminare.' :
+                   count === 1 ? '✅ 1 task eliminato.' : 
+                   `✅ ${count} task eliminati.`, 
           source: 'stateful',
           actionExecuted: true 
         };
       case 'events':
         await dataService.deleteAllEvents(userId);
         return { 
-          message: `✅ ${count === 1 ? 'Evento eliminato' : `Tutti i ${count} eventi eliminati`}.`, 
+          message: count === 0 ? '✅ Nessun evento da eliminare.' :
+                   count === 1 ? '✅ 1 evento eliminato.' : 
+                   `✅ ${count} eventi eliminati.`, 
           source: 'stateful',
           actionExecuted: true 
         };
       case 'expenses':
         await dataService.deleteAllExpenses(userId);
         return { 
-          message: `✅ ${count === 1 ? 'Spesa eliminata' : `Tutte le ${count} spese eliminate`}.`, 
+          message: count === 0 ? '✅ Nessuna spesa da eliminare.' :
+                   count === 1 ? '✅ 1 spesa eliminata.' : 
+                   `✅ ${count} spese eliminate.`, 
           source: 'stateful',
           actionExecuted: true 
         };
@@ -818,9 +924,9 @@ async function handleBulkDeleteConfirmation(
   }
   
   // User didn't say yes or no - ONE reminder only, then default to no
-  const itemName = deleteType === 'tasks' ? 'task' : deleteType === 'events' ? 'eventi' : 'spese';
+  const itemName = deleteType === 'tasks' ? 'task' : deleteType === 'events' ? 'evento/i' : 'spesa/e';
   return {
-    message: `Scrivi "sì" per eliminare ${count === 1 ? 'il' : `i ${count}`} ${itemName}, o "no" per annullare.`,
+    message: `Scrivi "sì" per eliminare ${count === 1 ? 'il' : 'i'} ${count} ${itemName}, o "no" per annullare.`,
     source: 'stateful'
   };
 }
@@ -868,6 +974,8 @@ async function handleBulkCompleteConfirmation(
 /**
  * Handle follow-up for CREATE_GENERIC (user said "crea X", need to know task/event)
  * Also handles expense flow when type='expense' is pre-set from Conversation Gate
+ * 
+ * CRITICAL: "task" or "evento" replies MUST complete the choice, not re-route to menu
  */
 async function handleCreateGenericFollowUp(
   userId: string,
@@ -877,6 +985,9 @@ async function handleCreateGenericFollowUp(
 ): Promise<StatefulResponse> {
   const title = state.intent_payload.title || '';
   const presetType = state.intent_payload.type;
+  const lower = message.trim().toLowerCase();
+  
+  console.log('[StatefulHandler] CREATE_GENERIC follow-up:', { title, presetType, followUpType, message: lower });
   
   // If type is pre-set as 'expense' (from Conversation Gate ADD_EXPENSE)
   if (presetType === 'expense') {
@@ -905,50 +1016,62 @@ async function handleCreateGenericFollowUp(
     return { message: 'Inserisci l\'importo (es: "15 euro pranzo")', source: 'stateful' };
   }
   
+  // ========== CRITICAL: Check for "task" or "evento" FIRST (disambiguation) ==========
+  // This MUST come before followUpType switch to ensure "task"/"evento" always work
+  if (/^task$/i.test(lower) || followUpType === 'CHOOSE_TASK') {
+    console.log('[StatefulHandler] User chose TASK');
+    // If we have a valid title, create immediately
+    if (title && isValidTitle(title)) {
+      return await executeCreateTask(userId, title);
+    }
+    // No title or invalid title - ask for it
+    await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
+    return { message: 'Che titolo?', source: 'stateful' };
+  }
+  
+  if (/^(?:evento|appuntamento)$/i.test(lower) || followUpType === 'CHOOSE_EVENT') {
+    console.log('[StatefulHandler] User chose EVENT');
+    // If we have a valid title, ask for when
+    if (title && isValidTitle(title)) {
+      await setActiveIntent(userId, 'CREATE_EVENT', { title }, ['date', 'time']);
+      return { message: 'Quando? (es. "venerdì 18:30")', source: 'stateful' };
+    }
+    // No title - ask for event details
+    await setActiveIntent(userId, 'CREATE_EVENT', {}, ['title', 'date', 'time']);
+    return { message: 'Come si chiama l\'evento e quando?', source: 'stateful' };
+  }
+  
   switch (followUpType) {
-    case 'CHOOSE_TASK':
     case 'CONFIRM_YES':
-      // Default to task on "sì"
-      await setActiveIntent(userId, 'CREATE_TASK', { title }, []);
-      // If we have a title, create immediately
-      if (title) {
+      // "sì" without context - default to task if we have title
+      if (title && isValidTitle(title)) {
         return await executeCreateTask(userId, title);
       }
-      return {
-        message: 'Cosa vuoi aggiungere come task?',
-        source: 'stateful'
-      };
-    
-    case 'CHOOSE_EVENT':
-      await setActiveIntent(userId, 'CREATE_EVENT', { title }, ['date', 'time']);
-      return {
-        message: 'Quando?',
-        source: 'stateful'
-      };
+      await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
+      return { message: 'Cosa vuoi aggiungere come task?', source: 'stateful' };
     
     case 'CONFIRM_NO':
       await clearActiveIntent(userId);
-      return {
-        message: 'Ok, lasciamo stare.',
-        source: 'stateful'
-      };
+      return { message: 'Ok, lasciamo stare.', source: 'stateful' };
     
     default:
-      // Check if user is clarifying with "task" or "evento" in the message
-      const lower = message.toLowerCase();
+      // Check if message contains "task" or "evento" (not standalone)
       if (/task/i.test(lower)) {
-        await setActiveIntent(userId, 'CREATE_TASK', { title }, []);
-        if (title) {
-          return await executeCreateTask(userId, title);
+        // Try to extract title from the message
+        const extractedTitle = extractTitleFromMessage(message, 'task');
+        if (extractedTitle) {
+          return await executeCreateTask(userId, extractedTitle);
         }
-        return { message: 'Cosa vuoi aggiungere?', source: 'stateful' };
+        await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
+        return { message: 'Che titolo?', source: 'stateful' };
       }
       if (/evento|appuntamento/i.test(lower)) {
-        await setActiveIntent(userId, 'CREATE_EVENT', { title }, ['date', 'time']);
+        const extractedTitle = extractTitleFromMessage(message, 'event');
+        await setActiveIntent(userId, 'CREATE_EVENT', { title: extractedTitle || undefined }, ['date', 'time']);
         return { message: 'Quando?', source: 'stateful' };
       }
       
-      // Still unclear
+      // Still unclear - repeat the question
       return {
         message: 'Task o evento?',
         source: 'stateful',
@@ -959,6 +1082,7 @@ async function handleCreateGenericFollowUp(
 
 /**
  * Handle follow-up for CREATE_TASK
+ * CRITICAL: Validate title is meaningful (not just "una", "un", etc.)
  */
 async function handleCreateTaskFollowUp(
   userId: string,
@@ -974,23 +1098,21 @@ async function handleCreateTaskFollowUp(
       return { message: 'Ok, annullato.', source: 'stateful' };
     
     case 'CONFIRM_YES':
-      if (title) {
+      if (title && isValidTitle(title)) {
         return await executeCreateTask(userId, title);
       }
-      return { message: 'Cosa vuoi aggiungere?', source: 'stateful' };
+      return { message: 'Che titolo?', source: 'stateful' };
     
     default:
-      // Assume the message is the title
-      if (!title) {
-        title = message.trim();
-        await updateIntentPayload(userId, { title });
+      // Try to use the message as title
+      const extractedTitle = extractTitleFromMessage(message, 'task');
+      
+      if (extractedTitle) {
+        return await executeCreateTask(userId, extractedTitle);
       }
       
-      if (title) {
-        return await executeCreateTask(userId, title);
-      }
-      
-      return { message: 'Cosa vuoi aggiungere?', source: 'stateful' };
+      // Invalid or empty title - ask again
+      return { message: 'Che titolo?', source: 'stateful' };
   }
 }
 
