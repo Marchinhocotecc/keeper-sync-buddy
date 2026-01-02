@@ -41,24 +41,11 @@ import {
 // ========== CONVERSATION GATE CONSTANTS ==========
 /**
  * Proactive response shown when the Conversation Gate activates.
- * This is returned when no active intent and message is not an explicit command.
- * INVARIANT: This response does NOT trigger any DB writes.
+ * RULE: Single simple question, NO multiple options, NO technical language
  */
 const CONVERSATION_GATE_RESPONSE = {
-  message: 'Ok 🙂 cosa vuoi fare?',
-  suggestions: [
-    '📋 Mostra task',
-    '➕ Aggiungi task', 
-    '📅 Crea evento',
-    '💸 Registra spesa'
-  ],
-  // These are the structured UI actions that bypass NLP
-  uiActions: {
-    'Mostra task': '__UI_ACTION__:SHOW_TASKS',
-    'Aggiungi task': '__UI_ACTION__:ADD_TASK',
-    'Crea evento': '__UI_ACTION__:CREATE_EVENT',
-    'Registra spesa': '__UI_ACTION__:ADD_EXPENSE'
-  }
+  message: 'Dimmi 🙂',
+  suggestions: ['Mostra task', 'Aggiungi task'],
 };
 
 /**
@@ -130,16 +117,21 @@ const ITALIAN_STOPWORDS = [
   'quelli', 'quelle', 'mio', 'mia', 'miei', 'mie'
 ];
 
-// ========== CONFIRMATION PHRASES BLACKLIST ==========
-// These phrases CANNOT be used as event/task titles - they are user consent phrases
-const CONFIRMATION_PHRASES_BLACKLIST = [
+// ========== CONFIRMATION/SAFETY PHRASES BLACKLIST ==========
+// These CANNOT be titles - they are user consent/cancel phrases
+const TITLE_BLACKLIST = [
+  // Consent phrases
   'ok', 'okay', 'va bene', 'pianifichiamo', 'facciamolo', 
   'sì', 'si', 'andiamo', 'procediamo', 'iniziamo', 'certo',
-  'perfetto', 'bene', 'ok pianifichiamo', 'va bene pianifichiamo'
+  'perfetto', 'bene', 'ok pianifichiamo', 'va bene pianifichiamo',
+  // Cancel/safety phrases  
+  'no', 'basta', 'annulla', 'stop', 'niente', 'top', 'eliminala',
+  'lascia stare', 'lascia perdere'
 ];
 
 /**
- * isValidTitle - Checks if extracted title is meaningful (not just a stopword or confirmation phrase)
+ * isValidTitle - Checks if extracted title is meaningful
+ * RULE: Must be at least 2 chars, not a stopword, not a confirmation/cancel phrase
  */
 export function isValidTitle(title: string): boolean {
   const cleaned = title.trim().toLowerCase();
@@ -153,10 +145,10 @@ export function isValidTitle(title: string): boolean {
   // Just "task" or "evento" without content
   if (/^(?:task|evento|appuntamento)$/i.test(cleaned)) return false;
   
-  // Confirmation phrase (blacklisted)
-  if (CONFIRMATION_PHRASES_BLACKLIST.includes(cleaned)) return false;
+  // Blacklisted phrase
+  if (TITLE_BLACKLIST.includes(cleaned)) return false;
   
-  // Check for confirmation patterns (with punctuation variations)
+  // Confirmation/consent patterns
   if (/^(?:ok|okay|va\s*bene|s[iì]|certo|perfetto|bene)\s*[,.]?\s*(?:pianifichiamo|facciamolo|andiamo|procediamo|iniziamo)?$/i.test(cleaned)) {
     return false;
   }
@@ -399,22 +391,34 @@ export async function handleStatefulMessage(
     console.log('[StatefulHandler] ADVICE follow-up detected - starting task/event choice');
     await setActiveIntent(userId, 'CREATE_GENERIC', {}, ['type']);
     return {
-      message: 'Perfetto 🙂 task o evento?',
+      message: 'Parliamo di un evento o di una cosa da fare?',
       source: 'stateful',
       suggestions: ['Task', 'Evento']
     };
   }
   
+  // ===== TOPIC CHANGE DETECTION (RESET SILENZIOSO) =====
+  // If user has active intent but message is a NEW explicit command → reset and process new
+  if (hasActiveIntent(state) && isExplicitCommand(message)) {
+    // Check if it's a DIFFERENT intent from current
+    const newIntent = classifyNewIntent(message);
+    if (newIntent.intent !== 'NONE' && newIntent.intent !== state.active_intent) {
+      console.log('[StatefulHandler] TOPIC CHANGE detected - silent reset');
+      await clearActiveIntent(userId);
+      // Fall through to process as new intent
+    }
+  }
+  
   // ===== CONVERSATION GATE (BEFORE ANY INTENT ROUTING) =====
-  // Activates when: no active intent, message is not explicit command, and parseConfirmation returned NONE
-  // Result: Proactive menu with 4 options, NO DB writes
+  // Activates when: no active intent, message is not explicit command
+  // RULE: Simple response, NO multiple options
   if (
     !hasActiveIntent(state) &&
     confirmResult.type === 'NONE' &&
     !confirmResult.shouldBypass &&
     !isExplicitCommand(message)
   ) {
-    console.log('[StatefulHandler] CONVERSATION GATE activated - returning proactive menu');
+    console.log('[StatefulHandler] CONVERSATION GATE activated');
     return {
       message: CONVERSATION_GATE_RESPONSE.message,
       source: 'stateful',
@@ -526,13 +530,13 @@ async function handleQuickAction(
     case 'SHOW_TASKS': {
       const tasks = await dataService.listTasks(userId);
       if (tasks.length === 0) {
-        return { message: '✅ Non hai task in sospeso.', source: 'stateful' };
+        return { message: 'Nessun task 🎉', source: 'stateful' };
       }
       const taskList = tasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n');
       await setActiveIntent(userId, 'MANAGE_TASKS', { lastShownIds: tasks.map(t => t.id) }, []);
       await setLastAction(userId, 'SHOW_TASKS', { ids: tasks.map(t => t.id) });
       return {
-        message: `📋 I tuoi task (${tasks.length}):\n${taskList}`,
+        message: `${taskList}`,
         source: 'stateful',
         suggestions: ['Completa uno', 'Elimina uno']
       };
@@ -541,13 +545,13 @@ async function handleQuickAction(
     case 'SHOW_EVENTS': {
       const events = await dataService.listEvents(userId);
       if (events.length === 0) {
-        return { message: '✅ Non hai eventi in programma.', source: 'stateful' };
+        return { message: 'Nessun evento in programma.', source: 'stateful' };
       }
       const eventList = events.map((e, i) => `${i + 1}. ${e.title}`).join('\n');
       await setActiveIntent(userId, 'MANAGE_EVENTS', { lastShownIds: events.map(e => e.id) }, []);
       await setLastAction(userId, 'SHOW_EVENTS', { ids: events.map(e => e.id) });
       return {
-        message: `📅 I tuoi eventi (${events.length}):\n${eventList}`,
+        message: `${eventList}`,
         source: 'stateful',
         suggestions: ['Elimina uno']
       };
@@ -556,13 +560,13 @@ async function handleQuickAction(
     case 'SHOW_EXPENSES': {
       const expenses = await dataService.listExpenses(userId);
       if (expenses.length === 0) {
-        return { message: '✅ Non hai spese registrate.', source: 'stateful' };
+        return { message: 'Nessuna spesa registrata.', source: 'stateful' };
       }
       const expenseList = expenses.slice(0, 10).map((e, i) => `${i + 1}. ${e.category || 'Spesa'}: €${e.amount}`).join('\n');
       await setActiveIntent(userId, 'MANAGE_EXPENSES', { lastShownIds: expenses.map(e => e.id) }, []);
       await setLastAction(userId, 'SHOW_EXPENSES', { ids: expenses.map(e => e.id) });
       return {
-        message: `💰 Le tue spese recenti:\n${expenseList}`,
+        message: `${expenseList}`,
         source: 'stateful',
         suggestions: ['Elimina una']
       };
@@ -630,20 +634,20 @@ async function handleQuickAction(
       };
     }
     
-    // ========== CREATION FLOW STARTERS (from Conversation Gate & buttons) ==========
+    // ========== CREATION FLOW STARTERS ==========
+    // RULE: ONE simple question at a time
     case 'CREATE_TASK':
     case 'ADD_TASK':
       await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
-      return { message: 'Cosa devi fare?', source: 'stateful' };
+      return { message: 'Cosa?', source: 'stateful' };
     
     case 'CREATE_EVENT':
       await setActiveIntent(userId, 'CREATE_EVENT', {}, ['title', 'date', 'time']);
-      return { message: 'Come si chiama l\'evento e quando?', source: 'stateful' };
+      return { message: 'Che evento?', source: 'stateful' };
     
     case 'ADD_EXPENSE':
-      // Use CREATE_GENERIC with expense type pre-selected for expense flow
       await setActiveIntent(userId, 'CREATE_GENERIC', { type: 'expense' }, ['amount']);
-      return { message: 'Quanto hai speso e per cosa?', source: 'stateful' };
+      return { message: 'Quanto e per cosa?', source: 'stateful' };
     
     // ========== BULK ACTIONS ==========
     case 'DELETE_ALL':
@@ -727,21 +731,22 @@ async function handleBulkDeleteRequest(
     }
   }
   
-  // N=0: "Nessun task da eliminare."
+  // N=0: "Nessun task." / "Nessuna spesa."
   if (count === 0) {
     const noItemText = type === 'expenses' ? `Nessuna ${itemNameSingular}` : `Nessun ${itemNameSingular}`;
-    return { message: `✅ ${noItemText} da eliminare.`, source: 'stateful' };
+    return { message: `${noItemText} da eliminare.`, source: 'stateful' };
   }
   
   // Set pending confirmation state
   await setActiveIntent(userId, 'CONFIRM_BULK_DELETE', { deleteType: type as 'tasks' | 'events' | 'expenses', count }, []);
   
-  // N=1: "Vuoi eliminare 1 task?" / N>1: "Vuoi eliminare i 5 task?"
+  // SIMPLE question - no verbose explanation
   const itemText = count === 1 ? `1 ${itemNameSingular}` : `${count} ${itemNamePlural}`;
   
   return {
-    message: `⚠️ Vuoi eliminare ${count === 1 ? '' : 'tutti '}${count === 1 ? 'il' : 'i'} ${itemText}? Scrivi "sì" per confermare o "no" per annullare.`,
-    source: 'stateful'
+    message: `Elimino ${itemText}?`,
+    source: 'stateful',
+    suggestions: ['Sì', 'No']
   };
 }
 
@@ -761,15 +766,16 @@ async function handleBulkCompleteRequest(
   const count = tasks.length;
   
   if (count === 0) {
-    return { message: '✅ Non hai task da completare.', source: 'stateful' };
+    return { message: 'Nessun task da completare.', source: 'stateful' };
   }
   
   // Set pending confirmation state for complete
   await setActiveIntent(userId, 'CONFIRM_BULK_COMPLETE', { deleteType: 'tasks' as const, count }, []);
   
   return {
-    message: `⚠️ Vuoi completare ${count === 1 ? 'il' : 'tutti i'} ${count} task? Scrivi "sì" per confermare o "no" per annullare.`,
-    source: 'stateful'
+    message: `Completo ${count === 1 ? 'il task' : `tutti i ${count} task`}?`,
+    source: 'stateful',
+    suggestions: ['Sì', 'No']
   };
 }
 
@@ -891,14 +897,13 @@ async function handleBulkDeleteConfirmation(
   const { deleteType, count } = state.intent_payload;
   console.log('[StatefulHandler] Bulk delete confirmation:', { deleteType, count, followUpType, message });
   
-  // CRITICAL: Also check message directly for "sì" in case followUpType missed it
   const lower = message.trim().toLowerCase();
   const isConfirmYes = followUpType === 'CONFIRM_YES' || /^s[iì]$/i.test(lower) || /^ok$/i.test(lower);
   const isConfirmNo = followUpType === 'CONFIRM_NO' || /^no$/i.test(lower);
   
   if (isConfirmNo) {
     await clearAllAssistantState(userId);
-    return { message: '✅ Ok, annullato.', source: 'stateful' };
+    return { message: 'Ok 🙂', source: 'stateful' };
   }
   
   if (isConfirmYes) {
@@ -907,29 +912,28 @@ async function handleBulkDeleteConfirmation(
     switch (deleteType) {
       case 'tasks':
         await dataService.deleteAllTasks(userId);
-        // N=1: "1 task eliminato." / N>1: "{N} task eliminati."
         return { 
-          message: count === 0 ? '✅ Nessun task da eliminare.' :
-                   count === 1 ? '✅ 1 task eliminato.' : 
-                   `✅ ${count} task eliminati.`, 
+          message: count === 0 ? 'Nessun task.' :
+                   count === 1 ? 'Fatto, 1 task eliminato.' : 
+                   `Fatto, ${count} task eliminati.`, 
           source: 'stateful',
           actionExecuted: true 
         };
       case 'events':
         await dataService.deleteAllEvents(userId);
         return { 
-          message: count === 0 ? '✅ Nessun evento da eliminare.' :
-                   count === 1 ? '✅ 1 evento eliminato.' : 
-                   `✅ ${count} eventi eliminati.`, 
+          message: count === 0 ? 'Nessun evento.' :
+                   count === 1 ? 'Fatto, 1 evento eliminato.' : 
+                   `Fatto, ${count} eventi eliminati.`, 
           source: 'stateful',
           actionExecuted: true 
         };
       case 'expenses':
         await dataService.deleteAllExpenses(userId);
         return { 
-          message: count === 0 ? '✅ Nessuna spesa da eliminare.' :
-                   count === 1 ? '✅ 1 spesa eliminata.' : 
-                   `✅ ${count} spese eliminate.`, 
+          message: count === 0 ? 'Nessuna spesa.' :
+                   count === 1 ? 'Fatto, 1 spesa eliminata.' : 
+                   `Fatto, ${count} spese eliminate.`, 
           source: 'stateful',
           actionExecuted: true 
         };
@@ -939,11 +943,11 @@ async function handleBulkDeleteConfirmation(
     }
   }
   
-  // User didn't say yes or no - ONE reminder only, then default to no
-  const itemName = deleteType === 'tasks' ? 'task' : deleteType === 'events' ? 'evento/i' : 'spesa/e';
+  // User didn't say yes or no - simple reminder
   return {
-    message: `Scrivi "sì" per eliminare ${count === 1 ? 'il' : 'i'} ${count} ${itemName}, o "no" per annullare.`,
-    source: 'stateful'
+    message: 'Sì o no?',
+    source: 'stateful',
+    suggestions: ['Sì', 'No']
   };
 }
 
@@ -958,32 +962,30 @@ async function handleBulkCompleteConfirmation(
   followUpType: FollowUpType
 ): Promise<StatefulResponse> {
   const { count } = state.intent_payload;
-  console.log('[StatefulHandler] Bulk complete confirmation:', { count, followUpType, message });
   
-  // CRITICAL: Also check message directly for "sì" in case followUpType missed it
   const lower = message.trim().toLowerCase();
   const isConfirmYes = followUpType === 'CONFIRM_YES' || /^s[iì]$/i.test(lower) || /^ok$/i.test(lower);
   const isConfirmNo = followUpType === 'CONFIRM_NO' || /^no$/i.test(lower);
   
   if (isConfirmNo) {
     await clearAllAssistantState(userId);
-    return { message: '✅ Ok, annullato.', source: 'stateful' };
+    return { message: 'Ok 🙂', source: 'stateful' };
   }
   
   if (isConfirmYes) {
     await clearActiveIntent(userId);
     await dataService.completeAllTasks(userId);
     return { 
-      message: `✅ ${count === 1 ? 'Task completato' : `Tutti i ${count} task completati`}!`, 
+      message: count === 1 ? 'Fatto!' : `Tutti i ${count} task completati!`, 
       source: 'stateful',
       actionExecuted: true 
     };
   }
   
-  // User didn't say yes or no - ONE reminder only
   return {
-    message: `Scrivi "sì" per completare ${count === 1 ? 'il' : `i ${count}`} task, o "no" per annullare.`,
-    source: 'stateful'
+    message: 'Sì o no?',
+    source: 'stateful',
+    suggestions: ['Sì', 'No']
   };
 }
 
@@ -1018,18 +1020,18 @@ async function handleCreateGenericFollowUp(
         await dataService.createExpense(userId, amount, category);
         await clearActiveIntent(userId);
         return {
-          message: `✅ Registrata spesa di €${amount.toFixed(2)} per "${category}".`,
+          message: `Fatto, €${amount.toFixed(2)} per ${category}.`,
           source: 'stateful',
           actionExecuted: true
         };
       } catch (e) {
         console.error('[StatefulHandler] Error creating expense:', e);
-        return { message: 'Errore nel registrare la spesa.', source: 'stateful' };
+        return { message: 'Errore. Riprova.', source: 'stateful' };
       }
     }
     
-    // No amount found - ask again
-    return { message: 'Inserisci l\'importo (es: "15 euro pranzo")', source: 'stateful' };
+    // No amount found - simple ask
+    return { message: 'Quanto?', source: 'stateful' };
   }
   
   // ========== CRITICAL: Check for "task" or "evento" FIRST (disambiguation) ==========
@@ -1040,9 +1042,9 @@ async function handleCreateGenericFollowUp(
     if (title && isValidTitle(title)) {
       return await executeCreateTask(userId, title);
     }
-    // No title or invalid title - ask for it
+    // No title or invalid title - simple ask
     await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
-    return { message: 'Che titolo?', source: 'stateful' };
+    return { message: 'Cosa?', source: 'stateful' };
   }
   
   if (/^(?:evento|appuntamento)$/i.test(lower) || followUpType === 'CHOOSE_EVENT') {
@@ -1050,11 +1052,11 @@ async function handleCreateGenericFollowUp(
     // If we have a valid title, ask for when
     if (title && isValidTitle(title)) {
       await setActiveIntent(userId, 'CREATE_EVENT', { title }, ['date', 'time']);
-      return { message: 'Quando? (es. "venerdì 18:30")', source: 'stateful' };
+      return { message: 'Quando?', source: 'stateful' };
     }
-    // No title - ask for event details
+    // No title - simple ask
     await setActiveIntent(userId, 'CREATE_EVENT', {}, ['title', 'date', 'time']);
-    return { message: 'Come si chiama l\'evento e quando?', source: 'stateful' };
+    return { message: 'Che evento?', source: 'stateful' };
   }
   
   switch (followUpType) {
@@ -1064,22 +1066,21 @@ async function handleCreateGenericFollowUp(
         return await executeCreateTask(userId, title);
       }
       await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
-      return { message: 'Cosa vuoi aggiungere come task?', source: 'stateful' };
+      return { message: 'Cosa?', source: 'stateful' };
     
     case 'CONFIRM_NO':
       await clearActiveIntent(userId);
-      return { message: 'Ok, lasciamo stare.', source: 'stateful' };
+      return { message: 'Ok 🙂', source: 'stateful' };
     
     default:
       // Check if message contains "task" or "evento" (not standalone)
       if (/task/i.test(lower)) {
-        // Try to extract title from the message
         const extractedTitle = extractTitleFromMessage(message, 'task');
         if (extractedTitle) {
           return await executeCreateTask(userId, extractedTitle);
         }
         await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
-        return { message: 'Che titolo?', source: 'stateful' };
+        return { message: 'Cosa?', source: 'stateful' };
       }
       if (/evento|appuntamento/i.test(lower)) {
         const extractedTitle = extractTitleFromMessage(message, 'event');
@@ -1087,7 +1088,7 @@ async function handleCreateGenericFollowUp(
         return { message: 'Quando?', source: 'stateful' };
       }
       
-      // Still unclear - repeat the question
+      // Still unclear - ONE simple question
       return {
         message: 'Task o evento?',
         source: 'stateful',
@@ -1111,13 +1112,13 @@ async function handleCreateTaskFollowUp(
   switch (followUpType) {
     case 'CONFIRM_NO':
       await clearActiveIntent(userId);
-      return { message: 'Ok, annullato.', source: 'stateful' };
+      return { message: 'Ok 🙂', source: 'stateful' };
     
     case 'CONFIRM_YES':
       if (title && isValidTitle(title)) {
         return await executeCreateTask(userId, title);
       }
-      return { message: 'Che titolo?', source: 'stateful' };
+      return { message: 'Cosa?', source: 'stateful' };
     
     default:
       // Try to use the message as title
@@ -1127,8 +1128,8 @@ async function handleCreateTaskFollowUp(
         return await executeCreateTask(userId, extractedTitle);
       }
       
-      // Invalid or empty title - ask again
-      return { message: 'Che titolo?', source: 'stateful' };
+      // Invalid or empty title - simple ask
+      return { message: 'Cosa?', source: 'stateful' };
   }
 }
 
@@ -1165,10 +1166,9 @@ async function handleCreateEventFollowUp(
   switch (followUpType) {
     case 'CONFIRM_NO':
       await clearActiveIntent(userId);
-      return { message: 'Ok, annullato.', source: 'stateful' };
+      return { message: 'Ok 🙂', source: 'stateful' };
     
     case 'PROVIDE_DATETIME': {
-      // Extract both date AND time from the message
       const date = extractDate(message);
       const time = extractTime(message);
       
@@ -1184,14 +1184,13 @@ async function handleCreateEventFollowUp(
       tryMergeDateTime();
       await updateIntentPayload(userId, payload);
       
-      // If we have everything, create the event
       if (payload.title && isValidTitle(payload.title) && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // CRITICAL ORDER: Ask for title FIRST if missing or invalid
+      // RULE: ONE question, title first
       if (!payload.title || !isValidTitle(payload.title)) {
-        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
+        return { message: 'Che evento?', source: 'stateful' };
       }
       if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
@@ -1216,12 +1215,9 @@ async function handleCreateEventFollowUp(
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // CRITICAL ORDER: title → date → time
       if (!payload.title || !isValidTitle(payload.title)) {
-        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
+        return { message: 'Che evento?', source: 'stateful' };
       }
-      
-      // Date received, now ask for time only
       if (!payload.pending_time && !payload.time) {
         return { message: 'A che ora?', source: 'stateful' };
       }
@@ -1242,12 +1238,9 @@ async function handleCreateEventFollowUp(
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // CRITICAL ORDER: title → date → time
       if (!payload.title || !isValidTitle(payload.title)) {
-        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
+        return { message: 'Che evento?', source: 'stateful' };
       }
-      
-      // Time received, now ask for date only
       if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
       }
@@ -1260,9 +1253,8 @@ async function handleCreateEventFollowUp(
       if (payload.title && isValidTitle(payload.title) && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
-      // CRITICAL ORDER: title → date → time
       if (!payload.title || !isValidTitle(payload.title)) {
-        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
+        return { message: 'Che evento?', source: 'stateful' };
       }
       if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
@@ -1273,7 +1265,6 @@ async function handleCreateEventFollowUp(
       break;
     
     default: {
-      // Try to extract any date/time info from the message
       const dateFromMsg = extractDate(message);
       const timeFromMsg = extractTime(message);
       
@@ -1286,38 +1277,32 @@ async function handleCreateEventFollowUp(
         payload.time = timeFromMsg;
       }
       
-      // If no title yet and no date/time extracted, maybe message is the title
-      // BUT only if it's a valid title (not a confirmation phrase)
+      // If no title yet and no date/time extracted, use message as title if valid
       if (!payload.title && !dateFromMsg && !timeFromMsg) {
         const potentialTitle = message.trim();
         if (isValidTitle(potentialTitle)) {
           payload.title = potentialTitle;
         }
-        // If not valid, title stays empty and we'll ask for it
       }
       
       tryMergeDateTime();
       await updateIntentPayload(userId, payload);
       
-      // CRITICAL ORDER: title → date → time
-      // Ask for title FIRST if missing or invalid
+      // Track title attempts for fallback
       if (!payload.title || !isValidTitle(payload.title)) {
-        // Track title attempts for fallback
         const titleAttempts = (payload.titleAttempts || 0) + 1;
         await updateIntentPayload(userId, { ...payload, titleAttempts });
         
-        // After 2 failed attempts, use default title
+        // After 2 attempts, use default
         if (titleAttempts >= 2) {
           payload.title = 'Nuovo evento';
           await updateIntentPayload(userId, payload);
           
-          // Now check if we can create
           tryMergeDateTime();
           if (payload.start_at) {
             return await executeCreateEvent(userId, payload.title, payload.start_at);
           }
           
-          // Continue asking for date/time
           if (!payload.pending_date && !payload.date) {
             return { message: 'Che giorno?', source: 'stateful' };
           }
@@ -1326,14 +1311,13 @@ async function handleCreateEventFollowUp(
           }
         }
         
-        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
+        return { message: 'Che evento?', source: 'stateful' };
       }
       
       if (payload.title && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // Ask for what's still missing (date → time order)
       if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
       }
@@ -1343,13 +1327,13 @@ async function handleCreateEventFollowUp(
     }
   }
   
-  // Final fallback - should rarely reach here
+  // Final fallback
   tryMergeDateTime();
   if (payload.title && payload.start_at) {
     return await executeCreateEvent(userId, payload.title, payload.start_at);
   }
   
-  return { message: 'Quando vuoi metterlo?', source: 'stateful' };
+  return { message: 'Quando?', source: 'stateful' };
 }
 
 /**
@@ -1446,15 +1430,12 @@ async function routeIntent(
         return await executeCreateTask(userId, intentResult.payload.title);
       }
       await setActiveIntent(userId, 'CREATE_TASK', intentResult.payload, intentResult.missingFields);
-      return {
-        message: 'Cosa vuoi aggiungere?',
-        source: 'stateful'
-      };
+      return { message: 'Cosa?', source: 'stateful' };
     
     case 'CREATE_EVENT':
       await setActiveIntent(userId, 'CREATE_EVENT', intentResult.payload, intentResult.missingFields);
       if (!intentResult.payload.title) {
-        return { message: 'Come si chiama l\'evento?', source: 'stateful' };
+        return { message: 'Che evento?', source: 'stateful' };
       }
       return { message: 'Quando?', source: 'stateful' };
     
@@ -1467,11 +1448,7 @@ async function routeIntent(
       };
     
     default:
-      // Not a stateful intent, let the old system handle it
-      return {
-        message: '',
-        source: 'local'
-      };
+      return { message: '', source: 'local' };
   }
 }
 
@@ -1488,44 +1465,38 @@ async function handleDeleteCommand(
   
   // Check for bulk delete (needs confirmation)
   if (BULK_DELETE_PATTERNS.some(p => p.test(lower))) {
-    // Determine what type
     let deleteType: 'tasks' | 'events' | 'expenses' = 'tasks';
     if (/eventi/i.test(lower)) deleteType = 'events';
     if (/spese/i.test(lower)) deleteType = 'expenses';
     
-    // Set active intent to await confirmation
     await setActiveIntent(userId, 'CONFIRM_BULK_DELETE' as any, { deleteType }, []);
     
-    const typeText = deleteType === 'tasks' ? 'TUTTI i task' : 
-                     deleteType === 'events' ? 'TUTTI gli eventi' : 'TUTTE le spese';
+    const typeText = deleteType === 'tasks' ? 'tutti i task' : 
+                     deleteType === 'events' ? 'tutti gli eventi' : 'tutte le spese';
     
     return {
-      message: `⚠️ Vuoi eliminare ${typeText}? Scrivi "sì" per confermare o "no" per annullare.`,
+      message: `Elimino ${typeText}?`,
       source: 'stateful',
       suggestions: ['Sì', 'No']
     };
   }
   
-  // Deterministic routing based on last action
   const lastAction = state.last_action_type;
   
   if (lastAction === 'SHOW_TASKS') {
-    // User saw tasks, now wants to delete them
     const ids = state.last_action_payload?.ids || [];
     if (ids.length > 0) {
-      // Set intent and ask for confirmation if multiple
       if (ids.length > 1) {
         await setActiveIntent(userId, 'MANAGE_TASKS', { action: 'delete', ids }, []);
         return {
-          message: `Vuoi eliminare tutti i ${ids.length} task mostrati?`,
+          message: `Elimino ${ids.length} task?`,
           source: 'stateful',
-          suggestions: ['Sì, eliminali', 'No']
+          suggestions: ['Sì', 'No']
         };
       }
-      // Single task, ask which action
       await setActiveIntent(userId, 'MANAGE_TASKS', { action: 'manage', ids }, []);
       return {
-        message: 'Vuoi completare o eliminare questo task?',
+        message: 'Completo o elimino?',
         source: 'stateful',
         suggestions: ['Completa', 'Elimina']
       };
@@ -1537,7 +1508,7 @@ async function handleDeleteCommand(
     if (ids.length > 0) {
       await setActiveIntent(userId, 'MANAGE_EVENTS', { action: 'delete', ids }, []);
       return {
-        message: `Vuoi eliminare ${ids.length > 1 ? 'tutti gli' : 'l\''} eventi mostrati?`,
+        message: `Elimino ${ids.length > 1 ? 'gli eventi' : 'l\'evento'}?`,
         source: 'stateful',
         suggestions: ['Sì', 'No']
       };
@@ -1549,16 +1520,16 @@ async function handleDeleteCommand(
     if (ids.length > 0) {
       await setActiveIntent(userId, 'MANAGE_EXPENSES' as any, { action: 'delete', ids }, []);
       return {
-        message: `Vuoi eliminare ${ids.length > 1 ? 'tutte le' : 'la'} spese mostrate?`,
+        message: `Elimino ${ids.length > 1 ? 'le spese' : 'la spesa'}?`,
         source: 'stateful',
         suggestions: ['Sì', 'No']
       };
     }
   }
   
-  // No context - ask what to delete
+  // No context
   return {
-    message: '❓ Cosa vuoi eliminare: task, eventi o spese?',
+    message: 'Cosa elimino: task, eventi o spese?',
     source: 'stateful',
     suggestions: ['Task', 'Eventi', 'Spese']
   };
@@ -1572,7 +1543,7 @@ async function executeCreateTask(userId: string, title: string): Promise<Statefu
   
   if (result.success) {
     return {
-      message: `✅ Fatto! Ho aggiunto "${title}".`,
+      message: `Fatto! "${title}" aggiunto.`,
       source: 'stateful',
       actionExecuted: true,
       actionResult: { success: true, data: result.data }
@@ -1580,7 +1551,7 @@ async function executeCreateTask(userId: string, title: string): Promise<Statefu
   }
   
   return {
-    message: 'Non sono riuscito a creare il task. Riprova.',
+    message: 'Errore. Riprova.',
     source: 'stateful',
     actionExecuted: false,
     actionResult: { success: false }
@@ -1592,7 +1563,6 @@ async function executeCreateEvent(
   title: string,
   startAt: string
 ): Promise<StatefulResponse> {
-  // Calculate end time (1 hour after start)
   const startDate = new Date(startAt);
   const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
   
@@ -1606,10 +1576,10 @@ async function executeCreateEvent(
   await clearActiveIntent(userId);
   
   if (result.success) {
-    const formattedDate = format(startDate, 'EEEE d MMMM', { locale: it });
+    const formattedDate = format(startDate, 'EEEE d', { locale: it });
     const formattedTime = format(startDate, 'HH:mm');
     return {
-      message: `✅ Evento creato: "${title}" - ${formattedDate} alle ${formattedTime}`,
+      message: `Fatto! "${title}" - ${formattedDate} alle ${formattedTime}`,
       source: 'stateful',
       actionExecuted: true,
       actionResult: { success: true, data: result.data }
@@ -1617,7 +1587,7 @@ async function executeCreateEvent(
   }
   
   return {
-    message: 'Non sono riuscito a creare l\'evento. Riprova.',
+    message: 'Errore. Riprova.',
     source: 'stateful',
     actionExecuted: false,
     actionResult: { success: false }
@@ -1628,36 +1598,33 @@ async function handleQueryTasks(userId: string): Promise<StatefulResponse> {
   const result = await dataService.getTasks(userId, 'pending');
   const tasks = result.data || [];
   
-  // Save last action for "eliminali" context
   await setLastAction(userId, 'SHOW_TASKS', {
     ids: tasks.map((t: any) => t.id),
     titles: tasks.map((t: any) => t.title),
     count: tasks.length
   });
   
-  // Set active intent to allow follow-up commands
   await setActiveIntent(userId, 'QUERY_TASKS', {}, []);
   
   if (tasks.length === 0) {
     await clearActiveIntent(userId);
     return {
-      message: '🎉 Nessun task in sospeso!',
+      message: 'Nessun task 🎉',
       source: 'stateful',
-      suggestions: ['Aggiungi un task']
+      suggestions: ['Aggiungi task']
     };
   }
   
   const taskList = tasks.slice(0, 5).map((t: any) => {
-    const priority = t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '🟢';
-    return `${priority} ${t.title}`;
+    return `• ${t.title}`;
   }).join('\n');
   
-  const moreText = tasks.length > 5 ? `\n\n...e altri ${tasks.length - 5}` : '';
+  const moreText = tasks.length > 5 ? `\n...e altri ${tasks.length - 5}` : '';
   
   return {
-    message: `📋 I tuoi task (${tasks.length}):\n\n${taskList}${moreText}`,
+    message: `${taskList}${moreText}`,
     source: 'stateful',
-    suggestions: ['Completa tutti', 'Elimina tutti', 'Aggiungi task']
+    suggestions: ['Completa tutti', 'Elimina tutti']
   };
 }
 
@@ -1676,7 +1643,7 @@ async function handleQueryEvents(userId: string): Promise<StatefulResponse> {
   if (events.length === 0) {
     await clearActiveIntent(userId);
     return {
-      message: '📅 Nessun evento in programma questa settimana.',
+      message: 'Nessun evento in programma.',
       source: 'stateful',
       suggestions: ['Aggiungi evento']
     };
@@ -1684,11 +1651,11 @@ async function handleQueryEvents(userId: string): Promise<StatefulResponse> {
   
   const eventList = events.slice(0, 5).map((e: any) => {
     const date = new Date(e.start_time);
-    return `⏰ ${format(date, 'EEE d', { locale: it })} ${format(date, 'HH:mm')} - ${e.title}`;
+    return `• ${format(date, 'EEE d', { locale: it })} ${format(date, 'HH:mm')} - ${e.title}`;
   }).join('\n');
   
   return {
-    message: `📅 Prossimi eventi:\n\n${eventList}`,
+    message: `${eventList}`,
     source: 'stateful',
     suggestions: ['Aggiungi evento']
   };
