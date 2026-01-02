@@ -130,8 +130,16 @@ const ITALIAN_STOPWORDS = [
   'quelli', 'quelle', 'mio', 'mia', 'miei', 'mie'
 ];
 
+// ========== CONFIRMATION PHRASES BLACKLIST ==========
+// These phrases CANNOT be used as event/task titles - they are user consent phrases
+const CONFIRMATION_PHRASES_BLACKLIST = [
+  'ok', 'okay', 'va bene', 'pianifichiamo', 'facciamolo', 
+  'sì', 'si', 'andiamo', 'procediamo', 'iniziamo', 'certo',
+  'perfetto', 'bene', 'ok pianifichiamo', 'va bene pianifichiamo'
+];
+
 /**
- * isValidTitle - Checks if extracted title is meaningful (not just a stopword)
+ * isValidTitle - Checks if extracted title is meaningful (not just a stopword or confirmation phrase)
  */
 export function isValidTitle(title: string): boolean {
   const cleaned = title.trim().toLowerCase();
@@ -144,6 +152,14 @@ export function isValidTitle(title: string): boolean {
   
   // Just "task" or "evento" without content
   if (/^(?:task|evento|appuntamento)$/i.test(cleaned)) return false;
+  
+  // Confirmation phrase (blacklisted)
+  if (CONFIRMATION_PHRASES_BLACKLIST.includes(cleaned)) return false;
+  
+  // Check for confirmation patterns (with punctuation variations)
+  if (/^(?:ok|okay|va\s*bene|s[iì]|certo|perfetto|bene)\s*[,.]?\s*(?:pianifichiamo|facciamolo|andiamo|procediamo|iniziamo)?$/i.test(cleaned)) {
+    return false;
+  }
   
   return true;
 }
@@ -1169,13 +1185,13 @@ async function handleCreateEventFollowUp(
       await updateIntentPayload(userId, payload);
       
       // If we have everything, create the event
-      if (payload.title && payload.start_at) {
+      if (payload.title && isValidTitle(payload.title) && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // Ask for what's still missing
-      if (!payload.title) {
-        return { message: 'Come si chiama l\'evento?', source: 'stateful' };
+      // CRITICAL ORDER: Ask for title FIRST if missing or invalid
+      if (!payload.title || !isValidTitle(payload.title)) {
+        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
       }
       if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
@@ -1196,17 +1212,18 @@ async function handleCreateEventFollowUp(
       tryMergeDateTime();
       await updateIntentPayload(userId, payload);
       
-      if (payload.title && payload.start_at) {
+      if (payload.title && isValidTitle(payload.title) && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
+      }
+      
+      // CRITICAL ORDER: title → date → time
+      if (!payload.title || !isValidTitle(payload.title)) {
+        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
       }
       
       // Date received, now ask for time only
       if (!payload.pending_time && !payload.time) {
         return { message: 'A che ora?', source: 'stateful' };
-      }
-      
-      if (!payload.title) {
-        return { message: 'Come si chiama l\'evento?', source: 'stateful' };
       }
       break;
     }
@@ -1221,17 +1238,18 @@ async function handleCreateEventFollowUp(
       tryMergeDateTime();
       await updateIntentPayload(userId, payload);
       
-      if (payload.title && payload.start_at) {
+      if (payload.title && isValidTitle(payload.title) && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
+      }
+      
+      // CRITICAL ORDER: title → date → time
+      if (!payload.title || !isValidTitle(payload.title)) {
+        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
       }
       
       // Time received, now ask for date only
       if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
-      }
-      
-      if (!payload.title) {
-        return { message: 'Come si chiama l\'evento?', source: 'stateful' };
       }
       break;
     }
@@ -1239,10 +1257,13 @@ async function handleCreateEventFollowUp(
     case 'CONFIRM_YES':
       tryMergeDateTime();
       
-      if (payload.title && payload.start_at) {
+      if (payload.title && isValidTitle(payload.title) && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
-      // Ask for missing
+      // CRITICAL ORDER: title → date → time
+      if (!payload.title || !isValidTitle(payload.title)) {
+        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
+      }
       if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
       }
@@ -1266,21 +1287,53 @@ async function handleCreateEventFollowUp(
       }
       
       // If no title yet and no date/time extracted, maybe message is the title
+      // BUT only if it's a valid title (not a confirmation phrase)
       if (!payload.title && !dateFromMsg && !timeFromMsg) {
-        payload.title = message.trim();
+        const potentialTitle = message.trim();
+        if (isValidTitle(potentialTitle)) {
+          payload.title = potentialTitle;
+        }
+        // If not valid, title stays empty and we'll ask for it
       }
       
       tryMergeDateTime();
       await updateIntentPayload(userId, payload);
       
+      // CRITICAL ORDER: title → date → time
+      // Ask for title FIRST if missing or invalid
+      if (!payload.title || !isValidTitle(payload.title)) {
+        // Track title attempts for fallback
+        const titleAttempts = (payload.titleAttempts || 0) + 1;
+        await updateIntentPayload(userId, { ...payload, titleAttempts });
+        
+        // After 2 failed attempts, use default title
+        if (titleAttempts >= 2) {
+          payload.title = 'Nuovo evento';
+          await updateIntentPayload(userId, payload);
+          
+          // Now check if we can create
+          tryMergeDateTime();
+          if (payload.start_at) {
+            return await executeCreateEvent(userId, payload.title, payload.start_at);
+          }
+          
+          // Continue asking for date/time
+          if (!payload.pending_date && !payload.date) {
+            return { message: 'Che giorno?', source: 'stateful' };
+          }
+          if (!payload.pending_time && !payload.time) {
+            return { message: 'A che ora?', source: 'stateful' };
+          }
+        }
+        
+        return { message: 'Che titolo vuoi dare all\'evento?', source: 'stateful' };
+      }
+      
       if (payload.title && payload.start_at) {
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // Ask for what's missing (one question at a time)
-      if (!payload.title) {
-        return { message: 'Come si chiama l\'evento?', source: 'stateful' };
-      }
+      // Ask for what's still missing (date → time order)
       if (!payload.pending_date && !payload.date) {
         return { message: 'Che giorno?', source: 'stateful' };
       }

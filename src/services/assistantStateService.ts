@@ -47,6 +47,8 @@ export interface IntentPayload {
   deleteType?: 'tasks' | 'events' | 'expenses';
   lastShownIds?: string[];  // IDs shown in last list operation
   count?: number;           // Count for bulk operations
+  // Title validation tracking
+  titleAttempts?: number;   // Number of invalid title attempts
 }
 
 export interface LastActionPayload {
