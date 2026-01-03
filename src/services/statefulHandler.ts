@@ -35,7 +35,9 @@ import {
   getNegativeFeedbackResponse,
   normalizeTitle,
   detectBulkDeleteTarget,
-  type ConfirmationWithContinuation
+  classifyInputKind,
+  type ConfirmationWithContinuation,
+  type InputKindResult
 } from '@/assistant/confirmationParser';
 
 // ========== CONVERSATION GATE CONSTANTS ==========
@@ -190,7 +192,8 @@ import {
   getMissingFields,
   type AssistantState,
   type ActiveIntent,
-  type IntentPayload
+  type IntentPayload,
+  type ExpectedInput
 } from '@/services/assistantStateService';
 import {
   classifyFollowUp,
@@ -381,6 +384,68 @@ export async function handleStatefulMessage(
   const state = await getState(userId);
   console.log('[StatefulHandler] Current state:', state.active_intent);
   
+  // ========== NPC MODE GATING ==========
+  // If active intent exists, use inputKind to decide how to handle
+  const inputKind = classifyInputKind(message);
+  console.log('[StatefulHandler] InputKind:', JSON.stringify(inputKind));
+  
+  if (hasActiveIntent(state)) {
+    const expectedInput = state.intent_payload.expectedInput || 'NONE';
+    console.log('[StatefulHandler] NPC Gating - expectedInput:', expectedInput, 'inputKind:', inputKind.inputKind);
+    
+    // CONTROL handling for active intent
+    if (inputKind.inputKind === 'CONTROL') {
+      if (inputKind.controlIntent === 'NEGATE' || inputKind.controlIntent === 'CANCEL') {
+        await clearAllAssistantState(userId);
+        return { message: getCancelResponse(), source: 'stateful' };
+      }
+      // AFFIRM only valid for confirmation states
+      if (inputKind.controlIntent === 'AFFIRM') {
+        if (expectedInput === 'CONFIRM_DELETE' || expectedInput === 'CONFIRM_COMPLETE') {
+          // Let follow-up handler process the confirmation
+          return await handleFollowUp(userId, message, state);
+        }
+        // AFFIRM without confirm context → neutral response, don't change intent
+        return { message: 'Dimmi 🙂', source: 'stateful' };
+      }
+    }
+    
+    // DATA handling: if expecting datetime and DATA arrives, use it
+    if (inputKind.inputKind === 'DATA') {
+      if (['EVENT_DATETIME', 'EVENT_DATE', 'EVENT_TIME', 'EXPENSE_AMOUNT'].includes(expectedInput)) {
+        // Let follow-up handler use the data
+        return await handleFollowUp(userId, message, state);
+      }
+      // DATA during title-expected state: don't interpret as expense
+      if (['TASK_TITLE', 'EVENT_TITLE', 'CHOOSE_TYPE'].includes(expectedInput)) {
+        // Store data for later, ask for title again
+        return { message: expectedInput === 'CHOOSE_TYPE' ? 'Task o evento?' : 
+                          expectedInput === 'TASK_TITLE' ? 'Cosa?' : 'Che evento?', 
+                 source: 'stateful',
+                 suggestions: expectedInput === 'CHOOSE_TYPE' ? ['Task', 'Evento'] : undefined };
+      }
+    }
+    
+    // COMMAND/CHAT: check if it's a topic change
+    if (inputKind.inputKind === 'COMMAND' || inputKind.inputKind === 'CHAT') {
+      // For COMMAND, check if it's a different intent
+      if (inputKind.inputKind === 'COMMAND' && isExplicitCommand(message)) {
+        const newIntent = classifyNewIntent(message);
+        if (newIntent.intent !== 'NONE' && newIntent.intent !== state.active_intent) {
+          console.log('[StatefulHandler] NPC: topic change detected, silent reset');
+          await clearActiveIntent(userId);
+          // Fall through to process as new intent
+        } else {
+          // Same intent type or unclear → continue with follow-up
+          return await handleFollowUp(userId, message, state);
+        }
+      } else {
+        // CHAT: use as data for the current intent (e.g., title)
+        return await handleFollowUp(userId, message, state);
+      }
+    }
+  }
+  
   // ===== ADVICE FOLLOW-UP CHECK (BEFORE CONVERSATION GATE) =====
   // If last action was ADVICE and user responds with consent+action pattern
   // → start CREATE_GENERIC flow (task or event choice)
@@ -389,9 +454,9 @@ export async function handleStatefulMessage(
     isAdviceFollowUp(message)
   ) {
     console.log('[StatefulHandler] ADVICE follow-up detected - starting task/event choice');
-    await setActiveIntent(userId, 'CREATE_GENERIC', {}, ['type']);
+    await setActiveIntent(userId, 'CREATE_GENERIC', { expectedInput: 'CHOOSE_TYPE' }, ['type']);
     return {
-      message: 'Parliamo di un evento o di una cosa da fare?',
+      message: 'Task o evento?',
       source: 'stateful',
       suggestions: ['Task', 'Evento']
     };
@@ -635,18 +700,18 @@ async function handleQuickAction(
     }
     
     // ========== CREATION FLOW STARTERS ==========
-    // RULE: ONE simple question at a time
+    // RULE: ONE simple question at a time, set expectedInput
     case 'CREATE_TASK':
     case 'ADD_TASK':
-      await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
+      await setActiveIntent(userId, 'CREATE_TASK', { expectedInput: 'TASK_TITLE' }, ['title']);
       return { message: 'Cosa?', source: 'stateful' };
     
     case 'CREATE_EVENT':
-      await setActiveIntent(userId, 'CREATE_EVENT', {}, ['title', 'date', 'time']);
+      await setActiveIntent(userId, 'CREATE_EVENT', { expectedInput: 'EVENT_TITLE' }, ['title', 'date', 'time']);
       return { message: 'Che evento?', source: 'stateful' };
     
     case 'ADD_EXPENSE':
-      await setActiveIntent(userId, 'CREATE_GENERIC', { type: 'expense' }, ['amount']);
+      await setActiveIntent(userId, 'CREATE_GENERIC', { type: 'expense', expectedInput: 'EXPENSE_AMOUNT' }, ['amount']);
       return { message: 'Quanto e per cosa?', source: 'stateful' };
     
     // ========== BULK ACTIONS ==========
@@ -737,8 +802,12 @@ async function handleBulkDeleteRequest(
     return { message: `${noItemText} da eliminare.`, source: 'stateful' };
   }
   
-  // Set pending confirmation state
-  await setActiveIntent(userId, 'CONFIRM_BULK_DELETE', { deleteType: type as 'tasks' | 'events' | 'expenses', count }, []);
+  // Set pending confirmation state with expectedInput for NPC gating
+  await setActiveIntent(userId, 'CONFIRM_BULK_DELETE', { 
+    deleteType: type as 'tasks' | 'events' | 'expenses', 
+    count,
+    expectedInput: 'CONFIRM_DELETE'
+  }, []);
   
   // SIMPLE question - no verbose explanation
   const itemText = count === 1 ? `1 ${itemNameSingular}` : `${count} ${itemNamePlural}`;
@@ -769,8 +838,12 @@ async function handleBulkCompleteRequest(
     return { message: 'Nessun task da completare.', source: 'stateful' };
   }
   
-  // Set pending confirmation state for complete
-  await setActiveIntent(userId, 'CONFIRM_BULK_COMPLETE', { deleteType: 'tasks' as const, count }, []);
+  // Set pending confirmation state for complete with expectedInput
+  await setActiveIntent(userId, 'CONFIRM_BULK_COMPLETE', { 
+    deleteType: 'tasks' as const, 
+    count,
+    expectedInput: 'CONFIRM_COMPLETE'
+  }, []);
   
   return {
     message: `Completo ${count === 1 ? 'il task' : `tutti i ${count} task`}?`,
@@ -1042,20 +1115,20 @@ async function handleCreateGenericFollowUp(
     if (title && isValidTitle(title)) {
       return await executeCreateTask(userId, title);
     }
-    // No title or invalid title - simple ask
-    await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
+    // No title or invalid title - simple ask with expectedInput
+    await setActiveIntent(userId, 'CREATE_TASK', { expectedInput: 'TASK_TITLE' }, ['title']);
     return { message: 'Cosa?', source: 'stateful' };
   }
   
   if (/^(?:evento|appuntamento)$/i.test(lower) || followUpType === 'CHOOSE_EVENT') {
     console.log('[StatefulHandler] User chose EVENT');
-    // If we have a valid title, ask for when
+    // If we have a valid title, ask for when with expectedInput
     if (title && isValidTitle(title)) {
-      await setActiveIntent(userId, 'CREATE_EVENT', { title }, ['date', 'time']);
+      await setActiveIntent(userId, 'CREATE_EVENT', { title, expectedInput: 'EVENT_DATETIME' }, ['date', 'time']);
       return { message: 'Quando?', source: 'stateful' };
     }
-    // No title - simple ask
-    await setActiveIntent(userId, 'CREATE_EVENT', {}, ['title', 'date', 'time']);
+    // No title - simple ask with expectedInput
+    await setActiveIntent(userId, 'CREATE_EVENT', { expectedInput: 'EVENT_TITLE' }, ['title', 'date', 'time']);
     return { message: 'Che evento?', source: 'stateful' };
   }
   
@@ -1065,7 +1138,7 @@ async function handleCreateGenericFollowUp(
       if (title && isValidTitle(title)) {
         return await executeCreateTask(userId, title);
       }
-      await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
+      await setActiveIntent(userId, 'CREATE_TASK', { expectedInput: 'TASK_TITLE' }, ['title']);
       return { message: 'Cosa?', source: 'stateful' };
     
     case 'CONFIRM_NO':
@@ -1079,13 +1152,13 @@ async function handleCreateGenericFollowUp(
         if (extractedTitle) {
           return await executeCreateTask(userId, extractedTitle);
         }
-        await setActiveIntent(userId, 'CREATE_TASK', {}, ['title']);
+        await setActiveIntent(userId, 'CREATE_TASK', { expectedInput: 'TASK_TITLE' }, ['title']);
         return { message: 'Cosa?', source: 'stateful' };
       }
       if (/evento|appuntamento/i.test(lower)) {
         const extractedTitle = extractTitleFromMessage(message, 'event');
-        await setActiveIntent(userId, 'CREATE_EVENT', { title: extractedTitle || undefined }, ['date', 'time']);
-        return { message: 'Quando?', source: 'stateful' };
+        await setActiveIntent(userId, 'CREATE_EVENT', { title: extractedTitle || undefined, expectedInput: extractedTitle ? 'EVENT_DATETIME' : 'EVENT_TITLE' }, ['date', 'time']);
+        return { message: extractedTitle ? 'Quando?' : 'Che evento?', source: 'stateful' };
       }
       
       // Still unclear - ONE simple question
@@ -1188,14 +1261,20 @@ async function handleCreateEventFollowUp(
         return await executeCreateEvent(userId, payload.title, payload.start_at);
       }
       
-      // RULE: ONE question, title first
+      // RULE: ONE question, title first, update expectedInput
       if (!payload.title || !isValidTitle(payload.title)) {
+        payload.expectedInput = 'EVENT_TITLE';
+        await updateIntentPayload(userId, payload);
         return { message: 'Che evento?', source: 'stateful' };
       }
       if (!payload.pending_date && !payload.date) {
+        payload.expectedInput = 'EVENT_DATE';
+        await updateIntentPayload(userId, payload);
         return { message: 'Che giorno?', source: 'stateful' };
       }
       if (!payload.pending_time && !payload.time) {
+        payload.expectedInput = 'EVENT_TIME';
+        await updateIntentPayload(userId, payload);
         return { message: 'A che ora?', source: 'stateful' };
       }
       break;
@@ -1216,9 +1295,13 @@ async function handleCreateEventFollowUp(
       }
       
       if (!payload.title || !isValidTitle(payload.title)) {
+        payload.expectedInput = 'EVENT_TITLE';
+        await updateIntentPayload(userId, payload);
         return { message: 'Che evento?', source: 'stateful' };
       }
       if (!payload.pending_time && !payload.time) {
+        payload.expectedInput = 'EVENT_TIME';
+        await updateIntentPayload(userId, payload);
         return { message: 'A che ora?', source: 'stateful' };
       }
       break;
@@ -1239,9 +1322,13 @@ async function handleCreateEventFollowUp(
       }
       
       if (!payload.title || !isValidTitle(payload.title)) {
+        payload.expectedInput = 'EVENT_TITLE';
+        await updateIntentPayload(userId, payload);
         return { message: 'Che evento?', source: 'stateful' };
       }
       if (!payload.pending_date && !payload.date) {
+        payload.expectedInput = 'EVENT_DATE';
+        await updateIntentPayload(userId, payload);
         return { message: 'Che giorno?', source: 'stateful' };
       }
       break;
@@ -1291,11 +1378,14 @@ async function handleCreateEventFollowUp(
       // Track title attempts for fallback
       if (!payload.title || !isValidTitle(payload.title)) {
         const titleAttempts = (payload.titleAttempts || 0) + 1;
-        await updateIntentPayload(userId, { ...payload, titleAttempts });
+        payload.titleAttempts = titleAttempts;
+        payload.expectedInput = 'EVENT_TITLE';
+        await updateIntentPayload(userId, payload);
         
         // After 2 attempts, use default
         if (titleAttempts >= 2) {
           payload.title = 'Nuovo evento';
+          payload.expectedInput = 'EVENT_DATETIME';
           await updateIntentPayload(userId, payload);
           
           tryMergeDateTime();
@@ -1304,9 +1394,13 @@ async function handleCreateEventFollowUp(
           }
           
           if (!payload.pending_date && !payload.date) {
+            payload.expectedInput = 'EVENT_DATE';
+            await updateIntentPayload(userId, payload);
             return { message: 'Che giorno?', source: 'stateful' };
           }
           if (!payload.pending_time && !payload.time) {
+            payload.expectedInput = 'EVENT_TIME';
+            await updateIntentPayload(userId, payload);
             return { message: 'A che ora?', source: 'stateful' };
           }
         }
@@ -1319,9 +1413,13 @@ async function handleCreateEventFollowUp(
       }
       
       if (!payload.pending_date && !payload.date) {
+        payload.expectedInput = 'EVENT_DATE';
+        await updateIntentPayload(userId, payload);
         return { message: 'Che giorno?', source: 'stateful' };
       }
       if (!payload.pending_time && !payload.time) {
+        payload.expectedInput = 'EVENT_TIME';
+        await updateIntentPayload(userId, payload);
         return { message: 'A che ora?', source: 'stateful' };
       }
     }
@@ -1429,18 +1527,28 @@ async function routeIntent(
       if (intentResult.payload.title && intentResult.missingFields.length === 0) {
         return await executeCreateTask(userId, intentResult.payload.title);
       }
-      await setActiveIntent(userId, 'CREATE_TASK', intentResult.payload, intentResult.missingFields);
+      await setActiveIntent(userId, 'CREATE_TASK', { 
+        ...intentResult.payload, 
+        expectedInput: 'TASK_TITLE' 
+      }, intentResult.missingFields);
       return { message: 'Cosa?', source: 'stateful' };
     
     case 'CREATE_EVENT':
-      await setActiveIntent(userId, 'CREATE_EVENT', intentResult.payload, intentResult.missingFields);
-      if (!intentResult.payload.title) {
+      const hasTitle = !!intentResult.payload.title;
+      await setActiveIntent(userId, 'CREATE_EVENT', { 
+        ...intentResult.payload,
+        expectedInput: hasTitle ? 'EVENT_DATETIME' : 'EVENT_TITLE'
+      }, intentResult.missingFields);
+      if (!hasTitle) {
         return { message: 'Che evento?', source: 'stateful' };
       }
       return { message: 'Quando?', source: 'stateful' };
     
     case 'CREATE_GENERIC':
-      await setActiveIntent(userId, 'CREATE_GENERIC', intentResult.payload, ['type']);
+      await setActiveIntent(userId, 'CREATE_GENERIC', { 
+        ...intentResult.payload,
+        expectedInput: 'CHOOSE_TYPE'
+      }, ['type']);
       return {
         message: 'Task o evento?',
         source: 'stateful',
