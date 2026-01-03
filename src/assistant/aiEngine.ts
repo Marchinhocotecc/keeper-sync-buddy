@@ -142,8 +142,17 @@ export async function processMessage(
   } catch (error) {
     console.error('[AIEngine] Stateful handler error:', error);
     
-    // CRITICAL: If stateful handler was chosen, DO NOT use legacy pipeline
-    if (useStatefulHandler || hasActiveIntentFlag) {
+    // CRITICAL NPC MODE: If active intent exists, NEVER use legacy pipeline
+    // Return safe message instead of falling back
+    if (hasActiveIntentFlag) {
+      console.log('[AIEngine] NPC MODE: Active intent exists but errored - returning safe message, BLOCKING legacy');
+      const safeMessage = SAFE_FALLBACK;
+      await saveConversation(userId, message, safeMessage);
+      return { message: safeMessage, source: 'local' };
+    }
+    
+    // If stateful handler was chosen (even without active intent) but errored, still block legacy
+    if (useStatefulHandler) {
       console.log('[AIEngine] Stateful was chosen but errored - returning safe message, NOT using legacy');
       const safeMessage = '⚠️ Problema tecnico. Riprova.';
       await saveConversation(userId, message, safeMessage);

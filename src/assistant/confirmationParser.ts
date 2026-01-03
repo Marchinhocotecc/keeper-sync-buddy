@@ -1,8 +1,14 @@
 /**
- * Confirmation Words Pre-Parser
+ * Confirmation Words Pre-Parser + Input Kind Classifier
  * 
  * GLOBAL PRE-PARSER applied BEFORE any intent classification.
  * Ensures confirmation words (no/sì/ok) NEVER create actions.
+ * 
+ * NPC MODE CLASSIFICATION:
+ * - CONTROL: Short ack/interj/emoji/single words with no operative content
+ * - COMMAND: Operative verbs (crea, elimina, mostra) with fuzzy typo tolerance
+ * - DATA: Numbers, times, dates, date+time combinations
+ * - CHAT: Everything else (free text)
  * 
  * RULES:
  * - "no", "annulla", "stop" → CANCEL (clear intent, safe message)
@@ -16,6 +22,258 @@
  * - These BYPASS all NLP parsing and map directly to actions
  * - Format: __UI_ACTION__:<ACTION_TYPE>
  */
+
+// ========== INPUT KIND CLASSIFIER (NPC MODE) ==========
+
+export type InputKind = 'CONTROL' | 'COMMAND' | 'DATA' | 'CHAT';
+export type ControlIntent = 'AFFIRM' | 'NEGATE' | 'CANCEL';
+
+export interface InputKindResult {
+  inputKind: InputKind;
+  controlIntent?: ControlIntent;
+  confidence: number;
+  normalized: string;
+}
+
+/**
+ * Simple Levenshtein distance for typo tolerance
+ * Returns edit distance between two strings
+ */
+function levenshteinDistance(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Check if word fuzzy-matches a target with typo tolerance
+ * Tolerance: 1 error for words <= 5 chars, 2 errors for longer
+ */
+function fuzzyMatch(word: string, target: string): boolean {
+  if (word === target) return true;
+  if (word.startsWith(target.slice(0, 3))) return true; // Prefix match
+  
+  const maxDistance = target.length <= 5 ? 1 : 2;
+  return levenshteinDistance(word, target) <= maxDistance;
+}
+
+// Command verb roots for fuzzy matching
+const COMMAND_VERBS = [
+  'crea', 'aggiungi', 'segna', 'metti', 'inserisci', 'ricordami',
+  'elimina', 'cancella', 'rimuovi', 'togli',
+  'mostra', 'vedi', 'lista', 'elenco',
+  'completa', 'spunta', 'chiudi', 'fatto',
+  'nuovo', 'nuova', 'registra'
+];
+
+// Patterns for DATA classification
+const TIME_PATTERN = /\b\d{1,2}[:.]\d{2}\b/;
+const HOUR_ONLY_PATTERN = /^(?:alle?\s*)?\d{1,2}$/i;
+const DATE_FORMAT_PATTERN = /\b\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{2,4})?\b/;
+const ITALIAN_WEEKDAYS = /\b(?:luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica)\b/i;
+const ITALIAN_RELATIVE = /\b(?:oggi|domani|dopodomani|ieri)\b/i;
+const PURE_NUMBER_PATTERN = /^\d+(?:[.,]\d+)?$/;
+
+/**
+ * Classify input kind - NPC MODE deterministic classifier
+ * 
+ * NO hardcoded "if message === 'ok'" - uses general heuristics:
+ * - CONTROL: very short, no verbs/objects, interj/ack/emoji
+ * - COMMAND: operative patterns with fuzzy verb matching
+ * - DATA: numbers, times, dates
+ * - CHAT: everything else
+ */
+export function classifyInputKind(message: string): InputKindResult {
+  const original = message.trim();
+  const normalized = original.toLowerCase()
+    .replace(/[ìí]/g, 'i')
+    .replace(/[àá]/g, 'a')
+    .replace(/[èé]/g, 'e')
+    .replace(/[òó]/g, 'o')
+    .replace(/[ùú]/g, 'u');
+  
+  const tokens = normalized.split(/\s+/).filter(t => t.length > 0);
+  const wordCount = tokens.length;
+  
+  // ========== DATA DETECTION (HIGHEST PRIORITY) ==========
+  // If message contains clear date/time patterns, it's DATA
+  const hasTime = TIME_PATTERN.test(original);
+  const hasWeekday = ITALIAN_WEEKDAYS.test(normalized);
+  const hasRelativeDay = ITALIAN_RELATIVE.test(normalized);
+  const hasDateFormat = DATE_FORMAT_PATTERN.test(original);
+  const isPureNumber = PURE_NUMBER_PATTERN.test(normalized);
+  const isHourOnly = HOUR_ONLY_PATTERN.test(normalized);
+  
+  // Pure number (could be amount, hour, or day)
+  if (isPureNumber) {
+    const num = parseFloat(normalized.replace(',', '.'));
+    // Numbers 1-31 could be days, 0-23 could be hours
+    // We classify as DATA and let context decide meaning
+    return {
+      inputKind: 'DATA',
+      confidence: 0.8,
+      normalized
+    };
+  }
+  
+  // Time pattern
+  if (hasTime) {
+    return {
+      inputKind: 'DATA',
+      confidence: 0.95,
+      normalized
+    };
+  }
+  
+  // Weekday or relative day
+  if (hasWeekday || hasRelativeDay) {
+    // Could also have time: "venerdì alle 8:30"
+    return {
+      inputKind: 'DATA',
+      confidence: 0.9,
+      normalized
+    };
+  }
+  
+  // Date format
+  if (hasDateFormat) {
+    return {
+      inputKind: 'DATA',
+      confidence: 0.9,
+      normalized
+    };
+  }
+  
+  // Hour only ("alle 8", "20")
+  if (isHourOnly) {
+    return {
+      inputKind: 'DATA',
+      confidence: 0.8,
+      normalized
+    };
+  }
+  
+  // ========== CONTROL DETECTION ==========
+  // Heuristics: very short, no operative verbs, common ack/interj patterns
+  
+  // Emoji-only or very short ack patterns
+  const emojiOnly = /^[\p{Emoji}\s]+$/u.test(original);
+  if (emojiOnly && original.length <= 4) {
+    return {
+      inputKind: 'CONTROL',
+      controlIntent: 'AFFIRM',
+      confidence: 0.9,
+      normalized
+    };
+  }
+  
+  // Single word checks
+  if (wordCount === 1) {
+    // Affirmation patterns
+    if (/^(?:si|ok|okay|y|yes|va|bene|perfetto|certo|esatto|giusto|vero|top|grande|ottimo|figo|bello|bravo|dai|fallo|fai|conferma|confermo|procedi)$/.test(normalized)) {
+      return {
+        inputKind: 'CONTROL',
+        controlIntent: 'AFFIRM',
+        confidence: 0.95,
+        normalized
+      };
+    }
+    
+    // Negation patterns
+    if (/^(?:no|n|nope|nah|mai|niente|basta|stop)$/.test(normalized)) {
+      return {
+        inputKind: 'CONTROL',
+        controlIntent: 'NEGATE',
+        confidence: 0.95,
+        normalized
+      };
+    }
+    
+    // Cancel patterns
+    if (/^(?:annulla|cancella|lascia|dimentica)$/.test(normalized)) {
+      return {
+        inputKind: 'CONTROL',
+        controlIntent: 'CANCEL',
+        confidence: 0.95,
+        normalized
+      };
+    }
+  }
+  
+  // Short phrases that are still CONTROL
+  if (wordCount <= 3) {
+    // "va bene", "ok perfetto", "lascia stare", "lascia perdere"
+    if (/^(?:va\s*bene|ok\s*(?:perfetto|grazie|va\s*bene)?|lascia\s*(?:stare|perdere)|non\s*(?:fa\s*)?niente|no\s*grazie)$/.test(normalized)) {
+      const isNeg = /^(?:lascia|no|non)/.test(normalized);
+      return {
+        inputKind: 'CONTROL',
+        controlIntent: isNeg ? 'NEGATE' : 'AFFIRM',
+        confidence: 0.9,
+        normalized
+      };
+    }
+  }
+  
+  // ========== COMMAND DETECTION ==========
+  // Look for operative verbs with fuzzy matching
+  const firstWord = tokens[0] || '';
+  
+  for (const verb of COMMAND_VERBS) {
+    if (fuzzyMatch(firstWord, verb)) {
+      return {
+        inputKind: 'COMMAND',
+        confidence: firstWord === verb ? 0.95 : 0.8,
+        normalized
+      };
+    }
+  }
+  
+  // Also check for commands anywhere in short messages
+  if (wordCount <= 4) {
+    for (const token of tokens) {
+      for (const verb of COMMAND_VERBS) {
+        if (fuzzyMatch(token, verb)) {
+          return {
+            inputKind: 'COMMAND',
+            confidence: 0.75,
+            normalized
+          };
+        }
+      }
+    }
+  }
+  
+  // ========== DEFAULT: CHAT ==========
+  return {
+    inputKind: 'CHAT',
+    confidence: 0.6,
+    normalized
+  };
+}
+
+// ========== ORIGINAL CONFIRMATION TYPES ==========
 
 export type ConfirmationType = 'CONFIRM' | 'CANCEL' | 'QUICK_ACTION' | 'UI_ACTION' | 'NEGATIVE_FEEDBACK' | 'NONE';
 
@@ -363,20 +621,29 @@ export function isCancelPattern(message: string): boolean {
 
 /**
  * Normalize a title before creating task/event
- * Removes common verbs and cleans up the text
+ * Removes common verbs, filler words, and cleans up the text
+ * 
+ * NPC MODE: Uses general patterns, NOT hardcoded phrases
  */
 export function normalizeTitle(text: string): { title: string; valid: boolean } {
-  // Remove common action verbs at the start
+  // Remove common action verbs at the start (general pattern)
+  // Pattern: verb + optional article
   const cleaned = text
-    .replace(/^(?:crea|segna|fai|aggiungi|inserisci|metti|nuovo|nuova)\s+/i, '')
-    .replace(/^(?:un|una|il|la|lo)\s+/i, '')
+    .replace(/^(?:crea(?:re)?|segna(?:re)?|fa(?:i|re)?|aggiungi(?:ere)?|inserisci(?:re)?|metti(?:ere)?|nuovo|nuova|ricordami\s*(?:di)?)\s*/i, '')
+    .replace(/^(?:un|una|il|la|lo|gli|le|i)\s+/i, '')
     .trim();
   
   // Capitalize first letter
   const title = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   
-  // Check if valid (at least 3 characters of meaningful content)
-  const valid = title.length >= 3 && !isSafetyWord(title);
+  // Check if valid: at least 3 characters AND not a safety/control word
+  const normalized = title.toLowerCase();
+  
+  // Use inputKind to check if it's a CONTROL word
+  const inputCheck = classifyInputKind(title);
+  const isControl = inputCheck.inputKind === 'CONTROL';
+  
+  const valid = title.length >= 3 && !isControl && !isSafetyWord(title);
   
   return { title, valid };
 }

@@ -27,6 +27,19 @@ export type LastActionType =
   | 'CREATED_EVENT'
   | 'ADVICE';  // After giving contextual advice
 
+// NPC Mode: Expected input type for state machine gating
+export type ExpectedInput = 
+  | 'NONE'
+  | 'CHOOSE_TYPE'      // Waiting for task/event choice
+  | 'TASK_TITLE'       // Waiting for task title
+  | 'EVENT_TITLE'      // Waiting for event title
+  | 'EVENT_DATE'       // Waiting for event date
+  | 'EVENT_TIME'       // Waiting for event time
+  | 'EVENT_DATETIME'   // Waiting for date and/or time
+  | 'CONFIRM_DELETE'   // Waiting for yes/no on bulk delete
+  | 'CONFIRM_COMPLETE' // Waiting for yes/no on bulk complete
+  | 'EXPENSE_AMOUNT';  // Waiting for expense amount
+
 export interface IntentPayload {
   title?: string;
   date?: string;           // ISO date string (legacy)
@@ -49,6 +62,8 @@ export interface IntentPayload {
   count?: number;           // Count for bulk operations
   // Title validation tracking
   titleAttempts?: number;   // Number of invalid title attempts
+  // NPC Mode: Expected input for state machine
+  expectedInput?: ExpectedInput;
 }
 
 export interface LastActionPayload {
