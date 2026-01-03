@@ -123,6 +123,9 @@ export default function AssistantPanel() {
     "Le mie task": "__UI_ACTION__:SHOW_TASKS",
     "I miei eventi": "__UI_ACTION__:SHOW_EVENTS",
     "Le mie spese": "__UI_ACTION__:SHOW_EXPENSES",
+    // Create actions
+    "Aggiungi task": "__UI_ACTION__:ADD_TASK",
+    "Aggiungi evento": "__UI_ACTION__:CREATE_EVENT",
     // Delete all actions
     "Elimina tutti": "__UI_ACTION__:DELETE_ALL",
     "Elimina tutte": "__UI_ACTION__:DELETE_ALL",
@@ -131,6 +134,10 @@ export default function AssistantPanel() {
     // Complete all actions
     "Completa tutte": "__UI_ACTION__:COMPLETE_ALL_TASKS",
     "Completa tutti": "__UI_ACTION__:COMPLETE_ALL_TASKS",
+    // Singular actions (from suggestions after showing lists)
+    "Completa uno": "__UI_ACTION__:COMPLETE_ONE",
+    "Elimina uno": "__UI_ACTION__:DELETE_ONE",
+    "Elimina una": "__UI_ACTION__:DELETE_ONE",
   };
 
   const handleClearHistory = async () => {
