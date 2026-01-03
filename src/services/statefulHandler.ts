@@ -36,8 +36,10 @@ import {
   normalizeTitle,
   detectBulkDeleteTarget,
   classifyInputKind,
+  detectReferenceCommand,
   type ConfirmationWithContinuation,
-  type InputKindResult
+  type InputKindResult,
+  type ReferenceResolution
 } from '@/assistant/confirmationParser';
 
 // ========== CONVERSATION GATE CONSTANTS ==========
@@ -193,7 +195,10 @@ import {
   type AssistantState,
   type ActiveIntent,
   type IntentPayload,
-  type ExpectedInput
+  type ExpectedInput,
+  type SingleContext,
+  type ListContext,
+  type EntityType
 } from '@/services/assistantStateService';
 import {
   classifyFollowUp,
@@ -283,6 +288,222 @@ export async function clearAllAssistantState(userId: string): Promise<void> {
   }
   
   console.log('[StatefulHandler] ===== ALL STATE CLEARED =====');
+}
+
+/**
+ * Update reference memory in intent_payload
+ * Called when showing tasks/events/expenses
+ */
+async function updateReferenceMemory(
+  userId: string,
+  type: EntityType,
+  ids: string[],
+  titles?: string[]
+): Promise<void> {
+  const payload: Partial<IntentPayload> = {};
+  
+  // Always update list context
+  payload.last_list_context = { type, ids, titles };
+  
+  // If single item, also set single context
+  if (ids.length === 1) {
+    payload.last_single_context = { 
+      type, 
+      id: ids[0], 
+      title: titles?.[0] 
+    };
+  } else {
+    // Clear single context when showing list
+    payload.last_single_context = undefined;
+  }
+  
+  await updateIntentPayload(userId, payload);
+  console.log('[StatefulHandler] Reference memory updated:', { type, count: ids.length });
+}
+
+/**
+ * Handle reference-based command (eliminalo, completalo)
+ * Uses last_single_context or last_list_context to resolve
+ */
+async function handleReferenceCommand(
+  userId: string,
+  refResult: ReferenceResolution,
+  state: AssistantState
+): Promise<StatefulResponse | null> {
+  const { action, isPlural } = refResult;
+  const payload = state.intent_payload;
+  
+  console.log('[StatefulHandler] Reference command:', { action, isPlural, payload });
+  
+  // Check for single context first
+  if (payload.last_single_context) {
+    const { type, id, title } = payload.last_single_context;
+    
+    if (action === 'delete') {
+      // Delete directly
+      if (type === 'TASK') {
+        await dataService.deleteTask(userId, id);
+        await clearActiveIntent(userId);
+        return { 
+          message: title ? `✅ "${title}" eliminato.` : '✅ Task eliminato.', 
+          source: 'stateful', 
+          actionExecuted: true 
+        };
+      }
+      if (type === 'EVENT') {
+        await dataService.deleteEvent(userId, id);
+        await clearActiveIntent(userId);
+        return { 
+          message: title ? `✅ "${title}" eliminato.` : '✅ Evento eliminato.', 
+          source: 'stateful', 
+          actionExecuted: true 
+        };
+      }
+    }
+    
+    if (action === 'complete' && type === 'TASK') {
+      await dataService.completeTask(userId, id);
+      await clearActiveIntent(userId);
+      return { 
+        message: title ? `✅ "${title}" completato!` : '✅ Task completato!', 
+        source: 'stateful', 
+        actionExecuted: true 
+      };
+    }
+  }
+  
+  // Check list context
+  if (payload.last_list_context) {
+    const { type, ids, titles } = payload.last_list_context;
+    
+    // Single item in list - execute directly
+    if (ids.length === 1) {
+      const id = ids[0];
+      const title = titles?.[0];
+      
+      if (action === 'delete') {
+        if (type === 'TASK') {
+          await dataService.deleteTask(userId, id);
+          await clearActiveIntent(userId);
+          return { 
+            message: title ? `✅ "${title}" eliminato.` : '✅ Task eliminato.', 
+            source: 'stateful', 
+            actionExecuted: true 
+          };
+        }
+        if (type === 'EVENT') {
+          await dataService.deleteEvent(userId, id);
+          await clearActiveIntent(userId);
+          return { 
+            message: title ? `✅ "${title}" eliminato.` : '✅ Evento eliminato.', 
+            source: 'stateful', 
+            actionExecuted: true 
+          };
+        }
+      }
+      
+      if (action === 'complete' && type === 'TASK') {
+        await dataService.completeTask(userId, id);
+        await clearActiveIntent(userId);
+        return { 
+          message: title ? `✅ "${title}" completato!` : '✅ Task completato!', 
+          source: 'stateful', 
+          actionExecuted: true 
+        };
+      }
+    }
+    
+    // Multiple items - ask which one
+    if (ids.length > 1) {
+      // Set up CHOOSE_INDEX state
+      await setActiveIntent(userId, type === 'TASK' ? 'MANAGE_TASKS' : type === 'EVENT' ? 'MANAGE_EVENTS' : 'MANAGE_EXPENSES', {
+        expectedInput: 'CHOOSE_INDEX',
+        pendingAction: action,
+        last_list_context: { type, ids, titles }
+      }, []);
+      
+      // Build numbered list
+      const listText = titles 
+        ? titles.map((t, i) => `${i + 1}. ${t}`).join('\n')
+        : ids.map((_, i) => `${i + 1}.`).join('\n');
+      
+      const actionVerb = action === 'delete' ? 'Elimino' : 'Completo';
+      
+      return {
+        message: `${actionVerb} quale? (1-${ids.length})\n${listText}`,
+        source: 'stateful'
+      };
+    }
+  }
+  
+  // No context - return null to let caller handle
+  return null;
+}
+
+/**
+ * Handle CHOOSE_INDEX follow-up (user selects 1-N)
+ */
+async function handleChooseIndexFollowUp(
+  userId: string,
+  message: string,
+  state: AssistantState
+): Promise<StatefulResponse | null> {
+  const payload = state.intent_payload;
+  const listContext = payload.last_list_context;
+  const pendingAction = payload.pendingAction;
+  
+  if (!listContext || !pendingAction) {
+    return null;
+  }
+  
+  // Try to extract number from message
+  const numMatch = message.match(/^(\d+)$/);
+  if (!numMatch) {
+    return { 
+      message: `Quale? (1-${listContext.ids.length})`, 
+      source: 'stateful' 
+    };
+  }
+  
+  const index = parseInt(numMatch[1], 10) - 1; // Convert to 0-based
+  
+  if (index < 0 || index >= listContext.ids.length) {
+    return { 
+      message: `Scegli un numero da 1 a ${listContext.ids.length}.`, 
+      source: 'stateful' 
+    };
+  }
+  
+  const id = listContext.ids[index];
+  const title = listContext.titles?.[index];
+  const { type } = listContext;
+  
+  // Execute the action
+  if (pendingAction === 'delete') {
+    if (type === 'TASK') {
+      await dataService.deleteTask(userId, id);
+    } else if (type === 'EVENT') {
+      await dataService.deleteEvent(userId, id);
+    }
+    await clearActiveIntent(userId);
+    return { 
+      message: title ? `✅ "${title}" eliminato.` : '✅ Eliminato.', 
+      source: 'stateful', 
+      actionExecuted: true 
+    };
+  }
+  
+  if (pendingAction === 'complete' && type === 'TASK') {
+    await dataService.completeTask(userId, id);
+    await clearActiveIntent(userId);
+    return { 
+      message: title ? `✅ "${title}" completato!` : '✅ Completato!', 
+      source: 'stateful', 
+      actionExecuted: true 
+    };
+  }
+  
+  return null;
 }
 
 /**
@@ -393,6 +614,14 @@ export async function handleStatefulMessage(
     const expectedInput = state.intent_payload.expectedInput || 'NONE';
     console.log('[StatefulHandler] NPC Gating - expectedInput:', expectedInput, 'inputKind:', inputKind.inputKind);
     
+    // ===== CHOOSE_INDEX: Handle numeric input for list selection =====
+    if (expectedInput === 'CHOOSE_INDEX') {
+      const indexResult = await handleChooseIndexFollowUp(userId, message, state);
+      if (indexResult) {
+        return indexResult;
+      }
+    }
+    
     // CONTROL handling for active intent
     if (inputKind.inputKind === 'CONTROL') {
       if (inputKind.controlIntent === 'NEGATE' || inputKind.controlIntent === 'CANCEL') {
@@ -406,7 +635,7 @@ export async function handleStatefulMessage(
           return await handleFollowUp(userId, message, state);
         }
         // AFFIRM without confirm context → neutral response, don't change intent
-        return { message: 'Dimmi 🙂', source: 'stateful' };
+        return { message: 'Ok 🙂', source: 'stateful' };
       }
     }
     
@@ -415,6 +644,13 @@ export async function handleStatefulMessage(
       if (['EVENT_DATETIME', 'EVENT_DATE', 'EVENT_TIME', 'EXPENSE_AMOUNT'].includes(expectedInput)) {
         // Let follow-up handler use the data
         return await handleFollowUp(userId, message, state);
+      }
+      // CHOOSE_INDEX: pure number could be index selection
+      if (expectedInput === 'CHOOSE_INDEX') {
+        const indexResult = await handleChooseIndexFollowUp(userId, message, state);
+        if (indexResult) {
+          return indexResult;
+        }
       }
       // DATA during title-expected state: don't interpret as expense
       if (['TASK_TITLE', 'EVENT_TITLE', 'CHOOSE_TYPE'].includes(expectedInput)) {
@@ -474,14 +710,29 @@ export async function handleStatefulMessage(
     }
   }
   
+  // ===== REFERENCE COMMAND CHECK (eliminalo/completalo) =====
+  // Before conversation gate, check if this is a pronoun-based reference command
+  const refResult = detectReferenceCommand(message);
+  if (refResult.found) {
+    console.log('[StatefulHandler] Reference command detected:', refResult);
+    const refResponse = await handleReferenceCommand(userId, refResult, state);
+    if (refResponse) {
+      return refResponse;
+    }
+    // No context found - fall through to normal handling
+    console.log('[StatefulHandler] No context for reference command, asking user');
+  }
+  
   // ===== CONVERSATION GATE (BEFORE ANY INTENT ROUTING) =====
   // Activates when: no active intent, message is not explicit command
   // RULE: Simple response, NO multiple options
+  // EXCEPTION: Don't gate if we just detected a reference command (even without context)
   if (
     !hasActiveIntent(state) &&
     confirmResult.type === 'NONE' &&
     !confirmResult.shouldBypass &&
-    !isExplicitCommand(message)
+    !isExplicitCommand(message) &&
+    !refResult.found  // Don't gate reference commands
   ) {
     console.log('[StatefulHandler] CONVERSATION GATE activated');
     return {
@@ -595,11 +846,21 @@ async function handleQuickAction(
     case 'SHOW_TASKS': {
       const tasks = await dataService.listTasks(userId);
       if (tasks.length === 0) {
+        await clearActiveIntent(userId);
         return { message: 'Nessun task 🎉', source: 'stateful' };
       }
       const taskList = tasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n');
-      await setActiveIntent(userId, 'MANAGE_TASKS', { lastShownIds: tasks.map(t => t.id) }, []);
-      await setLastAction(userId, 'SHOW_TASKS', { ids: tasks.map(t => t.id) });
+      const ids = tasks.map(t => t.id);
+      const titles = tasks.map(t => t.title);
+      
+      // Update reference memory for pronoun resolution
+      await updateReferenceMemory(userId, 'TASK', ids, titles);
+      await setActiveIntent(userId, 'MANAGE_TASKS', { 
+        lastShownIds: ids,
+        last_list_context: { type: 'TASK', ids, titles }
+      }, []);
+      await setLastAction(userId, 'SHOW_TASKS', { ids, titles, count: tasks.length });
+      
       return {
         message: `${taskList}`,
         source: 'stateful',
@@ -610,11 +871,21 @@ async function handleQuickAction(
     case 'SHOW_EVENTS': {
       const events = await dataService.listEvents(userId);
       if (events.length === 0) {
+        await clearActiveIntent(userId);
         return { message: 'Nessun evento in programma.', source: 'stateful' };
       }
       const eventList = events.map((e, i) => `${i + 1}. ${e.title}`).join('\n');
-      await setActiveIntent(userId, 'MANAGE_EVENTS', { lastShownIds: events.map(e => e.id) }, []);
-      await setLastAction(userId, 'SHOW_EVENTS', { ids: events.map(e => e.id) });
+      const ids = events.map(e => e.id);
+      const titles = events.map(e => e.title);
+      
+      // Update reference memory for pronoun resolution
+      await updateReferenceMemory(userId, 'EVENT', ids, titles);
+      await setActiveIntent(userId, 'MANAGE_EVENTS', { 
+        lastShownIds: ids,
+        last_list_context: { type: 'EVENT', ids, titles }
+      }, []);
+      await setLastAction(userId, 'SHOW_EVENTS', { ids, titles, count: events.length });
+      
       return {
         message: `${eventList}`,
         source: 'stateful',
@@ -625,11 +896,21 @@ async function handleQuickAction(
     case 'SHOW_EXPENSES': {
       const expenses = await dataService.listExpenses(userId);
       if (expenses.length === 0) {
+        await clearActiveIntent(userId);
         return { message: 'Nessuna spesa registrata.', source: 'stateful' };
       }
       const expenseList = expenses.slice(0, 10).map((e, i) => `${i + 1}. ${e.category || 'Spesa'}: €${e.amount}`).join('\n');
-      await setActiveIntent(userId, 'MANAGE_EXPENSES', { lastShownIds: expenses.map(e => e.id) }, []);
-      await setLastAction(userId, 'SHOW_EXPENSES', { ids: expenses.map(e => e.id) });
+      const ids = expenses.map(e => e.id);
+      const titles = expenses.map(e => e.category || `€${e.amount}`);
+      
+      // Update reference memory for pronoun resolution  
+      await updateReferenceMemory(userId, 'EXPENSE', ids, titles);
+      await setActiveIntent(userId, 'MANAGE_EXPENSES', { 
+        lastShownIds: ids,
+        last_list_context: { type: 'EXPENSE', ids, titles }
+      }, []);
+      await setLastAction(userId, 'SHOW_EXPENSES', { ids, titles, count: expenses.length });
+      
       return {
         message: `${expenseList}`,
         source: 'stateful',
@@ -1706,16 +1987,26 @@ async function handleQueryTasks(userId: string): Promise<StatefulResponse> {
   const result = await dataService.getTasks(userId, 'pending');
   const tasks = result.data || [];
   
+  const ids = tasks.map((t: any) => t.id);
+  const titles = tasks.map((t: any) => t.title);
+  
   await setLastAction(userId, 'SHOW_TASKS', {
-    ids: tasks.map((t: any) => t.id),
-    titles: tasks.map((t: any) => t.title),
+    ids,
+    titles,
     count: tasks.length
   });
   
-  await setActiveIntent(userId, 'QUERY_TASKS', {}, []);
+  // Update reference memory for pronoun resolution
+  if (tasks.length > 0) {
+    await updateReferenceMemory(userId, 'TASK', ids, titles);
+    await setActiveIntent(userId, 'QUERY_TASKS', {
+      last_list_context: { type: 'TASK', ids, titles }
+    }, []);
+  } else {
+    await clearActiveIntent(userId);
+  }
   
   if (tasks.length === 0) {
-    await clearActiveIntent(userId);
     return {
       message: 'Nessun task 🎉',
       source: 'stateful',
@@ -1740,16 +2031,26 @@ async function handleQueryEvents(userId: string): Promise<StatefulResponse> {
   const result = await dataService.getEvents(userId, 'week');
   const events = result.data || [];
   
+  const ids = events.map((e: any) => e.id);
+  const titles = events.map((e: any) => e.title);
+  
   await setLastAction(userId, 'SHOW_EVENTS', {
-    ids: events.map((e: any) => e.id),
-    titles: events.map((e: any) => e.title),
+    ids,
+    titles,
     count: events.length
   });
   
-  await setActiveIntent(userId, 'QUERY_EVENTS', {}, []);
+  // Update reference memory for pronoun resolution
+  if (events.length > 0) {
+    await updateReferenceMemory(userId, 'EVENT', ids, titles);
+    await setActiveIntent(userId, 'QUERY_EVENTS', {
+      last_list_context: { type: 'EVENT', ids, titles }
+    }, []);
+  } else {
+    await clearActiveIntent(userId);
+  }
   
   if (events.length === 0) {
-    await clearActiveIntent(userId);
     return {
       message: 'Nessun evento in programma.',
       source: 'stateful',

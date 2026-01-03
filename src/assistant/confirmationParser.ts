@@ -390,6 +390,49 @@ const QUICK_ACTION_PATTERNS: Array<{ pattern: RegExp; action: string }> = [
   { pattern: /^cancellali\s*tutt[ieoa]?$/i, action: 'DELETE_ALL' },
 ];
 
+// ========== PRONOUN/DEICTIC PATTERNS FOR REFERENCE RESOLUTION ==========
+// Patterns to detect "eliminalo", "completalo", "spostalo" etc.
+// These use verb+pronoun to refer to the last shown entity
+const REFERENCE_VERB_PATTERNS: Array<{ pattern: RegExp; action: 'delete' | 'complete' }> = [
+  // Delete patterns with pronouns
+  { pattern: /^elimina(?:lo|la|li|le)$/i, action: 'delete' },
+  { pattern: /^cancella(?:lo|la|li|le)$/i, action: 'delete' },
+  { pattern: /^rimuovi(?:lo|la|li|le)$/i, action: 'delete' },
+  { pattern: /^togli(?:lo|la|li|le)$/i, action: 'delete' },
+  // Complete patterns with pronouns
+  { pattern: /^completa(?:lo|la|li|le)$/i, action: 'complete' },
+  { pattern: /^spunta(?:lo|la|li|le)$/i, action: 'complete' },
+  { pattern: /^chiudi(?:lo|la|li|le)$/i, action: 'complete' },
+  { pattern: /^fai(?:lo|la|li|le)$/i, action: 'complete' },
+  // Deictic patterns (pointing words)
+  { pattern: /^(?:elimina|cancella|rimuovi)\s+(?:questo|questa|quello|quella)$/i, action: 'delete' },
+  { pattern: /^(?:completa|spunta|chiudi)\s+(?:questo|questa|quello|quella)$/i, action: 'complete' },
+];
+
+export interface ReferenceResolution {
+  found: boolean;
+  action?: 'delete' | 'complete';
+  isPlural?: boolean;  // "eliminali" vs "eliminalo"
+}
+
+/**
+ * Detect if message is a reference-based command (eliminalo, completalo, etc.)
+ * Does NOT execute - just identifies the pattern
+ */
+export function detectReferenceCommand(message: string): ReferenceResolution {
+  const trimmed = message.trim().toLowerCase();
+  
+  for (const { pattern, action } of REFERENCE_VERB_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      // Check if plural pronoun (li/le)
+      const isPlural = /(?:li|le)$/i.test(trimmed);
+      return { found: true, action, isPlural };
+    }
+  }
+  
+  return { found: false };
+}
+
 // ========== NEGATIVE FEEDBACK PATTERNS ==========
 const NEGATIVE_FEEDBACK_PATTERNS = [
   /(?:hai\s+sbagliato|stai\s+sbagliando)/i,

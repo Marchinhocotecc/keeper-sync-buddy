@@ -31,6 +31,7 @@ export type LastActionType =
 export type ExpectedInput = 
   | 'NONE'
   | 'CHOOSE_TYPE'      // Waiting for task/event choice
+  | 'CHOOSE_INDEX'     // Waiting for index selection (1-N) from a list
   | 'TASK_TITLE'       // Waiting for task title
   | 'EVENT_TITLE'      // Waiting for event title
   | 'EVENT_DATE'       // Waiting for event date
@@ -39,6 +40,21 @@ export type ExpectedInput =
   | 'CONFIRM_DELETE'   // Waiting for yes/no on bulk delete
   | 'CONFIRM_COMPLETE' // Waiting for yes/no on bulk complete
   | 'EXPENSE_AMOUNT';  // Waiting for expense amount
+
+// Reference memory types for "eliminalo/completalo" resolution
+export type EntityType = 'TASK' | 'EVENT' | 'EXPENSE';
+
+export interface SingleContext {
+  type: EntityType;
+  id: string;
+  title?: string;
+}
+
+export interface ListContext {
+  type: EntityType;
+  ids: string[];
+  titles?: string[];
+}
 
 export interface IntentPayload {
   title?: string;
@@ -64,6 +80,11 @@ export interface IntentPayload {
   titleAttempts?: number;   // Number of invalid title attempts
   // NPC Mode: Expected input for state machine
   expectedInput?: ExpectedInput;
+  // Reference memory for pronoun resolution ("eliminalo", "completalo")
+  last_single_context?: SingleContext;
+  last_list_context?: ListContext;
+  // Pending action for CHOOSE_INDEX resolution
+  pendingAction?: 'delete' | 'complete';
 }
 
 export interface LastActionPayload {
