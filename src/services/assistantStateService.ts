@@ -10,6 +10,8 @@ export type ActiveIntent =
   | 'CREATE_GENERIC'    // User said something ambiguous like "crea padel"
   | 'CREATE_TASK'       // Creating a task
   | 'CREATE_EVENT'      // Creating an event
+  | 'RECORD_EXPENSE'    // Recording an expense
+  | 'CHOOSE_TYPE'       // Choosing between task/event
   | 'QUERY_TASKS'       // Querying tasks
   | 'QUERY_EVENTS'      // Querying events
   | 'MANAGE_TASKS'      // Managing shown tasks (delete, complete)
@@ -25,6 +27,9 @@ export type LastActionType =
   | 'SHOW_EXPENSES'
   | 'CREATED_TASK'
   | 'CREATED_EVENT'
+  | 'CREATE_TASK'       // Alias for creating task
+  | 'CREATE_EVENT'      // Alias for creating event
+  | 'RECORD_EXPENSE'    // Recorded an expense
   | 'ADVICE';  // After giving contextual advice
 
 // NPC Mode: Expected input type for state machine gating
@@ -39,7 +44,13 @@ export type ExpectedInput =
   | 'EVENT_DATETIME'   // Waiting for date and/or time
   | 'CONFIRM_DELETE'   // Waiting for yes/no on bulk delete
   | 'CONFIRM_COMPLETE' // Waiting for yes/no on bulk complete
-  | 'EXPENSE_AMOUNT';  // Waiting for expense amount
+  | 'EXPENSE_AMOUNT'   // Waiting for expense amount
+  | 'TITLE'            // Generic title input
+  | 'DATE'             // Generic date input
+  | 'TIME'             // Generic time input
+  | 'AMOUNT'           // Generic amount input
+  | 'CATEGORY'         // Category input
+  | 'TYPE';            // Type selection input
 
 // Reference memory types for "eliminalo/completalo" resolution
 export type EntityType = 'TASK' | 'EVENT' | 'EXPENSE';
@@ -58,8 +69,10 @@ export interface ListContext {
 
 export interface IntentPayload {
   title?: string;
+  pendingTitle?: string;   // Title pending type choice
   date?: string;           // ISO date string (legacy)
   time?: string;           // HH:mm format (legacy)
+  startTime?: string;      // Start time for events (HH:mm)
   pending_date?: string;   // ISO date string (pending merge)
   pending_time?: string;   // HH:mm format (pending merge)
   start_at?: string;       // Full ISO datetime
@@ -70,6 +83,7 @@ export interface IntentPayload {
   amount?: number;         // For expense recording
   // Type disambiguation for CREATE_GENERIC
   type?: 'task' | 'event' | 'expense';
+  targetType?: 'tasks' | 'events' | 'expenses'; // Target type for bulk operations
   // Management fields
   action?: 'delete' | 'complete' | 'manage';
   ids?: string[];
@@ -90,7 +104,12 @@ export interface IntentPayload {
 export interface LastActionPayload {
   ids?: string[];
   titles?: string[];
+  title?: string;        // Single title for created item
   count?: number;
+  amount?: number;       // For expense actions
+  category?: string;     // For expense actions
+  date?: string;         // For event actions
+  startTime?: string;    // For event actions
 }
 
 export interface AssistantState {
