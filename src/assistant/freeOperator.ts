@@ -1,14 +1,19 @@
 /**
  * FREE OPERATOR - Deterministic Action Executor
  * 
- * ROLE: OPERATOR (DeepSeek R1 Free conceptually, runs locally)
+ * ROLE: OPERATOR (like a precise secretary)
+ * 
+ * GOLDEN RULE: Actions ONLY on explicit command
+ * - Must contain action verb + object
+ * - NO interpretation of vague phrases
+ * - NO creating entities from conversational responses
  * 
  * CAPABILITIES:
  * ✅ Create/Delete/Show tasks, events, expenses
- * ✅ Read/Write data via ActionEngine
+ * ✅ Read/Write data via ActionEngine ONLY
  * ✅ Execute ONLY explicit commands
- * ✅ Ask clarification if input is ambiguous
- * ✅ Ask confirmation before writes if needed
+ * ✅ Ask ONE targeted clarification if ambiguous
+ * ✅ Ask confirmation before destructive writes
  * 
  * PROHIBITIONS:
  * ❌ Cannot suggest
@@ -16,6 +21,9 @@
  * ❌ Cannot plan
  * ❌ Cannot interpret non-explicit intentions
  * ❌ Cannot take initiative
+ * ❌ Cannot deduce titles from vague phrases
+ * ❌ Cannot transform conversational responses into data
+ * ❌ Cannot complete user's sentences
  * 
  * ALL ACTIONS GO THROUGH ActionEngine - never direct DB writes
  */
@@ -66,63 +74,138 @@ export interface OperatorContext {
   lastSingleItem?: { type: 'TASK' | 'EVENT' | 'EXPENSE'; id: string; title?: string };
 }
 
+// ========== ANTI-STUPIDITY GUARDS ==========
+
+/**
+ * Words that should NEVER become task/event titles
+ * These are conversational responses, not actionable items
+ */
+const FORBIDDEN_TITLES = new Set([
+  'ok', 'okay', 'sì', 'si', 'no', 'nope',
+  'va bene', 'perfetto', 'certo', 'esatto',
+  'pianifichiamo', 'vediamo', 'organizziamo',
+  'mmm', 'hmm', 'ah', 'eh', 'oh',
+  'dimmi', 'procedi', 'vai', 'fallo',
+  'bene', 'ottimo', 'giusto', 'capito',
+  'forse', 'magari', 'boh', 'mah',
+  'aspetta', 'momento', 'un attimo',
+]);
+
+/**
+ * Patterns that indicate conversational/vague input (not actionable)
+ */
+const VAGUE_INPUT_PATTERNS = [
+  /^(?:ok|okay|sì|si|no|nope)$/i,
+  /^(?:va bene|perfetto|certo|esatto)$/i,
+  /^(?:pianifichiamo|vediamo|organizziamo)$/i,
+  /^(?:mmm+|hmm+|ah+|eh+|oh+)$/i,
+  /^(?:bene|ottimo|giusto|capito)$/i,
+  /^(?:da dove (?:inizio|comincio)|non so)$/i,
+  /^(?:cosa|come|perché|quando|dove|chi)\?$/i,
+  /^(?:forse|magari|boh|mah)$/i,
+  /^.{0,2}$/,  // Too short (1-2 chars)
+];
+
+/**
+ * Check if input is a forbidden/vague phrase
+ * Returns true if it should NOT be used as a title
+ */
+export function isForbiddenTitle(input: string): boolean {
+  const normalized = input.trim().toLowerCase();
+  
+  // Check forbidden set
+  if (FORBIDDEN_TITLES.has(normalized)) {
+    return true;
+  }
+  
+  // Check vague patterns
+  if (VAGUE_INPUT_PATTERNS.some(p => p.test(normalized))) {
+    return true;
+  }
+  
+  // Too short to be meaningful
+  if (normalized.length < 3) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if this is a valid actionable title
+ * Must be non-vague, meaningful content
+ */
+export function isValidTitle(input: string): boolean {
+  return !isForbiddenTitle(input) && input.trim().length >= 3;
+}
+
 // ========== COMMAND PATTERNS ==========
 // Explicit action verbs - NO fuzzy matching, NO interpretation
 
 const ACTION_PATTERNS = {
   CREATE_TASK: [
     /^(?:crea|aggiungi|nuovo|nuova)\s+(?:un\s+)?task\s+(.+)/i,
-    /^(?:aggiungi|metti|inserisci)\s+(?:alla\s+lista\s+)?(.+)/i,
+    /^(?:crea|aggiungi|nuovo|nuova)\s+(?:un\s+)?task$/i,  // Without title
     /^ricordami\s+(?:di\s+)?(.+)/i,
   ],
   CREATE_EVENT: [
     /^(?:crea|aggiungi|nuovo|nuova)\s+(?:un\s+)?evento\s+(.+)/i,
-    /^(?:crea|aggiungi)\s+(?:un\s+)?appuntamento\s+(.+)/i,
-    /^(?:fissa|prenota|segna)\s+(.+)/i,
+    /^(?:crea|aggiungi|nuovo|nuova)\s+(?:un\s+)?evento$/i,  // Without details
+    /^(?:crea|aggiungi)\s+(?:un\s+)?appuntamento\s*(.*)$/i,
+    /^(?:fissa|prenota)\s+(.+)/i,
   ],
   RECORD_EXPENSE: [
-    /^(?:registra|segna|aggiungi)\s+(?:una?\s+)?spesa\s+(.+)/i,
+    /^(?:registra|segna|aggiungi)\s+(?:una?\s+)?spesa\s*(.*)$/i,
     /^ho\s+speso\s+(.+)/i,
     /^spesa\s+(.+)/i,
+    /^spesa$/i,  // Just "spesa"
   ],
   SHOW_TASKS: [
     /^(?:mostra|vedi|lista|elenco)\s+(?:i\s+)?(?:miei\s+)?task/i,
     /^(?:quali\s+)?task\s+ho/i,
     /^i\s+miei\s+task$/i,
+    /^task$/i,  // Just "task" = show tasks
   ],
   SHOW_EVENTS: [
     /^(?:mostra|vedi|lista)\s+(?:gli\s+)?(?:miei\s+)?eventi/i,
     /^(?:mostra|vedi)\s+(?:il\s+)?calendario/i,
     /^(?:cosa\s+ho\s+in\s+)?programma/i,
+    /^eventi$/i,  // Just "eventi"
+    /^calendario$/i,  // Just "calendario"
   ],
   SHOW_EXPENSES: [
     /^(?:mostra|vedi|lista)\s+(?:le\s+)?(?:mie\s+)?spese/i,
     /^quanto\s+ho\s+speso/i,
+    /^spese$/i,  // Just "spese"
   ],
   DELETE_TASK: [
     /^(?:elimina|cancella|rimuovi)\s+(?:il\s+)?task\s+(.+)/i,
+    /^(?:elimina|cancella|rimuovi)\s+(?:il\s+)?task$/i,
   ],
   DELETE_EVENT: [
     /^(?:elimina|cancella|rimuovi)\s+(?:l'?\s*)?evento\s+(.+)/i,
+    /^(?:elimina|cancella|rimuovi)\s+(?:l'?\s*)?evento$/i,
   ],
   DELETE_EXPENSE: [
     /^(?:elimina|cancella|rimuovi)\s+(?:la\s+)?spesa\s+(.+)/i,
+    /^(?:elimina|cancella|rimuovi)\s+(?:la\s+)?spesa$/i,
   ],
   COMPLETE_TASK: [
     /^(?:completa|spunta|fatto|chiudi)\s+(?:il\s+)?task\s+(.+)/i,
+    /^(?:completa|spunta|fatto|chiudi)\s+(?:il\s+)?task$/i,
     /^(?:ho\s+fatto|completato)\s+(.+)/i,
   ],
 };
 
-// Generic creation (no type specified)
+// Generic creation (no type specified) - triggers clarification
 const GENERIC_CREATE_PATTERNS = [
-  /^(?:crea|aggiungi|nuovo|nuova)\s+(.+)/i,
-  /^(?:segna|metti)\s+(.+)/i,
+  /^(?:crea|aggiungi)\s+(.+)/i,
+  /^(?:segna|metti)\s+(?!come\s)(.+)/i,  // "metti X" but not "metti come fatto"
 ];
 
 // Cancel patterns
 const CANCEL_PATTERNS = [
-  /^(?:no|annulla|stop|basta|lascia\s+(?:stare|perdere)|niente)$/i,
+  /^(?:no|annulla|stop|basta|lascia\s+(?:stare|perdere)|niente|cancella)$/i,
 ];
 
 // Confirm patterns
@@ -134,7 +217,7 @@ const CONFIRM_PATTERNS = [
 
 /**
  * Parse explicit command from message
- * RULE: Only recognize EXPLICIT commands, never interpret
+ * RULE: Only recognize EXPLICIT commands with verb + object
  */
 export function parseExplicitCommand(message: string): { 
   intent: OperatorIntent; 
@@ -143,6 +226,19 @@ export function parseExplicitCommand(message: string): {
 } {
   const trimmed = message.trim();
   const lower = trimmed.toLowerCase();
+  
+  // Check for vague input FIRST - reject immediately
+  if (VAGUE_INPUT_PATTERNS.some(p => p.test(lower))) {
+    // Exception: if it's a cancel/confirm, handle it
+    if (CANCEL_PATTERNS.some(p => p.test(lower))) {
+      return { intent: 'CANCEL', confidence: 1.0 };
+    }
+    if (CONFIRM_PATTERNS.some(p => p.test(lower))) {
+      return { intent: 'CONFIRM', confidence: 1.0 };
+    }
+    // Otherwise, reject as not a command
+    return { intent: 'NONE', confidence: 0 };
+  }
   
   // Cancel
   if (CANCEL_PATTERNS.some(p => p.test(lower))) {
@@ -159,9 +255,21 @@ export function parseExplicitCommand(message: string): {
     for (const pattern of patterns) {
       const match = trimmed.match(pattern);
       if (match) {
+        const extracted = match[1]?.trim();
+        
+        // Validate extracted content is not forbidden
+        if (extracted && isForbiddenTitle(extracted)) {
+          // Has forbidden content - treat as needing clarification
+          return { 
+            intent: intent as OperatorIntent, 
+            extracted: undefined,  // Don't use forbidden title
+            confidence: 0.9 
+          };
+        }
+        
         return { 
           intent: intent as OperatorIntent, 
-          extracted: match[1]?.trim(),
+          extracted: extracted,
           confidence: 0.95 
         };
       }
@@ -172,9 +280,16 @@ export function parseExplicitCommand(message: string): {
   for (const pattern of GENERIC_CREATE_PATTERNS) {
     const match = trimmed.match(pattern);
     if (match) {
+      const extracted = match[1]?.trim();
+      
+      // Validate extracted content
+      if (extracted && isForbiddenTitle(extracted)) {
+        return { intent: 'NONE', confidence: 0 };
+      }
+      
       return { 
         intent: 'CHOOSE_TYPE', 
-        extracted: match[1]?.trim(),
+        extracted: extracted,
         confidence: 0.7 
       };
     }
@@ -186,12 +301,14 @@ export function parseExplicitCommand(message: string): {
 
 /**
  * Execute a CREATE_TASK command
+ * RULE: Only create if title is valid and explicit
  */
 export async function executeCreateTask(
   userId: string,
   title: string
 ): Promise<OperatorResponse> {
-  if (!title || title.trim().length < 2) {
+  // ANTI-STUPIDITY: Reject forbidden/vague titles
+  if (!isValidTitle(title)) {
     return {
       message: '❓ Che task?',
       source: 'operator',
@@ -207,7 +324,7 @@ export async function executeCreateTask(
   
   if (result.success) {
     return {
-      message: `✅ Task "${title.trim()}" aggiunto.`,
+      message: `✅ Task aggiunto.`,
       source: 'operator',
       actionExecuted: true,
       data: result.data
@@ -223,7 +340,7 @@ export async function executeCreateTask(
 
 /**
  * Execute a CREATE_EVENT command
- * Requires: title, date, time
+ * Requires: title (valid), date, time
  */
 export async function executeCreateEvent(
   userId: string,
@@ -231,14 +348,15 @@ export async function executeCreateEvent(
 ): Promise<OperatorResponse> {
   const missing: string[] = [];
   
-  if (!data.title || data.title.trim().length < 2) missing.push('titolo');
+  // ANTI-STUPIDITY: Reject forbidden/vague titles
+  if (!data.title || !isValidTitle(data.title)) missing.push('titolo');
   if (!data.date) missing.push('data');
   if (!data.startTime) missing.push('orario');
   
   if (missing.length > 0) {
     const question = missing.length === 1 
       ? `❓ ${missing[0] === 'titolo' ? 'Che evento?' : missing[0] === 'data' ? 'Quando?' : 'A che ora?'}`
-      : `❓ Mi servono: ${missing.join(', ')}.`;
+      : `❓ Dimmi: ${missing.join(', ')}.`;
     
     return {
       message: question,
@@ -257,7 +375,7 @@ export async function executeCreateEvent(
   
   if (result.success) {
     return {
-      message: `✅ Evento "${data.title!.trim()}" creato per ${data.date} alle ${data.startTime}.`,
+      message: `✅ Evento creato per ${data.date} alle ${data.startTime}.`,
       source: 'operator',
       actionExecuted: true,
       data: result.data
@@ -288,7 +406,8 @@ export async function executeRecordExpense(
     };
   }
   
-  if (!data.category || data.category.trim().length < 2) {
+  // ANTI-STUPIDITY: Reject forbidden/vague categories
+  if (!data.category || !isValidTitle(data.category)) {
     return {
       message: '❓ Per cosa?',
       source: 'operator',
@@ -306,7 +425,7 @@ export async function executeRecordExpense(
   
   if (result.success) {
     return {
-      message: `✅ Spesa di €${data.amount.toFixed(2)} (${data.category.trim()}) registrata.`,
+      message: `✅ €${data.amount.toFixed(2)} registrato.`,
       source: 'operator',
       actionExecuted: true,
       data: result.data
@@ -340,7 +459,7 @@ export async function executeShowTasks(userId: string): Promise<OperatorResponse
   const list = tasks.map((t: any, i: number) => `${i + 1}. ${t.title}`).join('\n');
   
   return {
-    message: list,
+    message: `📋 I tuoi task:\n${list}`,
     source: 'operator',
     actionExecuted: true,
     data: { 
@@ -372,7 +491,7 @@ export async function executeShowEvents(userId: string): Promise<OperatorRespons
   const list = events.map((e: any, i: number) => `${i + 1}. ${e.title}`).join('\n');
   
   return {
-    message: list,
+    message: `📅 I tuoi eventi:\n${list}`,
     source: 'operator',
     actionExecuted: true,
     data: { 
@@ -407,7 +526,7 @@ export async function executeShowExpenses(userId: string): Promise<OperatorRespo
   ).join('\n');
   
   return {
-    message: `${list}\n\n💰 Totale: €${total.toFixed(2)}`,
+    message: `💰 Spese:\n${list}\n\nTotale: €${total.toFixed(2)}`,
     source: 'operator',
     actionExecuted: true,
     data: { 
@@ -427,17 +546,18 @@ export function askTypeChoice(title?: string): OperatorResponse {
     source: 'operator',
     actionExecuted: false,
     nextExpected: 'TYPE',
-    data: { pendingTitle: title },
+    data: title ? { pendingTitle: title } : undefined,
     suggestions: ['Task', 'Evento']
   };
 }
 
 /**
  * Handle cancel
+ * Response: short, clear, no verbosity
  */
 export function handleCancel(): OperatorResponse {
   return {
-    message: '✅ Ok, annullato.',
+    message: '✅ Annullato.',
     source: 'operator',
     actionExecuted: false
   };
@@ -445,10 +565,11 @@ export function handleCancel(): OperatorResponse {
 
 /**
  * Handle ambiguous input - ask for explicit command
+ * Response: short, human, targeted
  */
 export function handleAmbiguous(): OperatorResponse {
   return {
-    message: '❓ Dimmi cosa vuoi fare.',
+    message: '❓ Cosa vuoi fare?',
     source: 'operator',
     actionExecuted: false,
     suggestions: ['Mostra task', 'Aggiungi task', 'Mostra eventi']

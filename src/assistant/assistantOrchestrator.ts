@@ -32,6 +32,8 @@ import {
   handleCancel,
   handleAmbiguous,
   isPremiumRequest,
+  isValidTitle,
+  isForbiddenTitle,
   type OperatorResponse,
   type OperatorContext
 } from './freeOperator';
@@ -193,7 +195,8 @@ export async function processMessage(
   }
   
   // ========== PHASE 7: AMBIGUOUS INPUT ==========
-  console.log('Ambiguous input - asking for clarification');
+  // RULE: Do NOT interpret vague input. Ask for clarification.
+  console.log('Ambiguous/vague input - asking for clarification');
   const ambiguous = handleAmbiguous();
   await saveConversation(userId, message, ambiguous.message);
   return toAssistantResponse(ambiguous);
@@ -260,12 +263,23 @@ async function handleCreateTaskFollowUp(
   message: string,
   payload: IntentPayload
 ): Promise<AssistantResponse> {
-  // User is providing title
-  const title = payload.title || message.trim();
+  // ANTI-STUPIDITY: User is providing title - validate it's not vague
+  const userInput = message.trim();
   
-  if (!title || title.length < 2) {
+  // Check if user input is forbidden/vague
+  if (isForbiddenTitle(userInput)) {
     return {
-      message: '❓ Che task?',
+      message: '❓ Che task vuoi aggiungere?',
+      source: 'operator',
+      actionExecuted: false
+    };
+  }
+  
+  const title = userInput;
+  
+  if (!isValidTitle(title)) {
+    return {
+      message: '❓ Dimmi il nome del task.',
       source: 'operator',
       actionExecuted: false
     };
@@ -287,10 +301,27 @@ async function handleCreateEventFollowUp(
 ): Promise<AssistantResponse> {
   const expectedInput = payload.expectedInput || 'TITLE';
   let updatedPayload = { ...payload };
+  const userInput = message.trim();
+  
+  // ANTI-STUPIDITY: Check for vague/forbidden input
+  if (isForbiddenTitle(userInput) && expectedInput === 'TITLE') {
+    return {
+      message: '❓ Che evento vuoi creare?',
+      source: 'operator',
+      actionExecuted: false
+    };
+  }
   
   // Extract data based on what's expected
   if (expectedInput === 'TITLE' || !payload.title) {
-    updatedPayload.title = message.trim();
+    if (!isValidTitle(userInput)) {
+      return {
+        message: '❓ Dimmi il nome dell\'evento.',
+        source: 'operator',
+        actionExecuted: false
+      };
+    }
+    updatedPayload.title = userInput;
     if (!updatedPayload.date) {
       updatedPayload.expectedInput = 'DATE';
       await updateIntentPayload(userId, updatedPayload);
@@ -363,6 +394,16 @@ async function handleRecordExpenseFollowUp(
 ): Promise<AssistantResponse> {
   const expectedInput = payload.expectedInput || 'AMOUNT';
   let updatedPayload = { ...payload };
+  const userInput = message.trim();
+  
+  // ANTI-STUPIDITY: Check for vague input on category
+  if (expectedInput === 'CATEGORY' && isForbiddenTitle(userInput)) {
+    return {
+      message: '❓ Per cosa era la spesa?',
+      source: 'operator',
+      actionExecuted: false
+    };
+  }
   
   if (expectedInput === 'AMOUNT' || !payload.amount) {
     const amount = extractData(message, 'AMOUNT') as number | null;
@@ -388,15 +429,14 @@ async function handleRecordExpenseFollowUp(
   }
   
   if (expectedInput === 'CATEGORY' || !payload.category) {
-    updatedPayload.category = message.trim();
-    
-    if (!updatedPayload.category || updatedPayload.category.length < 2) {
+    if (!isValidTitle(userInput)) {
       return {
-        message: '❓ Per cosa?',
+        message: '❓ Per cosa era?',
         source: 'operator',
         actionExecuted: false
       };
     }
+    updatedPayload.category = userInput;
   }
   
   // All data collected - record expense
