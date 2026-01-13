@@ -41,6 +41,12 @@ import {
   getConfirmNoIntentResponse 
 } from '@/assistant/confirmationParser';
 import { SAFE_FALLBACK_MESSAGE } from './constants';
+// NEW ARCHITECTURE: Import the deterministic orchestrator
+import { processMessage as orchestrateMessage } from './assistantOrchestrator';
+
+// Feature flag: Use new deterministic orchestrator
+// Set to true to enable the new FREE/PREMIUM separated architecture
+const USE_NEW_ORCHESTRATOR = true;
 
 // Response hash tracking for loop prevention
 const responseHashes = new Map<string, Set<string>>();
@@ -60,6 +66,23 @@ export async function processMessage(
   console.log('=== AI Engine Pipeline Start ===');
   console.log('User:', userId);
   console.log('Message:', message);
+  
+  // NEW ARCHITECTURE: Use deterministic orchestrator if enabled
+  if (USE_NEW_ORCHESTRATOR) {
+    console.log('[AIEngine] Using NEW deterministic orchestrator');
+    try {
+      const response = await orchestrateMessage(userId, message);
+      return {
+        message: response.message,
+        source: response.source === 'operator' || response.source === 'coach' ? 'local' : response.source,
+        suggestions: response.suggestions,
+        actionExecuted: response.actionExecuted,
+      };
+    } catch (error) {
+      console.error('[AIEngine] Orchestrator error, falling back:', error);
+      // Fall through to legacy pipeline on error
+    }
+  }
   
   // Use centralized constant
   const SAFE_FALLBACK = SAFE_FALLBACK_MESSAGE;
