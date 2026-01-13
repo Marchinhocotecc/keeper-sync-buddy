@@ -99,6 +99,10 @@ export interface IntentPayload {
   last_list_context?: ListContext;
   // Pending action for CHOOSE_INDEX resolution
   pendingAction?: 'delete' | 'complete';
+  // NEW: Confirmation system
+  awaitingConfirmation?: boolean;  // Flag for two-phase confirmation
+  selectedId?: string;             // Selected item ID for delete/complete
+  selectedTitle?: string;          // Selected item title
 }
 
 export interface LastActionPayload {

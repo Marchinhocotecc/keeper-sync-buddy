@@ -1,23 +1,24 @@
 /**
  * ASSISTANT ORCHESTRATOR - Main Entry Point
  * 
- * ARCHITECTURE RESET: Separazione netta FREE / PREMIUM
+ * ABSOLUTE INVARIANT:
+ * NO WRITE ACTION (create/delete/update) SHALL EVER OCCUR WITHOUT EXPLICIT "SÌ" CONFIRMATION
  * 
- * FREE (Operator):
- * - Esegue SOLO azioni esplicite
- * - Chiede chiarimenti se ambiguo
- * - Chiede conferma prima di scrivere
- * - NON suggerisce, NON consiglia
+ * TWO-PHASE FLOW FOR ALL WRITES:
  * 
- * PREMIUM (Coach):
- * - Analizza, consiglia, pianifica
- * - NON può scrivere direttamente nel DB
- * - Ogni proposta termina con richiesta conferma
+ * PHASE 1 - INTENTION (READ ONLY)
+ *   - User says something
+ *   - Assistant collects required data
+ *   - Assistant summarizes what it understood
+ *   - Assistant asks: "Vuoi che lo faccia? (sì/no)"
  * 
- * ROUTING DETERMINISTICO:
- * - Action verbs → Operator
- * - Reflection/advice → Coach (premium gating)
- * - Ambiguous → Operator asks clarification
+ * PHASE 2 - CONFIRMATION
+ *   - ONLY "sì" enables the action
+ *   - Any other response = cancellation
+ * 
+ * ARCHITECTURE:
+ * - FREE (Operator): Executes explicit actions with confirmation
+ * - PREMIUM (Coach): Analyzes, advises, plans (not implemented yet)
  */
 
 import {
@@ -28,12 +29,18 @@ import {
   executeShowTasks,
   executeShowEvents,
   executeShowExpenses,
+  buildTaskConfirmation,
+  buildEventConfirmation,
+  buildExpenseConfirmation,
   askTypeChoice,
   handleCancel,
   handleAmbiguous,
   isPremiumRequest,
   isValidTitle,
   isForbiddenTitle,
+  isCancel,
+  isConfirmation,
+  normalizeTitle,
   type OperatorResponse,
   type OperatorContext
 } from './freeOperator';
@@ -73,37 +80,16 @@ export interface AssistantResponse {
   data?: any;
 }
 
-// ========== STATE MANAGEMENT ==========
-
-/**
- * Get operator context from state
- */
-function getOperatorContext(state: AssistantState): OperatorContext {
-  const payload = state.intent_payload;
-  return {
-    pendingIntent: state.active_intent as any,
-    pendingData: {
-      title: payload.title,
-      date: payload.date,
-      startTime: payload.startTime || payload.time,
-      amount: payload.amount,
-      category: payload.category
-    },
-    lastShownList: payload.last_list_context,
-    lastSingleItem: payload.last_single_context
-  };
-}
-
 // ========== MAIN ORCHESTRATOR ==========
 
 /**
  * Process user message through the deterministic pipeline
  * 
  * FLOW:
- * 1. Check for active state (follow-up handling)
- * 2. Route message (Operator vs Coach)
- * 3. Premium gating if needed
- * 4. Execute or clarify
+ * 1. CANCEL always first priority
+ * 2. Check for active state (confirmation or data collection)
+ * 3. Route new messages
+ * 4. Execute or ask for data
  */
 export async function processMessage(
   userId: string,
@@ -114,18 +100,18 @@ export async function processMessage(
   console.log('Message:', message);
   
   const trimmed = message.trim();
+  const lower = trimmed.toLowerCase();
   
-  // ========== PHASE 1: LOAD STATE ==========
+  // ========== PHASE 0: LOAD STATE ==========
   const state = await getState(userId);
-  const context = getOperatorContext(state);
   const hasActiveState = state.active_intent && state.active_intent !== 'NONE';
+  const isAwaitingConfirmation = state.intent_payload.awaitingConfirmation === true;
   
   console.log('Active state:', hasActiveState ? state.active_intent : 'NONE');
+  console.log('Awaiting confirmation:', isAwaitingConfirmation);
   
-  // ========== PHASE 2: CANCEL DETECTION (ALWAYS FIRST) ==========
-  const parsed = parseExplicitCommand(trimmed);
-  
-  if (parsed.intent === 'CANCEL') {
+  // ========== PHASE 1: CANCEL IS ALWAYS PRIORITY ==========
+  if (isCancel(lower)) {
     console.log('Cancel detected - clearing state');
     await clearActiveIntent(userId);
     const response = handleCancel();
@@ -133,18 +119,34 @@ export async function processMessage(
     return toAssistantResponse(response);
   }
   
-  // ========== PHASE 3: ACTIVE STATE HANDLING (FOLLOW-UP) ==========
-  if (hasActiveState) {
-    console.log('Handling follow-up for:', state.active_intent);
-    const followUpResponse = await handleFollowUp(userId, message, state);
-    if (followUpResponse) {
-      await saveConversation(userId, message, followUpResponse.message);
-      return followUpResponse;
-    }
-    // If follow-up handler returned null, fall through to route as new message
+  // ========== PHASE 2: HANDLE CONFIRMATION RESPONSE ==========
+  if (isAwaitingConfirmation) {
+    console.log('Processing confirmation response');
+    const confirmationResponse = await handleConfirmationResponse(userId, message, state);
+    await saveConversation(userId, message, confirmationResponse.message);
+    return confirmationResponse;
   }
   
-  // ========== PHASE 4: ROUTE MESSAGE ==========
+  // ========== PHASE 3: HANDLE ACTIVE DATA COLLECTION ==========
+  if (hasActiveState && !isAwaitingConfirmation) {
+    console.log('Handling data collection for:', state.active_intent);
+    
+    // Check if this is a topic change (new explicit command)
+    const parsed = parseExplicitCommand(trimmed);
+    if (parsed.intent !== 'NONE' && parsed.intent !== 'CONFIRM' && parsed.intent !== 'CANCEL') {
+      console.log('Topic change detected - processing as new command');
+      await clearActiveIntent(userId);
+      // Fall through to process as new message
+    } else {
+      const dataResponse = await handleDataCollection(userId, message, state);
+      if (dataResponse) {
+        await saveConversation(userId, message, dataResponse.message);
+        return dataResponse;
+      }
+    }
+  }
+  
+  // ========== PHASE 4: ROUTE NEW MESSAGE ==========
   const route = routeMessage(trimmed);
   console.log('Route decision:', route.target, route.intent);
   
@@ -183,7 +185,7 @@ export async function processMessage(
   
   // ========== PHASE 6: EXECUTE OPERATOR COMMAND ==========
   if (route.target === 'OPERATOR' && route.intent !== 'NONE') {
-    const operatorResponse = await executeOperatorCommand(
+    const operatorResponse = await handleOperatorCommand(
       userId, 
       route.intent, 
       route.extracted,
@@ -195,20 +197,124 @@ export async function processMessage(
   }
   
   // ========== PHASE 7: AMBIGUOUS INPUT ==========
-  // RULE: Do NOT interpret vague input. Ask for clarification.
-  console.log('Ambiguous/vague input - asking for clarification');
+  // RULE: Do NOT interpret vague input. Ask conversationally.
+  console.log('Ambiguous/vague input - responding conversationally');
   const ambiguous = handleAmbiguous();
   await saveConversation(userId, message, ambiguous.message);
   return toAssistantResponse(ambiguous);
 }
 
-// ========== FOLLOW-UP HANDLER ==========
+// ========== CONFIRMATION HANDLER ==========
 
 /**
- * Handle follow-up for active state
- * Returns null if should be treated as new message
+ * Handle user response to a confirmation request
+ * ONLY "sì" executes the action - everything else cancels
  */
-async function handleFollowUp(
+async function handleConfirmationResponse(
+  userId: string,
+  message: string,
+  state: AssistantState
+): Promise<AssistantResponse> {
+  const payload = state.intent_payload;
+  const activeIntent = state.active_intent;
+  
+  // Check for explicit "sì"
+  if (isConfirmation(message)) {
+    console.log('User confirmed - executing action');
+    
+    // Execute based on intent
+    switch (activeIntent) {
+      case 'CREATE_TASK': {
+        const response = await executeCreateTask(userId, payload.title!);
+        await clearActiveIntent(userId);
+        if (response.actionExecuted) {
+          await setLastAction(userId, 'CREATE_TASK', { title: payload.title });
+        }
+        return toAssistantResponse(response);
+      }
+      
+      case 'CREATE_EVENT': {
+        const response = await executeCreateEvent(userId, {
+          title: payload.title,
+          date: payload.date,
+          startTime: payload.startTime || payload.time
+        });
+        await clearActiveIntent(userId);
+        if (response.actionExecuted) {
+          await setLastAction(userId, 'CREATE_EVENT', { 
+            title: payload.title,
+            date: payload.date,
+            startTime: payload.startTime
+          });
+        }
+        return toAssistantResponse(response);
+      }
+      
+      case 'RECORD_EXPENSE': {
+        const response = await executeRecordExpense(userId, {
+          amount: payload.amount,
+          category: payload.category
+        });
+        await clearActiveIntent(userId);
+        if (response.actionExecuted) {
+          await setLastAction(userId, 'RECORD_EXPENSE', { 
+            amount: payload.amount,
+            category: payload.category
+          });
+        }
+        return toAssistantResponse(response);
+      }
+      
+      case 'CONFIRM_BULK_DELETE': {
+        const targetType = payload.targetType;
+        if (targetType === 'tasks') {
+          await dataService.deleteAllTasks(userId);
+        } else if (targetType === 'events') {
+          await dataService.deleteAllEvents(userId);
+        } else if (targetType === 'expenses') {
+          await dataService.deleteAllExpenses(userId);
+        }
+        await clearActiveIntent(userId);
+        return {
+          message: '✅ Eliminati.',
+          source: 'operator',
+          actionExecuted: true
+        };
+      }
+      
+      case 'CONFIRM_BULK_COMPLETE': {
+        await dataService.completeAllTasks(userId);
+        await clearActiveIntent(userId);
+        return {
+          message: '✅ Completati tutti!',
+          source: 'operator',
+          actionExecuted: true
+        };
+      }
+      
+      default:
+        await clearActiveIntent(userId);
+        return toAssistantResponse(handleAmbiguous());
+    }
+  }
+  
+  // NOT a confirmation - cancel the pending action
+  console.log('User did not confirm - cancelling');
+  await clearActiveIntent(userId);
+  return {
+    message: 'Ok, annullato 🙂 Dimmi pure cosa vuoi fare.',
+    source: 'operator',
+    actionExecuted: false
+  };
+}
+
+// ========== DATA COLLECTION HANDLER ==========
+
+/**
+ * Handle data collection for incomplete intents
+ * Once all data is collected, ask for confirmation
+ */
+async function handleDataCollection(
   userId: string,
   message: string,
   state: AssistantState
@@ -216,137 +322,114 @@ async function handleFollowUp(
   const activeIntent = state.active_intent;
   const payload = state.intent_payload;
   const expectedInput = payload.expectedInput || 'NONE';
+  const userInput = message.trim();
   
-  console.log('Follow-up - expected:', expectedInput);
+  console.log('Data collection - expected:', expectedInput);
   
-  // Check for explicit topic change
-  const parsed = parseExplicitCommand(message);
-  if (parsed.intent !== 'NONE' && parsed.intent !== 'CONFIRM' && parsed.intent !== 'CANCEL') {
-    // New explicit command - clear state and process as new
-    console.log('Topic change detected - clearing state');
-    await clearActiveIntent(userId);
-    return null;
+  // ANTI-STUPIDITY: Reject vague input in data collection
+  if (isForbiddenTitle(userInput) && ['TITLE', 'CATEGORY'].includes(expectedInput as string)) {
+    return {
+      message: '❓ Puoi essere più specifico?',
+      source: 'operator',
+      actionExecuted: false
+    };
   }
   
-  // Handle by active intent type
   switch (activeIntent) {
     case 'CREATE_TASK':
-      return await handleCreateTaskFollowUp(userId, message, payload);
+      return await collectTaskData(userId, userInput, payload);
     
     case 'CREATE_EVENT':
-      return await handleCreateEventFollowUp(userId, message, payload);
+      return await collectEventData(userId, userInput, payload);
     
     case 'RECORD_EXPENSE':
-      return await handleRecordExpenseFollowUp(userId, message, payload);
+      return await collectExpenseData(userId, userInput, payload);
     
     case 'CREATE_GENERIC':
     case 'CHOOSE_TYPE':
-      return await handleChooseTypeFollowUp(userId, message, payload);
+      return await handleTypeChoice(userId, userInput, payload);
     
     case 'MANAGE_TASKS':
     case 'MANAGE_EVENTS':
-      return await handleManageFollowUp(userId, message, state);
-    
-    case 'CONFIRM_BULK_DELETE':
-    case 'CONFIRM_BULK_COMPLETE':
-      return await handleConfirmFollowUp(userId, message, state);
+      return await handleIndexSelection(userId, userInput, state);
     
     default:
       return null;
   }
 }
 
-// ========== INTENT-SPECIFIC FOLLOW-UP HANDLERS ==========
+// ========== DATA COLLECTORS ==========
 
-async function handleCreateTaskFollowUp(
+async function collectTaskData(
   userId: string,
-  message: string,
+  userInput: string,
   payload: IntentPayload
 ): Promise<AssistantResponse> {
-  // ANTI-STUPIDITY: User is providing title - validate it's not vague
-  const userInput = message.trim();
-  
-  // Check if user input is forbidden/vague
-  if (isForbiddenTitle(userInput)) {
+  // Expecting title
+  if (!isValidTitle(userInput)) {
     return {
-      message: '❓ Che task vuoi aggiungere?',
+      message: '❓ Che task vuoi creare?',
       source: 'operator',
       actionExecuted: false
     };
   }
   
-  const title = userInput;
+  const title = normalizeTitle(userInput);
   
-  if (!isValidTitle(title)) {
-    return {
-      message: '❓ Dimmi il nome del task.',
-      source: 'operator',
-      actionExecuted: false
-    };
-  }
+  // All data collected - ask for confirmation
+  await updateIntentPayload(userId, { 
+    title, 
+    awaitingConfirmation: true,
+    expectedInput: 'NONE'
+  });
   
-  const response = await executeCreateTask(userId, title);
-  if (response.actionExecuted) {
-    await clearActiveIntent(userId);
-    await setLastAction(userId, 'CREATE_TASK', { title });
-  }
-  
-  return toAssistantResponse(response);
+  return toAssistantResponse(buildTaskConfirmation(title));
 }
 
-async function handleCreateEventFollowUp(
+async function collectEventData(
   userId: string,
-  message: string,
+  userInput: string,
   payload: IntentPayload
 ): Promise<AssistantResponse> {
   const expectedInput = payload.expectedInput || 'TITLE';
   let updatedPayload = { ...payload };
-  const userInput = message.trim();
   
-  // ANTI-STUPIDITY: Check for vague/forbidden input
-  if (isForbiddenTitle(userInput) && expectedInput === 'TITLE') {
+  // Collect title
+  if (expectedInput === 'TITLE' || !payload.title) {
+    if (!isValidTitle(userInput)) {
+      return {
+        message: '❓ Che evento vuoi creare?',
+        source: 'operator',
+        actionExecuted: false
+      };
+    }
+    
+    updatedPayload.title = normalizeTitle(userInput);
+    updatedPayload.expectedInput = 'DATE';
+    await updateIntentPayload(userId, updatedPayload);
+    
     return {
-      message: '❓ Che evento vuoi creare?',
+      message: '❓ Quando?',
       source: 'operator',
       actionExecuted: false
     };
   }
   
-  // Extract data based on what's expected
-  if (expectedInput === 'TITLE' || !payload.title) {
-    if (!isValidTitle(userInput)) {
-      return {
-        message: '❓ Dimmi il nome dell\'evento.',
-        source: 'operator',
-        actionExecuted: false
-      };
-    }
-    updatedPayload.title = userInput;
-    if (!updatedPayload.date) {
-      updatedPayload.expectedInput = 'DATE';
-      await updateIntentPayload(userId, updatedPayload);
-      return {
-        message: '❓ Quando?',
-        source: 'operator',
-        actionExecuted: false
-      };
-    }
-  }
-  
+  // Collect date
   if (expectedInput === 'DATE' || !payload.date) {
-    const date = extractData(message, 'DATE') as string | null;
-    const time = extractData(message, 'TIME') as string | null;
+    const date = extractData(userInput, 'DATE') as string | null;
+    const time = extractData(userInput, 'TIME') as string | null;
     
-    if (date) updatedPayload.date = date;
-    if (time) updatedPayload.startTime = time;
-    
-    if (!updatedPayload.date) {
+    if (!date) {
       return {
-        message: '❓ Che giorno?',
+        message: '❓ Che giorno? (es. domani, lunedì, 15/01)',
         source: 'operator',
         actionExecuted: false
       };
     }
+    
+    updatedPayload.date = date;
+    if (time) updatedPayload.startTime = time;
     
     if (!updatedPayload.startTime) {
       updatedPayload.expectedInput = 'TIME';
@@ -359,106 +442,94 @@ async function handleCreateEventFollowUp(
     }
   }
   
+  // Collect time
   if (expectedInput === 'TIME' || !payload.startTime) {
-    const time = extractData(message, 'TIME') as string | null;
-    if (time) updatedPayload.startTime = time;
+    const time = extractData(userInput, 'TIME') as string | null;
     
-    if (!updatedPayload.startTime) {
+    if (!time) {
       return {
-        message: '❓ A che ora?',
+        message: '❓ A che ora? (es. 15:00, alle 10)',
         source: 'operator',
         actionExecuted: false
       };
     }
+    
+    updatedPayload.startTime = time;
   }
   
-  // All data collected - create event
-  const response = await executeCreateEvent(userId, {
-    title: updatedPayload.title,
-    date: updatedPayload.date,
-    startTime: updatedPayload.startTime
-  });
+  // All data collected - ask for confirmation
+  updatedPayload.awaitingConfirmation = true;
+  updatedPayload.expectedInput = 'NONE';
+  await updateIntentPayload(userId, updatedPayload);
   
-  if (response.actionExecuted) {
-    await clearActiveIntent(userId);
-    await setLastAction(userId, 'CREATE_EVENT', updatedPayload);
-  }
-  
-  return toAssistantResponse(response);
+  return toAssistantResponse(buildEventConfirmation({
+    title: updatedPayload.title!,
+    date: updatedPayload.date!,
+    startTime: updatedPayload.startTime!
+  }));
 }
 
-async function handleRecordExpenseFollowUp(
+async function collectExpenseData(
   userId: string,
-  message: string,
+  userInput: string,
   payload: IntentPayload
 ): Promise<AssistantResponse> {
   const expectedInput = payload.expectedInput || 'AMOUNT';
   let updatedPayload = { ...payload };
-  const userInput = message.trim();
   
-  // ANTI-STUPIDITY: Check for vague input on category
-  if (expectedInput === 'CATEGORY' && isForbiddenTitle(userInput)) {
+  // Collect amount
+  if (expectedInput === 'AMOUNT' || !payload.amount) {
+    const amount = extractData(userInput, 'AMOUNT') as number | null;
+    
+    if (!amount || amount <= 0) {
+      return {
+        message: '❓ Quanto hai speso? (es. 25, 12.50)',
+        source: 'operator',
+        actionExecuted: false
+      };
+    }
+    
+    updatedPayload.amount = amount;
+    updatedPayload.expectedInput = 'CATEGORY';
+    await updateIntentPayload(userId, updatedPayload);
+    
     return {
-      message: '❓ Per cosa era la spesa?',
+      message: '❓ Per cosa?',
       source: 'operator',
       actionExecuted: false
     };
   }
   
-  if (expectedInput === 'AMOUNT' || !payload.amount) {
-    const amount = extractData(message, 'AMOUNT') as number | null;
-    if (amount) updatedPayload.amount = amount;
-    
-    if (!updatedPayload.amount) {
-      return {
-        message: '❓ Quanto?',
-        source: 'operator',
-        actionExecuted: false
-      };
-    }
-    
-    if (!updatedPayload.category) {
-      updatedPayload.expectedInput = 'CATEGORY';
-      await updateIntentPayload(userId, updatedPayload);
-      return {
-        message: '❓ Per cosa?',
-        source: 'operator',
-        actionExecuted: false
-      };
-    }
-  }
-  
+  // Collect category
   if (expectedInput === 'CATEGORY' || !payload.category) {
     if (!isValidTitle(userInput)) {
       return {
-        message: '❓ Per cosa era?',
+        message: '❓ Per cosa era la spesa?',
         source: 'operator',
         actionExecuted: false
       };
     }
-    updatedPayload.category = userInput;
+    
+    updatedPayload.category = normalizeTitle(userInput);
   }
   
-  // All data collected - record expense
-  const response = await executeRecordExpense(userId, {
-    amount: updatedPayload.amount,
-    category: updatedPayload.category
-  });
+  // All data collected - ask for confirmation
+  updatedPayload.awaitingConfirmation = true;
+  updatedPayload.expectedInput = 'NONE';
+  await updateIntentPayload(userId, updatedPayload);
   
-  if (response.actionExecuted) {
-    await clearActiveIntent(userId);
-    await setLastAction(userId, 'RECORD_EXPENSE', updatedPayload);
-  }
-  
-  return toAssistantResponse(response);
+  return toAssistantResponse(buildExpenseConfirmation({
+    amount: updatedPayload.amount!,
+    category: updatedPayload.category!
+  }));
 }
 
-async function handleChooseTypeFollowUp(
+async function handleTypeChoice(
   userId: string,
-  message: string,
+  userInput: string,
   payload: IntentPayload
 ): Promise<AssistantResponse> {
-  const type = extractData(message, 'TYPE') as string | null;
+  const type = extractData(userInput, 'TYPE') as string | null;
   
   if (!type) {
     return {
@@ -472,13 +543,14 @@ async function handleChooseTypeFollowUp(
   const title = payload.title || payload.pendingTitle;
   
   if (type === 'task') {
-    if (title && title.length >= 2) {
-      // We have title, create directly
-      const response = await executeCreateTask(userId, title);
-      if (response.actionExecuted) {
-        await clearActiveIntent(userId);
-      }
-      return toAssistantResponse(response);
+    if (title && isValidTitle(title)) {
+      // Have title - ask for confirmation
+      await setActiveIntent(userId, 'CREATE_TASK', { 
+        title: normalizeTitle(title),
+        awaitingConfirmation: true,
+        expectedInput: 'NONE'
+      }, []);
+      return toAssistantResponse(buildTaskConfirmation(normalizeTitle(title)));
     }
     
     // Need title
@@ -493,7 +565,7 @@ async function handleChooseTypeFollowUp(
   if (type === 'event') {
     await setActiveIntent(userId, 'CREATE_EVENT', { 
       title,
-      expectedInput: title ? 'DATE' : 'TITLE' 
+      expectedInput: title ? 'DATE' : 'TITLE'
     }, title ? ['date', 'startTime'] : ['title', 'date', 'startTime']);
     
     return {
@@ -511,143 +583,97 @@ async function handleChooseTypeFollowUp(
   };
 }
 
-async function handleManageFollowUp(
+async function handleIndexSelection(
   userId: string,
-  message: string,
+  userInput: string,
   state: AssistantState
 ): Promise<AssistantResponse> {
   const payload = state.intent_payload;
   const listContext = payload.last_list_context;
-  const expectedInput = payload.expectedInput;
   
-  // Check for index selection
-  if (expectedInput === 'CHOOSE_INDEX' && listContext) {
-    const indexMatch = message.match(/^(\d+)$/);
-    if (indexMatch) {
-      const index = parseInt(indexMatch[1], 10) - 1;
-      
-      if (index >= 0 && index < listContext.ids.length) {
-        const id = listContext.ids[index];
-        const title = listContext.titles?.[index];
-        const pendingAction = payload.pendingAction;
-        
-        if (pendingAction === 'delete') {
-          if (listContext.type === 'TASK') {
-            await dataService.deleteTask(userId, id);
-          } else if (listContext.type === 'EVENT') {
-            await dataService.deleteEvent(userId, id);
-          }
-          await clearActiveIntent(userId);
-          return {
-            message: title ? `✅ "${title}" eliminato.` : '✅ Eliminato.',
-            source: 'operator',
-            actionExecuted: true
-          };
-        }
-        
-        if (pendingAction === 'complete' && listContext.type === 'TASK') {
-          await dataService.completeTask(userId, id);
-          await clearActiveIntent(userId);
-          return {
-            message: title ? `✅ "${title}" completato!` : '✅ Completato!',
-            source: 'operator',
-            actionExecuted: true
-          };
-        }
-      }
-      
-      return {
-        message: `❓ Scegli da 1 a ${listContext.ids.length}.`,
-        source: 'operator',
-        actionExecuted: false
-      };
-    }
-  }
-  
-  // Not a valid selection
-  return {
-    message: '❓ Quale numero?',
-    source: 'operator',
-    actionExecuted: false
-  };
-}
-
-async function handleConfirmFollowUp(
-  userId: string,
-  message: string,
-  state: AssistantState
-): Promise<AssistantResponse> {
-  const parsed = parseExplicitCommand(message);
-  
-  if (parsed.intent === 'CONFIRM') {
-    const payload = state.intent_payload;
-    const targetType = payload.targetType;
-    
-    if (state.active_intent === 'CONFIRM_BULK_DELETE') {
-      // Execute bulk delete
-      if (targetType === 'tasks') {
-        await dataService.deleteAllTasks(userId);
-      } else if (targetType === 'events') {
-        await dataService.deleteAllEvents(userId);
-      } else if (targetType === 'expenses') {
-        await dataService.deleteAllExpenses(userId);
-      }
-      
-      await clearActiveIntent(userId);
-      return {
-        message: '✅ Eliminati.',
-        source: 'operator',
-        actionExecuted: true
-      };
-    }
-    
-    if (state.active_intent === 'CONFIRM_BULK_COMPLETE') {
-      await dataService.completeAllTasks(userId);
-      await clearActiveIntent(userId);
-      return {
-        message: '✅ Completati tutti!',
-        source: 'operator',
-        actionExecuted: true
-      };
-    }
-  }
-  
-  if (parsed.intent === 'CANCEL') {
+  if (!listContext) {
     await clearActiveIntent(userId);
+    return toAssistantResponse(handleAmbiguous());
+  }
+  
+  const indexMatch = userInput.match(/^(\d+)$/);
+  if (!indexMatch) {
     return {
-      message: '✅ Ok, annullato.',
+      message: `❓ Quale numero? (1-${listContext.ids.length})`,
       source: 'operator',
       actionExecuted: false
     };
   }
   
-  return {
-    message: '❓ Confermi? (Sì/No)',
-    source: 'operator',
-    actionExecuted: false,
-    suggestions: ['Sì', 'No']
-  };
+  const index = parseInt(indexMatch[1], 10) - 1;
+  
+  if (index < 0 || index >= listContext.ids.length) {
+    return {
+      message: `❓ Scegli da 1 a ${listContext.ids.length}.`,
+      source: 'operator',
+      actionExecuted: false
+    };
+  }
+  
+  const id = listContext.ids[index];
+  const title = listContext.titles?.[index];
+  const pendingAction = payload.pendingAction;
+  
+  // Ask for confirmation before delete/complete
+  if (pendingAction === 'delete') {
+    await updateIntentPayload(userId, {
+      selectedId: id,
+      selectedTitle: title,
+      awaitingConfirmation: true
+    });
+    
+    return {
+      message: title 
+        ? `Vuoi eliminare "${title}"? (sì/no)` 
+        : 'Vuoi eliminarlo? (sì/no)',
+      source: 'operator',
+      actionExecuted: false,
+      suggestions: ['Sì', 'No']
+    };
+  }
+  
+  if (pendingAction === 'complete' && listContext.type === 'TASK') {
+    // Complete doesn't need confirmation (it's not destructive)
+    await dataService.completeTask(userId, id);
+    await clearActiveIntent(userId);
+    return {
+      message: title ? `✅ "${title}" completato!` : '✅ Completato!',
+      source: 'operator',
+      actionExecuted: true
+    };
+  }
+  
+  await clearActiveIntent(userId);
+  return toAssistantResponse(handleAmbiguous());
 }
 
-// ========== COMMAND EXECUTOR ==========
+// ========== OPERATOR COMMAND HANDLER ==========
 
-async function executeOperatorCommand(
+/**
+ * Handle operator commands
+ * For WRITE operations: collect data then ask for confirmation
+ * For READ operations: execute immediately
+ */
+async function handleOperatorCommand(
   userId: string,
   intent: string,
   extracted?: string,
   rawMessage?: string
 ): Promise<OperatorResponse> {
-  console.log('Executing operator command:', intent, extracted);
+  console.log('Handling operator command:', intent, extracted);
   
   switch (intent) {
+    // ========== READ OPERATIONS (immediate execution) ==========
     case 'SHOW_TASKS': {
       const response = await executeShowTasks(userId);
       if (response.data?.ids?.length > 0) {
         await updateIntentPayload(userId, {
-          last_list_context: response.data,
-          last_single_context: response.data.ids.length === 1 
-            ? { type: 'TASK', id: response.data.ids[0], title: response.data.titles?.[0] }
-            : undefined
+          last_list_context: response.data
         });
         await setLastAction(userId, 'SHOW_TASKS', response.data);
       }
@@ -658,10 +684,7 @@ async function executeOperatorCommand(
       const response = await executeShowEvents(userId);
       if (response.data?.ids?.length > 0) {
         await updateIntentPayload(userId, {
-          last_list_context: response.data,
-          last_single_context: response.data.ids.length === 1
-            ? { type: 'EVENT', id: response.data.ids[0], title: response.data.titles?.[0] }
-            : undefined
+          last_list_context: response.data
         });
         await setLastAction(userId, 'SHOW_EVENTS', response.data);
       }
@@ -674,18 +697,23 @@ async function executeOperatorCommand(
       return response;
     }
     
+    // ========== WRITE OPERATIONS (require confirmation) ==========
     case 'CREATE_TASK': {
-      if (extracted && extracted.length >= 2) {
-        const response = await executeCreateTask(userId, extracted);
-        if (response.actionExecuted) {
-          await setLastAction(userId, 'CREATE_TASK', { title: extracted });
-        }
-        return response;
+      if (extracted && isValidTitle(extracted)) {
+        const title = normalizeTitle(extracted);
+        // All data present - ask for confirmation
+        await setActiveIntent(userId, 'CREATE_TASK', { 
+          title,
+          awaitingConfirmation: true,
+          expectedInput: 'NONE'
+        }, []);
+        return buildTaskConfirmation(title);
       }
+      
       // Need title
       await setActiveIntent(userId, 'CREATE_TASK', { expectedInput: 'TITLE' }, ['title']);
       return {
-        message: '❓ Che task?',
+        message: '❓ Che task vuoi creare?',
         source: 'operator',
         actionExecuted: false,
         nextExpected: 'TITLE'
@@ -693,33 +721,32 @@ async function executeOperatorCommand(
     }
     
     case 'CREATE_EVENT': {
-      // Parse what we have from the message
       const dateFromMsg = rawMessage ? extractData(rawMessage, 'DATE') as string | null : null;
       const timeFromMsg = rawMessage ? extractData(rawMessage, 'TIME') as string | null : null;
       
-      if (extracted && extracted.length >= 2 && dateFromMsg && timeFromMsg) {
-        // We have everything
-        const response = await executeCreateEvent(userId, {
-          title: extracted,
+      if (extracted && isValidTitle(extracted) && dateFromMsg && timeFromMsg) {
+        const title = normalizeTitle(extracted);
+        // All data present - ask for confirmation
+        await setActiveIntent(userId, 'CREATE_EVENT', { 
+          title,
           date: dateFromMsg,
-          startTime: timeFromMsg
-        });
-        if (response.actionExecuted) {
-          await setLastAction(userId, 'CREATE_EVENT', { title: extracted, date: dateFromMsg, startTime: timeFromMsg });
-        }
-        return response;
+          startTime: timeFromMsg,
+          awaitingConfirmation: true,
+          expectedInput: 'NONE'
+        }, []);
+        return buildEventConfirmation({ title, date: dateFromMsg, startTime: timeFromMsg });
       }
       
-      // Need more data - set up state
+      // Need more data
       await setActiveIntent(userId, 'CREATE_EVENT', {
-        title: extracted,
+        title: extracted ? normalizeTitle(extracted) : undefined,
         date: dateFromMsg || undefined,
         startTime: timeFromMsg || undefined,
         expectedInput: !extracted ? 'TITLE' : !dateFromMsg ? 'DATE' : 'TIME'
       }, []);
       
       if (!extracted) {
-        return { message: '❓ Che evento?', source: 'operator', actionExecuted: false, nextExpected: 'TITLE' };
+        return { message: '❓ Che evento vuoi creare?', source: 'operator', actionExecuted: false, nextExpected: 'TITLE' };
       }
       if (!dateFromMsg) {
         return { message: '❓ Quando?', source: 'operator', actionExecuted: false, nextExpected: 'DATE' };
@@ -728,39 +755,38 @@ async function executeOperatorCommand(
     }
     
     case 'RECORD_EXPENSE': {
-      // Parse amount and category from message
-      const amountFromMsg = rawMessage ? extractData(rawMessage, 'AMOUNT') as number | null : null;
+      let amount: number | undefined;
+      let category: string | undefined;
       
       if (extracted) {
-        // Try to get amount and category from extracted
         const amountMatch = extracted.match(/(\d+(?:[.,]\d+)?)/);
-        const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : amountFromMsg;
-        const category = extracted.replace(/€?\s*\d+(?:[.,]\d+)?\s*(?:euro|€)?/gi, '').trim();
-        
-        if (amount && category && category.length >= 2) {
-          const response = await executeRecordExpense(userId, { amount, category });
-          if (response.actionExecuted) {
-            await setLastAction(userId, 'RECORD_EXPENSE', { amount, category });
-          }
-          return response;
-        }
-        
-        // Need more data
-        await setActiveIntent(userId, 'RECORD_EXPENSE', {
-          amount,
-          category: category.length >= 2 ? category : undefined,
-          expectedInput: !amount ? 'AMOUNT' : 'CATEGORY'
-        }, []);
-        
-        if (!amount) {
-          return { message: '❓ Quanto?', source: 'operator', actionExecuted: false, nextExpected: 'AMOUNT' };
-        }
-        return { message: '❓ Per cosa?', source: 'operator', actionExecuted: false, nextExpected: 'CATEGORY' };
+        amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : undefined;
+        const categoryText = extracted.replace(/€?\s*\d+(?:[.,]\d+)?\s*(?:euro|€)?/gi, '').trim();
+        category = categoryText && isValidTitle(categoryText) ? normalizeTitle(categoryText) : undefined;
       }
       
-      // No extracted data
-      await setActiveIntent(userId, 'RECORD_EXPENSE', { expectedInput: 'AMOUNT' }, ['amount', 'category']);
-      return { message: '❓ Quanto hai speso?', source: 'operator', actionExecuted: false, nextExpected: 'AMOUNT' };
+      if (amount && category) {
+        // All data present - ask for confirmation
+        await setActiveIntent(userId, 'RECORD_EXPENSE', {
+          amount,
+          category,
+          awaitingConfirmation: true,
+          expectedInput: 'NONE'
+        }, []);
+        return buildExpenseConfirmation({ amount, category });
+      }
+      
+      // Need more data
+      await setActiveIntent(userId, 'RECORD_EXPENSE', {
+        amount,
+        category,
+        expectedInput: !amount ? 'AMOUNT' : 'CATEGORY'
+      }, []);
+      
+      if (!amount) {
+        return { message: '❓ Quanto hai speso?', source: 'operator', actionExecuted: false, nextExpected: 'AMOUNT' };
+      }
+      return { message: '❓ Per cosa?', source: 'operator', actionExecuted: false, nextExpected: 'CATEGORY' };
     }
     
     case 'CHOOSE_TYPE': {
@@ -771,15 +797,11 @@ async function executeOperatorCommand(
       return askTypeChoice(extracted);
     }
     
-    case 'COMPLETE_TASK': {
-      // TODO: Implement complete specific task
-      return handleAmbiguous();
-    }
-    
+    case 'COMPLETE_TASK':
     case 'DELETE_TASK':
     case 'DELETE_EVENT':
     case 'DELETE_EXPENSE': {
-      // TODO: Implement delete specific item
+      // These require index selection first
       return handleAmbiguous();
     }
     
