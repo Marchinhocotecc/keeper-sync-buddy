@@ -83,7 +83,7 @@ function getOperatorContext(state: AssistantState): OperatorContext {
     pendingData: {
       title: payload.title,
       date: payload.date,
-      startTime: payload.startTime,
+      startTime: payload.startTime || payload.time,
       amount: payload.amount,
       category: payload.category
     },
@@ -165,7 +165,7 @@ export async function processMessage(
     // Premium user - get coaching
     console.log('Premium coaching requested');
     const userContext = await loadUserContext(userId);
-    const history = getConversationHistory(userId);
+    const history = await getConversationHistory(userId);
     const coaching = await getCoaching(message, userContext, history);
     
     await setLastAction(userId, 'ADVICE', {});
@@ -765,12 +765,12 @@ async function saveConversation(userId: string, userMessage: string, assistantRe
     await addToConversationHistory(userId, {
       role: 'user',
       content: userMessage,
-      timestamp: new Date()
+      timestamp: new Date().toISOString()
     });
     await addToConversationHistory(userId, {
       role: 'assistant',
       content: assistantResponse,
-      timestamp: new Date()
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     console.error('Failed to save conversation:', error);
