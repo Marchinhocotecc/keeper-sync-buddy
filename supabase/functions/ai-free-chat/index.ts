@@ -225,7 +225,18 @@ async function executeAction(supabase: any, userId: string, actionType: string, 
   }
 }
 
-// Build system prompt
+// Common Italian typos mapping (used in prompt instructions)
+const TYPO_EXAMPLES = [
+  "domai → domani",
+  "qst → questo/questa",
+  "xchè → perché",
+  "nn → non",
+  "dp → dopo",
+  "sett → settimana",
+  "dom → domani/domenica (from context)"
+];
+
+// Build system prompt with enhanced natural language understanding
 function buildSystemPrompt(context: any, locale: string): string {
   const pendingTasks = context.todos.filter((t: any) => !t.completed);
   const completedTasks = context.todos.filter((t: any) => t.completed);
@@ -234,50 +245,72 @@ function buildSystemPrompt(context: any, locale: string): string {
   const totalExpenses = context.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
   const budget = context.budget?.amount || 0;
   
-  return `Sei un assistente personale semplice e amichevole. Rispondi in italiano in modo breve e naturale.
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  return `Sei un assistente personale amichevole e intelligente. Parli italiano colloquiale.
+
+DATA ATTUALE: ${today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+DOMANI: ${tomorrow.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
 
 CONTESTO UTENTE:
 - Task in sospeso: ${pendingTasks.length} (${pendingTasks.slice(0, 5).map((t: any) => t.title).join(", ") || "nessuno"})
 - Task completati: ${completedTasks.length}
-- Eventi prossimi: ${todayEvents.length} (${todayEvents.map((e: any) => e.title).join(", ") || "nessuno"})
+- Eventi prossimi: ${todayEvents.length} (${todayEvents.map((e: any) => `${e.title} (${new Date(e.start_time).toLocaleDateString("it-IT")})`).join(", ") || "nessuno"})
 - Spese del mese: €${totalExpenses.toFixed(2)} su budget €${budget}
 
-REGOLE FONDAMENTALI:
-1. Rispondi SOLO in JSON valido con questa struttura esatta:
+COMPRENSIONE LINGUAGGIO NATURALE:
+- Gestisci typo comuni italiani: ${TYPO_EXAMPLES.join(", ")}
+- Interpreta riferimenti temporali: "domai/domani", "sabato prossimo", "tra 2 giorni", "alle 20", "di sera", "stamattina"
+- Estrai informazioni rilevanti anche da frasi lunghe o incomplete
+- Se l'utente dice "padel domai alle 20", crea evento "Padel" per domani alle 20:00
+
+REGOLE OUTPUT JSON (RISPETTA SEMPRE):
+1. Rispondi SOLO in JSON valido:
 {
-  "reply": "testo da mostrare all'utente",
+  "reply": "testo da mostrare all'utente (breve, umano)",
   "intent": "NONE|CREATE_TASK|CREATE_EVENT|RECORD_EXPENSE|QUERY_TASKS|QUERY_EVENTS|QUERY_BUDGET|DELETE_ALL_TASKS|DELETE_ALL_EVENTS|ADVICE",
-  "data": {"title": "", "amount": 0, "category": "", "date": "", "time": "", "priority": ""},
-  "needsConfirmation": false,
-  "confirmationQuestion": null
+  "data": {
+    "title": "titolo pulito (senza verbi come 'crea')",
+    "amount": 0,
+    "category": "",
+    "date": "YYYY-MM-DD",
+    "time": "HH:MM",
+    "start_time": "ISO datetime",
+    "priority": "low|medium|high"
+  },
+  "needsConfirmation": true,
+  "confirmationQuestion": "Creo [cosa]? (sì/no)"
 }
 
-2. Se l'utente chiede di CREARE qualcosa:
-   - Estrai il titolo/importo dalla richiesta
-   - Imposta intent appropriato e data con i dettagli
-   - needsConfirmation = true
-   - confirmationQuestion = "Creo [tipo]: [dettagli]?"
+2. AZIONI DI CREAZIONE:
+   - Estrai titolo pulito (NO verbi come "crea", "aggiungi", "segna")
+   - "crea task lavoro" → title: "Lavoro" (non "crea task lavoro")
+   - "padel domani alle 20" → CREATE_EVENT, title: "Padel", date: domani, time: "20:00"
+   - needsConfirmation = true SEMPRE per create/delete
+   - confirmationQuestion deve essere specifica: "Creo il task 'Lavoro'?" o "Creo evento 'Padel' per domani alle 20:00?"
 
-3. Se l'utente chiede di ELIMINARE TUTTO:
-   - intent = "DELETE_ALL_TASKS" o "DELETE_ALL_EVENTS"
-   - needsConfirmation = true
-   - confirmationQuestion = "Sei sicuro di voler eliminare tutto?"
-
-4. Per domande generiche, consigli, saluti:
-   - intent = "NONE" o "ADVICE"
+3. QUERY (mostra task/eventi/spese):
    - needsConfirmation = false
-   - Rispondi in modo breve e utile
+   - Elenca in modo leggibile nel reply
 
-5. Per query (mostra task, eventi, spese):
-   - intent = "QUERY_TASKS", "QUERY_EVENTS", "QUERY_BUDGET"
+4. CONSIGLI/DOMANDE (ADVICE):
+   - intent = "ADVICE"
    - needsConfirmation = false
-   - Elenca i dati in modo leggibile
+   - Rispondi in modo utile e conversazionale
+   - Per domande lunghe tipo "consigliami come risparmiare...", dai un consiglio pratico
 
-6. MAI creare task/eventi con titoli vaghi come "ok", "no", "pianifichiamo", "sì"
-7. Sii breve, umano, non tecnico
-8. Se qualcosa non è chiaro, chiedi in modo semplice
+5. MAI fare:
+   - Creare con titoli vuoti o vaghi: "ok", "no", "sì", "pianifichiamo"
+   - Se non capisci cosa creare, chiedi chiarimento (intent: NONE, needsConfirmation: false)
 
-Rispondi SOLO con JSON valido, nessun testo extra.`;
+6. Se mancano informazioni per un'azione:
+   - needsConfirmation = true
+   - confirmationQuestion = domanda mirata (UNA sola cosa alla volta)
+   - Es: "Per che giorno vuoi l'evento?"
+
+Rispondi SOLO con JSON valido. Nessun testo extra prima o dopo.`;
 }
 
 // Valid free models on OpenRouter
@@ -290,11 +323,12 @@ const VALID_FREE_MODELS = [
 
 const DEFAULT_MODEL = "deepseek/deepseek-r1-0528:free";
 
-// Call OpenRouter AI
+// Call OpenRouter AI with robust error handling
 async function callOpenRouterAI(systemPrompt: string, userMessage: string): Promise<any> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   if (!apiKey) {
-    throw new Error("OPENROUTER_API_KEY not configured");
+    console.error("[AI-FREE] OPENROUTER_API_KEY not configured");
+    throw new Error("API key not configured");
   }
   
   // Get model from secret, validate it, fallback to default
@@ -307,57 +341,107 @@ async function callOpenRouterAI(systemPrompt: string, userMessage: string): Prom
   }
   
   console.log(`[AI-FREE] Calling OpenRouter with model: ${model}`);
+  console.log(`[AI-FREE] User message: "${userMessage}"`);
   
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://lovable.dev",
-      "X-Title": "Lovable Assistant"
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage }
-      ],
-      max_tokens: 1000,
-      temperature: 0.7
-    })
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[AI-FREE] OpenRouter error:", response.status, errorText);
-    throw new Error(`OpenRouter API error: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || "";
-  
-  console.log("[AI-FREE] Raw AI response:", content.substring(0, 500));
-  
-  // Parse JSON from response (handle markdown code blocks)
-  let parsed;
   try {
-    // Try to extract JSON from possible markdown code block
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/);
-    const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
-    parsed = JSON.parse(jsonStr);
-  } catch (e) {
-    console.error("[AI-FREE] JSON parse error, using fallback:", e);
-    // Fallback response
-    parsed = {
-      reply: content.replace(/```json|```/g, "").trim() || "Mi dispiace, non ho capito. Puoi ripetere?",
-      intent: "NONE",
-      data: {},
-      needsConfirmation: false,
-      confirmationQuestion: null
-    };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://lovable.dev",
+        "X-Title": "Lovable Assistant"
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      }),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[AI-FREE] OpenRouter error:", response.status, errorText);
+      throw new Error(`OpenRouter API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || "";
+    
+    console.log("[AI-FREE] Raw AI response:", content.substring(0, 800));
+    
+    // Parse JSON from response (handle markdown code blocks and thinking blocks)
+    let parsed;
+    try {
+      // Remove <think>...</think> blocks if present (DeepSeek R1 reasoning)
+      let cleanContent = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      
+      // Try to extract JSON from possible markdown code block
+      const jsonMatch = cleanContent.match(/```(?:json)?\s*([\s\S]*?)```/) || cleanContent.match(/(\{[\s\S]*\})/);
+      const jsonStr = jsonMatch ? jsonMatch[1].trim() : cleanContent.trim();
+      parsed = JSON.parse(jsonStr);
+      
+      // Validate required fields
+      if (!parsed.reply) {
+        parsed.reply = "Come posso aiutarti?";
+      }
+      if (!parsed.intent) {
+        parsed.intent = "NONE";
+      }
+      if (parsed.needsConfirmation === undefined) {
+        parsed.needsConfirmation = false;
+      }
+      
+    } catch (e) {
+      console.error("[AI-FREE] JSON parse error:", e);
+      console.error("[AI-FREE] Raw content was:", content);
+      
+      // Try to extract meaningful text from the response
+      let cleanText = content
+        .replace(/<think>[\s\S]*?<\/think>/g, "")
+        .replace(/```json|```/g, "")
+        .trim();
+      
+      // If we got some text, use it as a conversational response
+      if (cleanText && cleanText.length > 5 && cleanText.length < 500) {
+        parsed = {
+          reply: cleanText,
+          intent: "ADVICE",
+          data: {},
+          needsConfirmation: false,
+          confirmationQuestion: null
+        };
+      } else {
+        // Complete fallback
+        parsed = {
+          reply: "Ho capito! Dimmi di più su cosa vorresti fare.",
+          intent: "NONE",
+          data: {},
+          needsConfirmation: false,
+          confirmationQuestion: null
+        };
+      }
+    }
+    
+    return parsed;
+    
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("[AI-FREE] Request timeout");
+      throw new Error("Request timeout");
+    }
+    throw error;
   }
-  
-  return parsed;
 }
 
 serve(async (req) => {
@@ -675,16 +759,37 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("[AI-FREE] Error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
+    // Return user-friendly error with recovery options
+    const isTimeout = errorMessage.includes("timeout");
+    const isApiError = errorMessage.includes("API");
+    
+    let reply = "Si è verificato un problema tecnico.";
+    let suggestions: string[] = [];
+    
+    if (isTimeout) {
+      reply = "La risposta sta impiegando troppo tempo. Vuoi riprovare?";
+      suggestions = ["Riprova", "Mostra task", "Aggiungi task"];
+    } else if (isApiError) {
+      reply = "Ho avuto un problema di connessione. Vuoi riprovare o preferisci fare qualcosa manualmente?";
+      suggestions = ["Riprova", "Mostra task", "Mostra eventi", "Aggiungi task"];
+    } else {
+      reply = "Qualcosa non ha funzionato. Prova a riformulare la richiesta.";
+      suggestions = ["Mostra task", "Aggiungi task", "Mostra eventi"];
+    }
+    
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error",
-        reply: "Si è verificato un errore. Riprova tra poco 😊",
+        reply,
         intent: "ERROR",
         action: { type: "NONE", payload: {} },
         needsConfirmation: false,
-        confirmationQuestion: null
+        confirmationQuestion: null,
+        suggestions,
+        error: errorMessage
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } } // 200 so UI can handle gracefully
     );
   }
 });
