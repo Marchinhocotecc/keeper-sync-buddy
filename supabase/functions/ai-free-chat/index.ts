@@ -323,12 +323,21 @@ const VALID_FREE_MODELS = [
 
 const DEFAULT_MODEL = "deepseek/deepseek-r1-0528:free";
 
-// Call OpenRouter AI with robust error handling
+// Call OpenRouter AI with robust error handling and API key validation
 async function callOpenRouterAI(systemPrompt: string, userMessage: string): Promise<any> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-  if (!apiKey) {
-    console.error("[AI-FREE] OPENROUTER_API_KEY not configured");
-    throw new Error("API key not configured");
+  
+  // Validate API key: must exist, not be empty, and start with sk-or-
+  if (!apiKey || apiKey.trim() === "" || !apiKey.startsWith("sk-or-")) {
+    console.error("[AI-FREE] Invalid or missing OPENROUTER_API_KEY");
+    // Return structured error response instead of throwing
+    return {
+      intent: "ERROR",
+      reply: "Configurazione AI non valida. Riprova più tardi.",
+      data: {},
+      needsConfirmation: false,
+      confirmationQuestion: null
+    };
   }
   
   // Get model from secret, validate it, fallback to default
@@ -336,7 +345,7 @@ async function callOpenRouterAI(systemPrompt: string, userMessage: string): Prom
   
   // If model doesn't look like a valid OpenRouter model ID (contains "/"), use default
   if (!model.includes("/")) {
-    console.log(`[AI-FREE] Invalid model ID "${model}", using default: ${DEFAULT_MODEL}`);
+    console.log(`[AI-FREE] Invalid model ID, using default: ${DEFAULT_MODEL}`);
     model = DEFAULT_MODEL;
   }
   
@@ -352,8 +361,8 @@ async function callOpenRouterAI(systemPrompt: string, userMessage: string): Prom
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://lovable.dev",
-        "X-Title": "Lovable Assistant"
+        "HTTP-Referer": "https://daily-sync-keeper.lovable.app",
+        "X-Title": "Daily Sync Keeper"
       },
       body: JSON.stringify({
         model: model,
@@ -371,8 +380,19 @@ async function callOpenRouterAI(systemPrompt: string, userMessage: string): Prom
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[AI-FREE] OpenRouter error:", response.status, errorText);
-      throw new Error(`OpenRouter API error: ${response.status}`);
+      // Log only status, message, and model - NEVER log API key
+      console.error(`[AI-FREE] OpenRouter error: status=${response.status}, model=${model}, error=${errorText.substring(0, 200)}`);
+      
+      // Return structured error instead of throwing
+      return {
+        intent: "ERROR",
+        reply: response.status === 401 
+          ? "Configurazione AI non valida. Riprova più tardi."
+          : "Servizio AI temporaneamente non disponibile. Riprova tra poco.",
+        data: {},
+        needsConfirmation: false,
+        confirmationQuestion: null
+      };
     }
     
     const data = await response.json();
@@ -404,7 +424,7 @@ async function callOpenRouterAI(systemPrompt: string, userMessage: string): Prom
       
     } catch (e) {
       console.error("[AI-FREE] JSON parse error:", e);
-      console.error("[AI-FREE] Raw content was:", content);
+      console.error("[AI-FREE] Raw content was:", content.substring(0, 500));
       
       // Try to extract meaningful text from the response
       let cleanText = content
@@ -438,9 +458,25 @@ async function callOpenRouterAI(systemPrompt: string, userMessage: string): Prom
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       console.error("[AI-FREE] Request timeout");
-      throw new Error("Request timeout");
+      return {
+        intent: "ERROR",
+        reply: "Richiesta scaduta. Il servizio AI è lento, riprova tra poco.",
+        data: {},
+        needsConfirmation: false,
+        confirmationQuestion: null
+      };
     }
-    throw error;
+    
+    // Log error without exposing sensitive data
+    console.error("[AI-FREE] Unexpected error:", error instanceof Error ? error.message : "Unknown error");
+    
+    return {
+      intent: "ERROR",
+      reply: "Si è verificato un errore imprevisto. Riprova più tardi.",
+      data: {},
+      needsConfirmation: false,
+      confirmationQuestion: null
+    };
   }
 }
 
