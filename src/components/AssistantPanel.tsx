@@ -172,16 +172,36 @@ export default function AssistantPanel() {
         }
       });
       
+      // Handle edge function invocation error
       if (error) {
-        console.error("[AssistantPanel] Edge function error:", error);
-        throw new Error(error.message || "Errore nella comunicazione con l'assistente");
+        console.error("[AssistantPanel] Edge function invocation error:", error);
+        
+        // Show helpful fallback message instead of generic error
+        const fallbackMessage: Message = {
+          role: "assistant",
+          content: "Ho avuto un problema di connessione. Vuoi riprovare o preferisci fare qualcosa manualmente?",
+          timestamp: new Date(),
+          suggestions: ["Riprova", "Mostra task", "Mostra eventi", "Aggiungi task"]
+        };
+        setMessages((prev) => [...prev, fallbackMessage]);
+        setSuggestions([
+          { text: "Riprova", priority: "high" },
+          { text: "Mostra task", priority: "medium" },
+          { text: "Mostra eventi", priority: "medium" },
+        ]);
+        return;
       }
       
       console.log("[AssistantPanel] AI response:", data);
       
+      // Handle error response from edge function (but with 200 status)
+      if (data.intent === "ERROR") {
+        console.warn("[AssistantPanel] AI returned error intent:", data.error);
+      }
+      
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.reply || "Non ho una risposta al momento.",
+        content: data.reply || "Come posso aiutarti?",
         timestamp: new Date(),
         suggestions: data.suggestions
       };
@@ -193,15 +213,21 @@ export default function AssistantPanel() {
         setSuggestions(data.suggestions.map((s: string) => ({ text: s, priority: 'medium' })));
       }
     } catch (error: any) {
-      console.error("[AssistantPanel] Error:", error);
-      toast({
-        title: "Errore",
-        description: error.message || "Errore nell'elaborazione del messaggio",
-        variant: "destructive",
-      });
+      console.error("[AssistantPanel] Unexpected error:", error);
       
-      // Remove failed user message
-      setMessages((prev) => prev.slice(0, -1));
+      // User-friendly error message with action buttons
+      const fallbackMessage: Message = {
+        role: "assistant",
+        content: "Ops! Qualcosa non ha funzionato. Prova a riformulare la richiesta o usa i pulsanti rapidi qui sotto.",
+        timestamp: new Date(),
+        suggestions: ["Mostra task", "Mostra eventi", "Aggiungi task"]
+      };
+      setMessages((prev) => [...prev, fallbackMessage]);
+      setSuggestions([
+        { text: "Mostra task", priority: "high" },
+        { text: "Mostra eventi", priority: "medium" },
+        { text: "Aggiungi task", priority: "medium" },
+      ]);
     } finally {
       setIsLoading(false);
       isRequestingRef.current = false;
