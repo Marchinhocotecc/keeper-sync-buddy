@@ -1,4 +1,10 @@
 project_id = "rqadcblvckfpgmhduemw"
 
-[assistant-ai]
+[functions.assistant-ai]
+verify_jwt = false
+
+[functions.ai-assistant]
+verify_jwt = false
+
+[functions.ai-free-chat]
 verify_jwt = false
