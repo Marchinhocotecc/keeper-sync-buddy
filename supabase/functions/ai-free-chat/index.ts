@@ -280,6 +280,16 @@ REGOLE FONDAMENTALI:
 Rispondi SOLO con JSON valido, nessun testo extra.`;
 }
 
+// Valid free models on OpenRouter
+const VALID_FREE_MODELS = [
+  "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-chat-v3-0324:free", 
+  "google/gemma-3-27b-it:free",
+  "meta-llama/llama-3.3-8b-instruct:free"
+];
+
+const DEFAULT_MODEL = "deepseek/deepseek-r1-0528:free";
+
 // Call OpenRouter AI
 async function callOpenRouterAI(systemPrompt: string, userMessage: string): Promise<any> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
@@ -287,7 +297,14 @@ async function callOpenRouterAI(systemPrompt: string, userMessage: string): Prom
     throw new Error("OPENROUTER_API_KEY not configured");
   }
   
-  const model = Deno.env.get("OPENROUTER_MODEL") || "deepseek/deepseek-r1-0528:free";
+  // Get model from secret, validate it, fallback to default
+  let model = Deno.env.get("OPENROUTER_MODEL") || DEFAULT_MODEL;
+  
+  // If model doesn't look like a valid OpenRouter model ID (contains "/"), use default
+  if (!model.includes("/")) {
+    console.log(`[AI-FREE] Invalid model ID "${model}", using default: ${DEFAULT_MODEL}`);
+    model = DEFAULT_MODEL;
+  }
   
   console.log(`[AI-FREE] Calling OpenRouter with model: ${model}`);
   
