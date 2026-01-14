@@ -360,10 +360,153 @@ export async function queryExpenses(
   return { success: true, data: data ?? [] };
 }
 
+// ============ DELETE OPERATIONS ============
+
+export async function deleteTask(userId: string, taskId: string): Promise<ActionResult> {
+  if (!userId || !taskId) {
+    return {
+      success: false,
+      error: { type: 'VALIDATION_ERROR', missing_fields: ['user_id', 'task_id'] }
+    };
+  }
+  
+  const { error } = await supabase
+    .from('todos')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', taskId);
+  
+  if (error) {
+    return {
+      success: false,
+      error: { type: 'DATABASE_ERROR', message: error.message }
+    };
+  }
+  
+  return { success: true, data: { deleted: true } };
+}
+
+export async function deleteAllTasks(userId: string): Promise<ActionResult> {
+  if (!userId) {
+    return {
+      success: false,
+      error: { type: 'VALIDATION_ERROR', missing_fields: ['user_id'] }
+    };
+  }
+  
+  const { error } = await supabase
+    .from('todos')
+    .delete()
+    .eq('user_id', userId);
+  
+  if (error) {
+    return {
+      success: false,
+      error: { type: 'DATABASE_ERROR', message: error.message }
+    };
+  }
+  
+  return { success: true, data: { deleted: true } };
+}
+
+export async function deleteEvent(userId: string, eventId: string): Promise<ActionResult> {
+  if (!userId || !eventId) {
+    return {
+      success: false,
+      error: { type: 'VALIDATION_ERROR', missing_fields: ['user_id', 'event_id'] }
+    };
+  }
+  
+  const { error } = await supabase
+    .from('calendar_events')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', eventId);
+  
+  if (error) {
+    return {
+      success: false,
+      error: { type: 'DATABASE_ERROR', message: error.message }
+    };
+  }
+  
+  return { success: true, data: { deleted: true } };
+}
+
+export async function deleteAllEvents(userId: string): Promise<ActionResult> {
+  if (!userId) {
+    return {
+      success: false,
+      error: { type: 'VALIDATION_ERROR', missing_fields: ['user_id'] }
+    };
+  }
+  
+  const { error } = await supabase
+    .from('calendar_events')
+    .delete()
+    .eq('user_id', userId);
+  
+  if (error) {
+    return {
+      success: false,
+      error: { type: 'DATABASE_ERROR', message: error.message }
+    };
+  }
+  
+  return { success: true, data: { deleted: true } };
+}
+
+export async function deleteExpense(userId: string, expenseId: string): Promise<ActionResult> {
+  if (!userId || !expenseId) {
+    return {
+      success: false,
+      error: { type: 'VALIDATION_ERROR', missing_fields: ['user_id', 'expense_id'] }
+    };
+  }
+  
+  const { error } = await supabase
+    .from('expenses')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', expenseId);
+  
+  if (error) {
+    return {
+      success: false,
+      error: { type: 'DATABASE_ERROR', message: error.message }
+    };
+  }
+  
+  return { success: true, data: { deleted: true } };
+}
+
+export async function deleteAllExpenses(userId: string): Promise<ActionResult> {
+  if (!userId) {
+    return {
+      success: false,
+      error: { type: 'VALIDATION_ERROR', missing_fields: ['user_id'] }
+    };
+  }
+  
+  const { error } = await supabase
+    .from('expenses')
+    .delete()
+    .eq('user_id', userId);
+  
+  if (error) {
+    return {
+      success: false,
+      error: { type: 'DATABASE_ERROR', message: error.message }
+    };
+  }
+  
+  return { success: true, data: { deleted: true } };
+}
+
 // ============ HELPERS ============
 
 function calculateEndTime(startTime: string): string {
   const [hours, minutes] = startTime.split(':').map(Number);
   const endHour = (hours + 1) % 24;
-  return `${endHour.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`;
+  return `${endHour.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`; 
 }
