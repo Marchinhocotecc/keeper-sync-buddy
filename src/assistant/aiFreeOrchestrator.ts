@@ -17,8 +17,6 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { format, addDays } from 'date-fns';
-import { it } from 'date-fns/locale';
 import {
   validateActionData,
   isWriteAction,
@@ -118,155 +116,46 @@ function parseUIAction(message: string): AIFreeIntent | null {
   return mapping[action] || null;
 }
 
-// ========== SYSTEM PROMPT ==========
+// Note: System prompt is now handled by the ai-free-chat edge function
 
-function buildSystemPrompt(): string {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-  
-  return `Sei un assistente personale operativo. Interpreti i comandi dell'utente e restituisci SOLO JSON strutturato.
+// ========== CALL AI FREE (via Edge Function - SECURE) ==========
 
-DATA OGGI: ${today}
-DATA DOMANI: ${tomorrow}
-
-REGOLE ASSOLUTE:
-1. Rispondi SEMPRE in JSON valido
-2. Non inventare titoli se l'utente non li ha detti
-3. Per "domani" usa: ${tomorrow}
-4. Per "oggi" usa: ${today}
-5. Se mancano informazioni, chiedi in modo breve
-6. Mai eseguire azioni senza dati completi
-7. Le risposte (reply) devono essere brevi e umane
-
-INTENTI DISPONIBILI:
-- NONE: nessun comando chiaro
-- CREATE_TASK: creare un task
-- CREATE_EVENT: creare un evento
-- QUERY_TASKS: mostrare task
-- QUERY_EVENTS: mostrare eventi
-- RECORD_EXPENSE: registrare una spesa
-- QUERY_BUDGET: mostrare spese/budget
-- DELETE_TASK: eliminare un task specifico
-- DELETE_ALL_TASKS: eliminare tutti i task
-- DELETE_EVENT: eliminare un evento specifico
-- DELETE_ALL_EVENTS: eliminare tutti gli eventi
-- DELETE_EXPENSE: eliminare una spesa
-- DELETE_ALL_EXPENSES: eliminare tutte le spese
-- ADVICE: l'utente chiede consigli (non operativo)
-
-FORMATO OUTPUT OBBLIGATORIO:
-{
-  "intent": "INTENT_NAME",
-  "reply": "messaggio breve per l'utente",
-  "data": {
-    "title": "titolo se presente",
-    "date": "YYYY-MM-DD se presente",
-    "time": "HH:MM se presente",
-    "amount": numero se presente,
-    "category": "categoria se presente"
-  },
-  "needsConfirmation": true/false,
-  "confirmationQuestion": "domanda di conferma o null"
-}
-
-ESEMPI:
-
-Input: "crea un task lavoro"
-Output: {"intent":"CREATE_TASK","reply":"Vuoi creare il task \\"Lavoro\\"?","data":{"title":"Lavoro"},"needsConfirmation":true,"confirmationQuestion":"Vuoi creare il task \\"Lavoro\\"? (sì/no)"}
-
-Input: "evento domani alle 15"
-Output: {"intent":"CREATE_EVENT","reply":"Che evento vuoi creare?","data":{"date":"${tomorrow}","time":"15:00"},"needsConfirmation":false,"confirmationQuestion":null}
-
-Input: "mostra i miei task"
-Output: {"intent":"QUERY_TASKS","reply":"Ecco i tuoi task","data":{},"needsConfirmation":false,"confirmationQuestion":null}
-
-Input: "ok pianifichiamo"
-Output: {"intent":"NONE","reply":"Cosa vuoi fare? Posso aiutarti a creare task, eventi o registrare spese.","data":{},"needsConfirmation":false,"confirmationQuestion":null}
-
-Input: "cosa dovrei fare oggi?"
-Output: {"intent":"ADVICE","reply":"Per consigli personalizzati, passa al piano Premium 🌟","data":{},"needsConfirmation":false,"confirmationQuestion":null}`;
-}
-
-// ========== CALL AI FREE (DeepSeek R1 via Lovable AI) ==========
-
-async function callAIFree(userMessage: string): Promise<AIFreeOutput> {
-  console.log('[AIFree] Calling Lovable AI Gateway');
+async function callAIFree(userMessage: string, userId: string): Promise<AIFreeOutput> {
+  console.log('[AIFree] Calling ai-free-chat edge function');
   
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_LOVABLE_API_KEY || ''}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: buildSystemPrompt() },
-          { role: 'user', content: userMessage }
-        ],
-        temperature: 0.1, // Low temperature for deterministic output
-        max_tokens: 500,
-      }),
+    const { data, error } = await supabase.functions.invoke('ai-free-chat', {
+      body: {
+        userMessage,
+        locale: 'it'
+      }
     });
     
-    if (!response.ok) {
-      if (response.status === 429) {
-        console.error('[AIFree] Rate limit exceeded');
-        return getDefaultOutput('⚠️ Troppi messaggi. Riprova tra un momento.');
-      }
-      if (response.status === 402) {
-        console.error('[AIFree] Payment required');
-        return getDefaultOutput('⚠️ Servizio temporaneamente non disponibile.');
-      }
-      
-      console.error('[AIFree] API error:', response.status);
+    if (error) {
+      console.error('[AIFree] Edge function error:', error);
       return getDefaultOutput('⚠️ Errore temporaneo. Riprova.');
     }
     
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
+    // Edge function returns the structured response
+    if (data && data.reply) {
+      return {
+        intent: data.intent || 'NONE',
+        reply: data.reply,
+        data: data.data || {},
+        needsConfirmation: data.needsConfirmation || false,
+        confirmationQuestion: data.confirmationQuestion || null
+      };
+    }
     
-    console.log('[AIFree] Raw response:', content);
-    
-    // Parse JSON from response
-    return parseAIResponse(content);
+    return getDefaultOutput('⚠️ Risposta non valida. Riprova.');
     
   } catch (error) {
-    console.error('[AIFree] Error calling AI:', error);
+    console.error('[AIFree] Error calling edge function:', error);
     return getDefaultOutput('⚠️ Errore di connessione. Riprova.');
   }
 }
 
-function parseAIResponse(content: string): AIFreeOutput {
-  try {
-    // Try to extract JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('[AIFree] No JSON found in response');
-      return getDefaultOutput('Non ho capito. Cosa vuoi fare?');
-    }
-    
-    const parsed = JSON.parse(jsonMatch[0]);
-    
-    // Validate required fields
-    if (!parsed.intent || !parsed.reply) {
-      return getDefaultOutput('Non ho capito. Cosa vuoi fare?');
-    }
-    
-    return {
-      intent: parsed.intent as AIFreeIntent,
-      reply: parsed.reply,
-      data: parsed.data || {},
-      needsConfirmation: parsed.needsConfirmation ?? false,
-      confirmationQuestion: parsed.confirmationQuestion || null
-    };
-    
-  } catch (error) {
-    console.error('[AIFree] JSON parse error:', error);
-    return getDefaultOutput('Non ho capito. Cosa vuoi fare?');
-  }
-}
+// Note: parseAIResponse is now handled by the edge function
 
 function getDefaultOutput(reply: string): AIFreeOutput {
   return {
@@ -522,7 +411,7 @@ export async function processAIFreeMessage(
   }
   
   // ========== PHASE 4: CALL AI FREE ==========
-  const aiOutput = await callAIFree(trimmed);
+  const aiOutput = await callAIFree(trimmed, userId);
   console.log('[AIFree] AI output:', aiOutput);
   
   // ========== PHASE 5: VALIDATE OUTPUT ==========

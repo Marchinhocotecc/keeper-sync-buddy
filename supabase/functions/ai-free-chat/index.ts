@@ -802,15 +802,11 @@ serve(async (req) => {
   }
 
   try {
-    const { userMessage, userId, locale = "it" } = await req.json();
+    // Parse request body
+    const body = await req.json();
+    const { userMessage, locale = "it" } = body;
     
-    if (!userId) {
-      return new Response(
-        JSON.stringify(createResponse({ intent: "ERROR", reply: "userId richiesto" })),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
+    // Validate required fields
     if (!userMessage || typeof userMessage !== "string") {
       return new Response(
         JSON.stringify(createResponse({ intent: "ERROR", reply: "Messaggio richiesto" })),
@@ -818,12 +814,42 @@ serve(async (req) => {
       );
     }
 
+    // Create Supabase client with service role for database operations
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
     
+    // Extract and validate JWT from Authorization header
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("[AI-FREE] Missing or invalid authorization header");
+      return new Response(
+        JSON.stringify(createResponse({ intent: "ERROR", reply: "Non autenticato. Effettua il login." })),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Create auth client to verify token
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    const { data: userData, error: userError } = await authClient.auth.getUser();
+    
+    if (userError || !userData?.user?.id) {
+      console.error("[AI-FREE] JWT verification failed:", userError?.message || "No user");
+      return new Response(
+        JSON.stringify(createResponse({ intent: "ERROR", reply: "Sessione scaduta. Effettua nuovamente il login." })),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Extract userId from verified JWT
+    const userId = userData.user.id;
+    
     const message = userMessage.trim();
-    console.log(`[AI-FREE] User ${userId}: "${message}"`);
+    console.log(`[AI-FREE] Authenticated user ${userId}: "${message}"`);
     
     // === UI ACTIONS (bypass all routing) ===
     if (message.startsWith("__UI_ACTION__:")) {

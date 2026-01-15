@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.ai-assistant]
 verify_jwt = false
+
+[functions.ai-free-chat]
+verify_jwt = false
