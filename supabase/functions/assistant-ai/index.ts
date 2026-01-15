@@ -142,7 +142,28 @@ serve(async (req) => {
       );
     }
 
-    const { prompt, message, userId, context, history, systemPrompt, forceJson } = body;
+    // Extract and validate JWT from Authorization header
+    const authHeader = req.headers.get("authorization");
+    let userId: string | null = null;
+    
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      // Create auth client to verify token
+      const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(supabaseUrl!, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      
+      const { data: userData, error: userError } = await authClient.auth.getUser();
+      
+      if (!userError && userData?.user?.id) {
+        userId = userData.user.id;
+        console.log(`[ASSISTANT-AI] Authenticated user: ${userId}`);
+      } else {
+        console.warn("[ASSISTANT-AI] JWT verification failed, continuing without user context");
+      }
+    }
+
+    const { prompt, message, context, history, systemPrompt, forceJson } = body;
     const userMessage = prompt || message;
 
     if (!userMessage || typeof userMessage !== "string" || userMessage.trim().length === 0) {
