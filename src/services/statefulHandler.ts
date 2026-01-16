@@ -192,6 +192,7 @@ import {
   hasActiveIntent,
   isPayloadComplete,
   getMissingFields,
+  patchState,
   type AssistantState,
   type ActiveIntent,
   type IntentPayload,
@@ -253,6 +254,10 @@ const BULK_DELETE_PATTERNS = [
 // Import centralized constants
 import { SAFE_FALLBACK_MESSAGE } from '@/assistant/constants';
 
+// Anti-loop protection constants
+const MAX_ATTEMPTS = 3;
+const ANTI_LOOP_MESSAGE = "Sto avendo difficoltà a completare questa azione. Vuoi annullare (scrivi 'annulla') o riprovare riscrivendo i dettagli in una frase?";
+
 // Bulk delete patterns - require confirmation
 const BULK_DELETE_ALL_PATTERNS = [
   { pattern: /(?:elimina|cancella|rimuovi)\s+(?:tutt[eio]|tutti)\s+(?:i\s+)?task/i, type: 'tasks' },
@@ -268,26 +273,27 @@ const BULK_DELETE_ALL_PATTERNS = [
  * INVARIANT: After this function, there MUST be no pending intent anywhere
  */
 export async function clearAllAssistantState(userId: string): Promise<void> {
-  console.log('[StatefulHandler] ===== CLEARING ALL STATE =====');
-  console.log('[StatefulHandler] User:', userId);
+  console.log('[AssistantState] cleared');
   
-  // 1. Clear Supabase stateful state (active_intent + intent_payload)
+  // 1. Clear Supabase stateful state (active_intent + intent_payload + attempts)
   try {
-    await clearActiveIntent(userId);
-    console.log('[StatefulHandler] Supabase state cleared');
+    await patchState(userId, {
+      active_intent: 'NONE',
+      intent_payload: {},
+      missing_fields: [],
+      awaiting_confirmation: false,
+      attempts: 0
+    });
   } catch (e) {
-    console.error('[StatefulHandler] Error clearing Supabase state:', e);
+    console.error('[AssistantState] Error clearing Supabase state:', e);
   }
   
   // 2. Clear legacy in-memory pending intent
   try {
     clearLegacyPendingIntent(userId);
-    console.log('[StatefulHandler] Legacy pending intent cleared');
   } catch (e) {
-    console.error('[StatefulHandler] Error clearing legacy state:', e);
+    console.error('[AssistantState] Error clearing legacy state:', e);
   }
-  
-  console.log('[StatefulHandler] ===== ALL STATE CLEARED =====');
 }
 
 /**
@@ -798,17 +804,34 @@ export async function handleStatefulMessage(
   
   // ===== PHASE 1: Check for active intent =====
   if (hasActiveIntent(state)) {
-    console.log('[StatefulHandler] Handling follow-up for:', state.active_intent);
+    console.log('[Orchestrator] using stateful: true (reason: active_intent=' + state.active_intent + ')');
+    
+    // ===== ANTI-LOOP PROTECTION =====
+    const currentAttempts = (state.attempts ?? 0) + 1;
+    await patchState(userId, { attempts: currentAttempts });
+    
+    if (currentAttempts >= MAX_ATTEMPTS) {
+      console.log('[Orchestrator] Anti-loop triggered: attempts=' + currentAttempts);
+      // Don't clear state yet - let user decide to cancel or retry
+      return { 
+        message: ANTI_LOOP_MESSAGE, 
+        source: 'stateful',
+        suggestions: ['Annulla']
+      };
+    }
+    
     const response = await handleFollowUp(userId, message, state);
     
     // INVARIANT: Never return empty
     if (!response.message || response.message.trim() === '') {
-      console.log('[StatefulHandler] Follow-up returned empty, using safe fallback');
+      console.log('[Orchestrator] Follow-up returned empty, using safe fallback');
       return { message: SAFE_FALLBACK_MESSAGE, source: 'stateful' };
     }
     
     return response;
   }
+  
+  console.log('[Orchestrator] using stateful: false (reason: active_intent=NONE)');
   
   // ===== PHASE 2: Check for delete/manage commands =====
   if (DELETE_MANAGE_PATTERNS.some(p => p.test(message))) {

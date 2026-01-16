@@ -123,6 +123,8 @@ export interface AssistantState {
   missing_fields: string[];
   last_action_type: LastActionType;
   last_action_payload: LastActionPayload;
+  awaiting_confirmation: boolean;
+  attempts: number;
   updated_at: string;
 }
 
@@ -131,7 +133,9 @@ const DEFAULT_STATE: Omit<AssistantState, 'user_id' | 'updated_at'> = {
   intent_payload: {},
   missing_fields: [],
   last_action_type: 'NONE',
-  last_action_payload: {}
+  last_action_payload: {},
+  awaiting_confirmation: false,
+  attempts: 0
 };
 
 /**
@@ -189,6 +193,8 @@ export async function getState(userId: string): Promise<AssistantState> {
       missing_fields: (data.missing_fields || []) as string[],
       last_action_type: (data.last_action_type || 'NONE') as LastActionType,
       last_action_payload: (data.last_action_payload || {}) as LastActionPayload,
+      awaiting_confirmation: data.awaiting_confirmation ?? false,
+      attempts: data.attempts ?? 0,
       updated_at: data.updated_at
     };
   } catch (error) {

@@ -86,6 +86,8 @@ export type Database = {
       assistant_state: {
         Row: {
           active_intent: string
+          attempts: number
+          awaiting_confirmation: boolean
           intent_payload: Json
           last_action_payload: Json
           last_action_type: string
@@ -95,6 +97,8 @@ export type Database = {
         }
         Insert: {
           active_intent?: string
+          attempts?: number
+          awaiting_confirmation?: boolean
           intent_payload?: Json
           last_action_payload?: Json
           last_action_type?: string
@@ -104,6 +108,8 @@ export type Database = {
         }
         Update: {
           active_intent?: string
+          attempts?: number
+          awaiting_confirmation?: boolean
           intent_payload?: Json
           last_action_payload?: Json
           last_action_type?: string
