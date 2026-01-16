@@ -83,8 +83,32 @@ const FORBIDDEN_TITLES = [
   "un", "una", "il", "la", "lo", "i", "gli", "le"
 ];
 
-// Cancel patterns
-const CANCEL_PATTERNS = ["no", "annulla", "lascia stare", "stop", "niente", "cambia idea", "non importa", "lascia perdere"];
+// Cancel patterns (pure standalone)
+const CANCEL_PATTERNS_STANDALONE = ["no", "annulla", "lascia stare", "stop", "niente", "cambia idea", "non importa", "lascia perdere", "basta"];
+
+// Cancel patterns with continuation (e.g., "no, consigliami cosa fare oggi")
+const CANCEL_PREFIX_PATTERNS = [
+  /^no\s*,\s*(.+)$/i,           // "no, consigliami..."
+  /^no\s+(?!task|evento|spesa|grazie)(.{3,})$/i, // "no consigliami..." (no comma, but not "no task")
+  /^annulla\s*,?\s*(.+)$/i,     // "annulla, fammi vedere..."
+  /^lascia\s*(?:stare|perdere)\s*,?\s*(.+)$/i, // "lascia stare, dimmi..."
+  /^niente\s*,?\s*(.+)$/i,      // "niente, consigliami..."
+  /^basta\s*,?\s*(.+)$/i,       // "basta, dimmi..."
+  /^stop\s*,?\s*(.+)$/i,        // "stop, consigliami..."
+];
+
+// ADVICE patterns - NEVER ask for date/time on these
+const ADVICE_PATTERNS = [
+  /cosa\s+(?:posso|potrei|dovrei)\s+fare/i,
+  /cosa\s+faccio\s+oggi/i,
+  /consigliami/i,
+  /(?:dammi|dai)\s+(?:un\s+)?(?:consiglio|idea|suggerimento)/i,
+  /come\s+posso/i,
+  /idee\s+per/i,
+  /che\s+(?:cosa|ne)\s+(?:faccio|dici)/i,
+  /aiutami\s+(?:a\s+)?(?:capire|decidere)/i,
+  /non\s+so\s+(?:cosa|che)\s+fare/i,
+];
 
 interface PendingAction {
   type: string;
@@ -182,14 +206,56 @@ function isForbiddenTitle(title: string): boolean {
   return FORBIDDEN_TITLES.includes(lower) || lower.length < 2;
 }
 
+// Check for pure cancel (standalone words)
 function isCancel(message: string): boolean {
   const lower = message.toLowerCase().trim();
-  return CANCEL_PATTERNS.some(p => lower === p || lower.startsWith(p + " "));
+  return CANCEL_PATTERNS_STANDALONE.some(p => lower === p);
+}
+
+// Check for cancel with continuation - returns { isCancel, continuation }
+function detectCancelWithContinuation(message: string): { isCancel: boolean; continuation: string | null } {
+  const lower = message.toLowerCase().trim();
+  
+  // Pure cancel first
+  if (CANCEL_PATTERNS_STANDALONE.some(p => lower === p)) {
+    return { isCancel: true, continuation: null };
+  }
+  
+  // Cancel prefix with continuation
+  for (const pattern of CANCEL_PREFIX_PATTERNS) {
+    const match = message.match(pattern);
+    if (match && match[1] && match[1].trim().length > 2) {
+      return { isCancel: true, continuation: match[1].trim() };
+    }
+  }
+  
+  return { isCancel: false, continuation: null };
+}
+
+// Check if message is an ADVICE request (NEVER ask for date/time)
+function isAdviceRequest(message: string): boolean {
+  const lower = message.toLowerCase();
+  return ADVICE_PATTERNS.some(p => p.test(lower));
 }
 
 function isConfirm(message: string): boolean {
   const lower = message.toLowerCase().trim();
   return ["sì", "si", "yes", "ok", "confermo", "conferma", "va bene", "procedi", "fatto", "perfetto", "certo", "dai"].includes(lower);
+}
+
+// ============================================================================
+// NORMALIZE INPUT (CRITICAL: Fix decimal comma → dot)
+// ============================================================================
+
+/**
+ * Normalize user text BEFORE any parsing:
+ * - Converts decimal comma to dot: 5,5 → 5.5, €5,50 → €5.50
+ * - Does NOT touch date slashes: 26/01 stays 26/01
+ */
+function normalizeUserText(input: string): string {
+  // Pattern: number followed by comma followed by 1-2 digits (decimal)
+  // But NOT when it's part of a date (no digits immediately after the 2 decimal digits)
+  return input.replace(/(\d),(\d{1,2})(?!\d)/g, '$1.$2');
 }
 
 // ============================================================================
@@ -372,36 +438,40 @@ function buildISODateTime(date: string, time: string): string {
 // ============================================================================
 
 function parseExpense(text: string): { amount: number | null; category: string | null; description: string | null } {
-  const lower = text.toLowerCase();
-  const original = text;
+  // CRITICAL: Normalize decimal comma to dot FIRST
+  const normalized = normalizeUserText(text);
+  const lower = normalized.toLowerCase();
+  const original = normalized;
   
   // Parse amount - multiple patterns
   let amount: number | null = null;
   const amountPatterns = [
-    /€\s*(\d+(?:[.,]\d{1,2})?)/,
-    /(\d+(?:[.,]\d{1,2})?)\s*€/,
-    /(\d+(?:[.,]\d{1,2})?)\s*euro/i,
-    /(\d+(?:[.,]\d{1,2})?)\s*eur\b/i
+    /€\s*(\d+(?:\.\d{1,2})?)/,          // €5.50
+    /(\d+(?:\.\d{1,2})?)\s*€/,          // 5.50€
+    /(\d+(?:\.\d{1,2})?)\s*euro/i,      // 5.50 euro
+    /(\d+(?:\.\d{1,2})?)\s*eur\b/i      // 5.50 eur
   ];
   
   for (const pattern of amountPatterns) {
     const match = lower.match(pattern);
     if (match) {
-      amount = parseFloat(match[1].replace(",", "."));
+      amount = parseFloat(match[1]);
       break;
     }
   }
   
-  // If no symbol/word, check for standalone number with context
+  // If no symbol/word, check for standalone number with word context
+  // Pattern: "word number" or "number word" (e.g., "sigarette 5.50", "5.50 sigarette")
   if (!amount) {
-    // Pattern: "word number" or "number word" (e.g., "sigarette 5.50", "5.50 sigarette")
-    const numWordMatch = original.match(/(\d+(?:[.,]\d{1,2})?)\s+(\w+)/i);
-    const wordNumMatch = original.match(/(\w+)\s+(\d+(?:[.,]\d{1,2})?)/i);
+    // Number followed by word (5.5 sigarette)
+    const numWordMatch = original.match(/^(\d+(?:\.\d{1,2})?)\s+([a-zA-ZàèéìòùÀÈÉÌÒÙ\s]+)$/i);
+    // Word followed by number (sigarette 5.5)
+    const wordNumMatch = original.match(/^([a-zA-ZàèéìòùÀÈÉÌÒÙ\s]+?)\s+(\d+(?:\.\d{1,2})?)$/i);
     
     if (numWordMatch) {
-      amount = parseFloat(numWordMatch[1].replace(",", "."));
+      amount = parseFloat(numWordMatch[1]);
     } else if (wordNumMatch) {
-      amount = parseFloat(wordNumMatch[2].replace(",", "."));
+      amount = parseFloat(wordNumMatch[2]);
     }
   }
   
@@ -538,15 +608,20 @@ function deterministicRouter(message: string, state?: any): RouterResult {
   const { date, time } = parseDateTime(message);
   
   // === EXPENSE DETECTION (HIGHEST PRIORITY FOR MONEY PATTERNS) ===
-  // Patterns: "sigarette €5,50", "pranzo 12 euro", "€20 benzina", "5.50 sigarette"
+  // Patterns: "sigarette €5,50", "pranzo 12 euro", "€20 benzina", "5.50 sigarette", "5,5 sigarette"
+  // CRITICAL: Also detect "number word" or "word number" patterns for quick expense entry
+  const normalizedMessage = normalizeUserText(message);
   const expensePatterns = [
     /€\s*\d+/,
-    /\d+(?:[.,]\d{1,2})?\s*€/,
-    /\d+(?:[.,]\d{1,2})?\s*euro/i,
-    /\d+(?:[.,]\d{1,2})?\s*eur\b/i
+    /\d+(?:\.\d{1,2})?\s*€/,
+    /\d+(?:\.\d{1,2})?\s*euro/i,
+    /\d+(?:\.\d{1,2})?\s*eur\b/i,
+    // Simple patterns like "5.5 sigarette" or "sigarette 5.5"
+    /^\d+(?:\.\d{1,2})?\s+[a-zA-ZàèéìòùÀÈÉÌÒÙ]+/i,
+    /^[a-zA-ZàèéìòùÀÈÉÌÒÙ]+\s+\d+(?:\.\d{1,2})?$/i,
   ];
   
-  if (expensePatterns.some(p => p.test(message))) {
+  if (expensePatterns.some(p => p.test(normalizedMessage))) {
     const { amount, category, description } = parseExpense(message);
     if (amount && amount > 0) {
       return {
@@ -1476,12 +1551,99 @@ serve(async (req) => {
       }
     }
     
-    // === CANCEL HANDLING ===
-    if (isCancel(message)) {
+    // === CANCEL + CONTINUATION HANDLING (CRITICAL: BEFORE ALL OTHER ROUTING) ===
+    const cancelResult = detectCancelWithContinuation(message);
+    if (cancelResult.isCancel) {
+      console.log(`[AI-FREE] Cancel detected, continuation: ${cancelResult.continuation}`);
+      
+      // Clear state FIRST
       await clearAssistantState(supabase, userId);
+      await setPendingAction(supabase, userId, null);
+      
+      // If there's a continuation, process it as a fresh message
+      if (cancelResult.continuation) {
+        console.log(`[AI-FREE] Processing continuation: "${cancelResult.continuation}"`);
+        // DON'T return cancel response - recursively process the continuation
+        // We need to process the continuation through the full pipeline
+        // So we reassign message and fall through to the rest of the handler
+        // This is handled by re-calling the router with cleared state
+        
+        // Check if continuation is an ADVICE request (GUARDRAIL)
+        if (isAdviceRequest(cancelResult.continuation)) {
+          return jsonResponse(createResponse({
+            intent: "ADVICE",
+            reply: "Potresti: controllare i tuoi task, pianificare un nuovo evento, o registrare una spesa. Cosa preferisci?",
+            suggestions: ["Mostra task", "Aggiungi evento", "Mostra spese"]
+          }));
+        }
+        
+        // Process continuation through deterministic router
+        const contRouterResult = deterministicRouter(cancelResult.continuation, { active_intent: 'NONE' });
+        if (contRouterResult.matched) {
+          // Handle queries and advice directly
+          if (contRouterResult.intent === "SMALL_TALK" || contRouterResult.intent === "ADVICE") {
+            return jsonResponse(createResponse({
+              intent: contRouterResult.intent,
+              reply: contRouterResult.reply!,
+              suggestions: contRouterResult.suggestions
+            }));
+          }
+          // For other matched intents, set up state and return
+          if (contRouterResult.needsConfirmation || (contRouterResult.missingFields && contRouterResult.missingFields.length > 0)) {
+            if (contRouterResult.intent && contRouterResult.intent !== "NONE") {
+              const newPayload: any = { expectedInput: contRouterResult.missingFields?.[0]?.toUpperCase() };
+              if (contRouterResult.action?.title) newPayload.title = contRouterResult.action.title;
+              await updateAssistantState(supabase, userId, {
+                active_intent: contRouterResult.intent,
+                intent_payload: newPayload
+              });
+            }
+          }
+          return jsonResponse(createResponse({
+            intent: contRouterResult.intent || "NONE",
+            action: contRouterResult.action || { type: "NONE" },
+            reply: contRouterResult.reply!,
+            needsConfirmation: contRouterResult.needsConfirmation || false,
+            confirmationQuestion: contRouterResult.confirmationQuestion || null,
+            missingFields: contRouterResult.missingFields || [],
+            suggestions: contRouterResult.suggestions
+          }));
+        }
+        
+        // Continuation not matched by router - use LLM
+        const context = await fetchUserContext(supabase, userId);
+        const systemPrompt = buildSystemPrompt(context);
+        const aiResponse = await callOpenRouterAI(systemPrompt, cancelResult.continuation);
+        return jsonResponse(createResponse({
+          intent: aiResponse.intent,
+          action: aiResponse.action || { type: "NONE" },
+          reply: aiResponse.reply,
+          needsConfirmation: aiResponse.needsConfirmation || false,
+          confirmationQuestion: aiResponse.confirmationQuestion || null,
+          missingFields: aiResponse.missingFields || []
+        }));
+      }
+      
+      // No continuation - just cancel
       return jsonResponse(createResponse({ 
         intent: "CANCEL", 
         reply: "Ok, annullato." 
+      }));
+    }
+    
+    // === ADVICE GUARDRAIL (CRITICAL: BEFORE slot filling to prevent "A che ora?") ===
+    if (isAdviceRequest(message)) {
+      console.log("[AI-FREE] Advice request detected - clearing state");
+      // Clear any pending state - user is changing topic
+      if (state.active_intent && state.active_intent !== 'NONE') {
+        await clearAssistantState(supabase, userId);
+        await setPendingAction(supabase, userId, null);
+      }
+      
+      return jsonResponse(createResponse({
+        intent: "ADVICE",
+        reply: "Potresti: controllare i tuoi task, pianificare un nuovo evento, o registrare una spesa. Cosa preferisci?",
+        suggestions: ["Mostra task", "Aggiungi evento", "Mostra spese"]
       }));
     }
     
