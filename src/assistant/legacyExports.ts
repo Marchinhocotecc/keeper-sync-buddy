@@ -1,11 +1,10 @@
 /**
  * Legacy Exports - Backwards compatibility for functions still used elsewhere
+ * 
+ * CLEANED: Removed pendingIntent references
  */
 
-import { format, addDays } from 'date-fns';
-import { loadUserContext } from './contextLoader';
 import { clearActiveIntent } from '@/services/assistantStateService';
-import { clearPendingIntent } from './contextStore';
 
 /**
  * Get a smart greeting based on time of day
@@ -35,9 +34,6 @@ export async function resetConversation(userId: string): Promise<void> {
   try {
     // Clear Supabase state
     await clearActiveIntent(userId);
-    
-    // Clear in-memory pending intent
-    clearPendingIntent(userId);
     
     console.log('[Legacy] Conversation reset complete');
   } catch (error) {
