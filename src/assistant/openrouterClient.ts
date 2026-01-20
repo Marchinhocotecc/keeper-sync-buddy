@@ -1,11 +1,11 @@
 /**
  * OpenRouter Client - Wrapper for external AI calls
- * Updated: force module refresh
+ * 
+ * CLEANED: Removed legacy intentParser dependency
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import type { AIConversationEntry, OpenRouterOptions, ParsedAIResponse } from './typesAI';
-import { parseAIResponse } from './intentParser';
 
 const DEFAULT_TIMEOUT = 12000; // 12 seconds
 const DEFAULT_RETRIES = 2;
@@ -44,6 +44,37 @@ ESEMPI SBAGLIATI (DA NON FARE):
 ❌ "Spesa registrata"
 
 Rispondi SOLO in JSON valido.`;
+
+/**
+ * Parse AI response from raw text
+ */
+function parseAIResponse(rawText: string): ParsedAIResponse {
+  if (!rawText || typeof rawText !== 'string') {
+    return { success: false, response: null, error: 'Empty response' };
+  }
+
+  try {
+    // Try to extract JSON from the response
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return { success: true, response: parsed };
+    }
+    
+    // If no JSON, return the raw text as message
+    return { 
+      success: true, 
+      response: { 
+        intent: 'unknown', 
+        message: rawText,
+        payload: {}
+      } 
+    };
+  } catch (error) {
+    console.error('Error parsing AI response:', error);
+    return { success: false, response: null, error: 'Parse error' };
+  }
+}
 
 /**
  * Send message to external AI via edge function

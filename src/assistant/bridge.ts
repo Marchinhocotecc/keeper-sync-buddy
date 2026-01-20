@@ -3,7 +3,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { format, addDays, parse, isValid } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import type { 
   AIIntent, 
   AIPayload, 
@@ -13,7 +13,24 @@ import type {
   ExpensePayload, 
   NotePayload 
 } from './typesAI';
-import { getActionConfirmation } from './fallback';
+
+// Action confirmation messages
+const ACTION_CONFIRMATIONS: Record<string, { success: string; fail: string }> = {
+  create_event: { success: '✅ Evento creato:', fail: '❌ Errore evento' },
+  create_task: { success: '✅ Task aggiunto:', fail: '❌ Errore task' },
+  create_expense: { success: '✅ Spesa registrata:', fail: '❌ Errore spesa' },
+  create_note: { success: '✅ Nota salvata', fail: '❌ Errore nota' },
+  update_task: { success: '✅ Task aggiornato', fail: '❌ Errore aggiornamento' },
+  delete_task: { success: '✅ Task eliminato', fail: '❌ Errore eliminazione' },
+};
+
+/**
+ * Get action confirmation message
+ */
+export function getActionConfirmation(action: string, success: boolean): string {
+  const messages = ACTION_CONFIRMATIONS[action] || { success: '✅ Fatto!', fail: '❌ Errore' };
+  return success ? messages.success : messages.fail;
+}
 
 /**
  * Execute a command from AI response

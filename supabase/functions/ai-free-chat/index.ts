@@ -75,6 +75,9 @@ function createResponse(partial: Partial<AIResponse>): AIResponse {
 // CONSTANTS
 // ============================================================================
 
+// PREMIUM-ONLY actions (FREE users blocked)
+const PREMIUM_ONLY_ACTIONS = ['DELETE_ALL_TASKS', 'DELETE_ALL_EVENTS', 'DELETE_ALL_EXPENSES'];
+
 // Forbidden titles - never create with these
 const FORBIDDEN_TITLES = [
   "ok", "no", "sì", "si", "yes", "ciao", "salve", "grazie", "boh", 
@@ -82,6 +85,20 @@ const FORBIDDEN_TITLES = [
   "annulla", "lascia stare", "niente", "nulla", "stop", "task", "evento",
   "un", "una", "il", "la", "lo", "i", "gli", "le"
 ];
+
+// Check if action is premium-only
+function isPremiumOnlyAction(actionType: string): boolean {
+  return PREMIUM_ONLY_ACTIONS.includes(actionType);
+}
+
+// FREE plan message for premium features
+function getPremiumBlockedMessage(): AIResponse {
+  return createResponse({
+    intent: "NONE",
+    reply: "⭐ Questa funzione (bulk delete) è disponibile nel piano Premium. Per ora puoi eliminare uno alla volta.",
+    suggestions: ["Mostra task", "Mostra eventi"]
+  });
+}
 
 // Cancel patterns (pure standalone)
 const CANCEL_PATTERNS_STANDALONE = ["no", "annulla", "lascia stare", "stop", "niente", "cambia idea", "non importa", "lascia perdere", "basta"];

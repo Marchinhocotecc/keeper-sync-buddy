@@ -1,108 +1,16 @@
 /**
- * Context Store - Persistent storage for user context, conversations, and pending intents
+ * Context Store - Persistent storage for user context and conversations
+ * 
+ * CLEANED: Removed legacy pendingIntents (all state now in Supabase assistant_state)
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import type { 
   UserContext, 
   UserPreferences, 
-  ConversationMessage, 
-  ConversationSession 
+  ConversationMessage 
 } from './types';
-import type { AssistantIntent, ExtractedData } from './intentParser';
 
-// ============ PENDING INTENT STATE ============
-export interface PendingIntent {
-  intent: AssistantIntent;
-  extractedData: Partial<ExtractedData>;
-  clarificationQuestion: string;
-  createdAt: string;
-  attempts: number;
-}
-
-// In-memory pending intents (could be persisted to DB if needed)
-const pendingIntents = new Map<string, PendingIntent>();
-
-/**
- * Get pending intent for user
- */
-export function getPendingIntent(userId: string): PendingIntent | null {
-  const pending = pendingIntents.get(userId);
-  if (!pending) return null;
-  
-  // Expire after 5 minutes
-  const age = Date.now() - new Date(pending.createdAt).getTime();
-  if (age > 5 * 60 * 1000) {
-    pendingIntents.delete(userId);
-    return null;
-  }
-  
-  return pending;
-}
-
-/**
- * Set pending intent for user
- */
-export function setPendingIntent(
-  userId: string,
-  intent: AssistantIntent,
-  extractedData: Partial<ExtractedData>,
-  clarificationQuestion: string
-): void {
-  pendingIntents.set(userId, {
-    intent,
-    extractedData,
-    clarificationQuestion,
-    createdAt: new Date().toISOString(),
-    attempts: 1
-  });
-  console.log('Pending intent set:', intent, 'for user:', userId);
-}
-
-/**
- * Update an existing pending intent without resetting attempts/createdAt
- */
-export function updatePendingIntent(
-  userId: string,
-  updates: {
-    extractedData?: Partial<ExtractedData>;
-    clarificationQuestion?: string;
-  }
-): PendingIntent | null {
-  const pending = pendingIntents.get(userId);
-  if (!pending) return null;
-
-  const next: PendingIntent = {
-    ...pending,
-    extractedData: updates.extractedData ? { ...pending.extractedData, ...updates.extractedData } : pending.extractedData,
-    clarificationQuestion: updates.clarificationQuestion ?? pending.clarificationQuestion,
-  };
-
-  pendingIntents.set(userId, next);
-  return next;
-}
-
-/**
- * Increment pending intent attempts
- */
-export function incrementPendingAttempts(userId: string): number {
-  const pending = pendingIntents.get(userId);
-  if (pending) {
-    pending.attempts++;
-    return pending.attempts;
-  }
-  return 0;
-}
-
-/**
- * Clear pending intent for user
- */
-export function clearPendingIntent(userId: string): void {
-  pendingIntents.delete(userId);
-  console.log('Pending intent cleared for user:', userId);
-}
-
-const MAX_CONVERSATIONS = 5;
 const MAX_MESSAGES_PER_CONVERSATION = 15;
 
 // Default context
@@ -137,7 +45,6 @@ export async function getContext(userId: string): Promise<UserContext> {
 
     // Parse stored data
     const lastAction = data.last_action as Record<string, any> | null;
-    const suggestionHistory = data.suggestion_history as any[] | null;
 
     return {
       userId,

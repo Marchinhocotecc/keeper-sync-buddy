@@ -7,8 +7,18 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { format, addDays } from 'date-fns';
-import type { ParsedIntent, ExtractedData } from './intentParser';
 import type { UserContext, TaskData, EventData, ExpenseData } from './contextLoader';
+
+// Extracted data type for local use
+export interface ExtractedData {
+  title?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  amount?: number;
+  category?: string;
+  priority?: string;
+}
 
 export interface ExecutionResult {
   success: boolean;
