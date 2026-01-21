@@ -118,6 +118,76 @@ function parseUIAction(message: string): AIFreeIntent | null {
 
 // Note: System prompt is now handled by the ai-free-chat edge function
 
+// ========== MAPPING ACTION → DATA ==========
+
+/**
+ * Converte la struttura action della edge function in AIFreeData
+ * Edge function usa: { type, title, start_at, amount, category }
+ * Client usa: { title, date, time, amount, category }
+ */
+function mapActionToData(action: any): AIFreeData {
+  if (!action || action.type === 'NONE') {
+    return {};
+  }
+  
+  const result: AIFreeData = {};
+  
+  // Title
+  if (action.title) {
+    result.title = action.title;
+  }
+  
+  // Description (per spese)
+  if (action.description) {
+    result.description = action.description;
+  }
+  
+  // Date/Time da start_at (formato ISO: "2025-01-22T20:00:00")
+  if (action.start_at) {
+    try {
+      const dateObj = new Date(action.start_at);
+      if (!isNaN(dateObj.getTime())) {
+        result.date = dateObj.toISOString().split('T')[0]; // "2025-01-22"
+        result.time = dateObj.toTimeString().slice(0, 5);  // "20:00"
+      }
+    } catch {
+      // Se parsing fallisce, prova regex
+      const match = action.start_at.match(/(\d{4}-\d{2}-\d{2})(?:T|\s)(\d{2}:\d{2})/);
+      if (match) {
+        result.date = match[1];
+        result.time = match[2];
+      }
+    }
+  }
+  
+  // Date/Time separati (se la edge function li manda già separati)
+  if (action.due_date) {
+    result.date = action.due_date;
+  }
+  if (action.due_time) {
+    result.time = action.due_time;
+  }
+  
+  // Amount per spese
+  if (action.amount !== undefined && action.amount !== null) {
+    result.amount = Number(action.amount);
+  }
+  
+  // Category per spese/eventi
+  if (action.category) {
+    result.category = action.category;
+  }
+  
+  // Priority per task
+  if (action.priority) {
+    result.priority = action.priority;
+  }
+  
+  console.log('[aiFreeOrchestrator] mapActionToData:', { input: action, output: result });
+  
+  return result;
+}
+
 // ========== CALL AI FREE (via Edge Function - SECURE) ==========
 
 async function callAIFree(userMessage: string, userId: string): Promise<AIFreeOutput> {
@@ -136,12 +206,17 @@ async function callAIFree(userMessage: string, userId: string): Promise<AIFreeOu
       return getDefaultOutput('⚠️ Errore temporaneo. Riprova.');
     }
     
+    console.log('[aiFreeOrchestrator] Edge function raw response:', data);
+    
     // Edge function returns the structured response
     if (data && data.reply) {
+      // Estrai e converti i dati dall'action della edge function
+      const actionData = mapActionToData(data.action);
+      
       return {
         intent: data.intent || 'NONE',
         reply: data.reply,
-        data: data.data || {},
+        data: actionData,
         needsConfirmation: data.needsConfirmation || false,
         confirmationQuestion: data.confirmationQuestion || null
       };

@@ -169,6 +169,8 @@ export interface AIFreeData {
   time?: string;
   amount?: number;
   category?: string;
+  description?: string;
+  priority?: 'low' | 'medium' | 'high';
   targetId?: string;
 }
 
