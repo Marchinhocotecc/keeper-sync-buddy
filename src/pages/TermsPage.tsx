@@ -22,7 +22,7 @@ export default function TermsPage() {
           <CardTitle className="text-3xl">{t('terms.title')}</CardTitle>
         </CardHeader>
         <CardContent className="prose dark:prose-invert max-w-none">
-          <p className="text-muted-foreground">{t('terms.lastUpdated')}: October 9, 2025</p>
+          <p className="text-muted-foreground">{t('terms.lastUpdated')}: January 22, 2026</p>
 
           <h2>{t('terms.section1Title')}</h2>
           <p>{t('terms.section1Content')}</p>

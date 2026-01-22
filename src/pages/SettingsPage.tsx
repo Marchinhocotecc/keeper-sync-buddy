@@ -404,12 +404,12 @@ export default function SettingsPage() {
                 </div>
                 
                 <a 
-                  href="mailto:support@dailysynckeeper.app"
-                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  href="mailto:support@lumi-app.com"
+                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
                 >
                   <div className="flex items-center gap-2 sm:gap-3">
                     <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                    <span className="text-xs sm:text-sm font-medium">Contattaci</span>
+                    <span className="text-xs sm:text-sm font-medium">Scrivici</span>
                   </div>
                   <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 </a>

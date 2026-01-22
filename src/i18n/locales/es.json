@@ -11,11 +11,12 @@
     "logout": "Cerrar sesión"
   },
   "home": {
-    "title": "Daily Sync Keeper",
+    "title": "LUMI",
+    "subtitle": "Tu asistente de vida simple y brillante",
     "dailyActivities": "Actividades Diarias",
     "todayActivities": "Actividades de Hoy",
     "tasks": "Tareas",
-    "wellness": "Bienestar Diario",
+    "wellness": "Bienestar",
     "addTask": "Agregar Tarea",
     "taskTitle": "Título de tarea",
     "priority": "Prioridad",
@@ -26,17 +27,18 @@
     "cancel": "Cancelar",
     "loading": "Cargando...",
     "saving": "Guardando...",
-    "saveWellness": "Guardar Datos de Bienestar",
+    "saveWellness": "Guardar Bienestar",
     "steps": "Pasos",
     "sleepHours": "Sueño (horas)",
-    "meditationMinutes": "Meditación (minutos)",
+    "meditationMinutes": "Meditación (min)",
     "completed": "Completadas",
-    "noActiveTasks": "No hay tareas activas. ¡Agrega una para comenzar!",
-    "errorLoadingTasks": "Error al cargar tareas",
+    "noActiveTasks": "No hay tareas activas. ¡Agrega una para comenzar! ✨",
+    "errorLoadingTasks": "Ups, algo salió mal. ¡Inténtalo de nuevo!",
     "taskReminder": "Recordatorio de Tarea"
   },
   "calendar": {
     "title": "Calendario",
+    "subtitle": "Gestiona tu tiempo con serenidad",
     "events": "Eventos",
     "calendar": "Calendario",
     "filters": "Filtros",
@@ -47,15 +49,16 @@
     "time": "Hora",
     "description": "Descripción",
     "create": "Crear",
-    "noEvents": "No hay eventos programados para este día.",
+    "noEvents": "No hay eventos hoy. ¡Disfruta la calma! 🌸",
     "selectDate": "Selecciona una fecha para ver eventos"
   },
   "expenses": {
     "title": "Gastos",
+    "subtitle": "Controla tus finanzas",
     "budget": "Presupuesto",
     "transactions": "Transacciones",
     "addExpense": "Agregar Gasto",
-    "addNew": "Agregar Nuevo Gasto",
+    "addNew": "Nuevo Gasto",
     "amount": "Cantidad",
     "category": "Categoría",
     "description": "Descripción",
@@ -77,23 +80,25 @@
     "startDate": "Fecha de Inicio",
     "endDate": "Fecha de Fin",
     "noData": "No hay datos disponibles",
-    "noExpenses": "Aún no hay gastos. ¡Agrega tu primer gasto para comenzar!",
+    "noExpenses": "Aún no hay gastos. ¡Empieza a rastrear! 💰",
     "loading": "Cargando gastos...",
-    "errorLoading": "Error al cargar gastos"
+    "errorLoading": "Ups, error al cargar"
   },
   "assistant": {
-    "title": "Asistente IA",
-    "placeholder": "Escribe tu mensaje aquí...",
+    "title": "Asistente LUMI",
+    "subtitle": "Estoy aquí para ayudarte",
+    "placeholder": "Escribe aquí... ¡soy todo oídos! 👂",
     "send": "Enviar",
-    "getSuggestion": "Obtener Sugerencia",
-    "suggestionHint": "Haz clic para obtener sugerencias impulsadas por IA para optimizar tu día"
+    "getSuggestion": "Sugerencias",
+    "suggestionHint": "Pídeme consejos para organizar tu día"
   },
   "settings": {
     "title": "Ajustes",
+    "subtitle": "Personaliza tu experiencia",
     "language": "Idioma",
     "languageDesc": "Elige tu idioma preferido",
     "theme": "Tema",
-    "themeDesc": "Personaliza la apariencia de la aplicación",
+    "themeDesc": "Personaliza la apariencia de LUMI",
     "light": "Claro",
     "dark": "Oscuro",
     "system": "Sistema",
@@ -102,8 +107,10 @@
     "terms": "Términos y Condiciones",
     "privacy": "Política de Privacidad",
     "contact": "Contacto",
-    "contactDesc": "Ponte en contacto con nosotros",
-    "contactEmail": "Envíanos un correo a:"
+    "contactDesc": "¿Necesitas ayuda?",
+    "contactEmail": "Envíanos un correo a:",
+    "about": "Acerca de",
+    "aboutDesc": "LUMI - Tu asistente de vida simple y brillante"
   },
   "auth": {
     "signIn": "Iniciar Sesión",
@@ -112,21 +119,23 @@
     "password": "Contraseña",
     "noAccount": "¿No tienes una cuenta?",
     "haveAccount": "¿Ya tienes una cuenta?",
-    "signInGoogle": "Iniciar sesión con Google"
+    "signInGoogle": "Iniciar sesión con Google",
+    "welcome": "Bienvenido a LUMI",
+    "welcomeBack": "¡Bienvenido de nuevo!"
   },
   "terms": {
     "title": "Términos y Condiciones",
     "lastUpdated": "Última actualización",
     "section1Title": "1. Aceptación de Términos",
-    "section1Content": "Al acceder y usar Daily Sync Keeper, aceptas y consientes estar sujeto a los términos y disposiciones de este acuerdo.",
+    "section1Content": "Al acceder y usar LUMI, aceptas y consientes estar sujeto a los términos y disposiciones de este acuerdo.",
     "section2Title": "2. Licencia de Uso",
-    "section2Content": "Se concede permiso para usar temporalmente Daily Sync Keeper para uso personal y no comercial.",
+    "section2Content": "Se concede permiso para usar temporalmente LUMI para uso personal y no comercial.",
     "section3Title": "3. Descargo de Responsabilidad",
-    "section3Content": "Los materiales en Daily Sync Keeper se proporcionan 'tal cual'. Daily Sync Keeper no ofrece garantías, expresas o implícitas.",
+    "section3Content": "Los materiales en LUMI se proporcionan 'tal cual'. LUMI no ofrece garantías, expresas o implícitas.",
     "section4Title": "4. Limitaciones",
-    "section4Content": "En ningún caso Daily Sync Keeper o sus proveedores serán responsables de cualquier daño derivado del uso o la imposibilidad de usar los materiales en Daily Sync Keeper.",
+    "section4Content": "En ningún caso LUMI o sus proveedores serán responsables de cualquier daño derivado del uso o la imposibilidad de usar los materiales en LUMI.",
     "section5Title": "5. Modificaciones",
-    "section5Content": "Daily Sync Keeper puede revisar estos términos de servicio en cualquier momento sin previo aviso. Al usar esta aplicación, aceptas estar sujeto a la versión actual de estos términos."
+    "section5Content": "LUMI puede revisar estos términos de servicio en cualquier momento sin previo aviso. Al usar esta aplicación, aceptas estar sujeto a la versión actual de estos términos."
   },
   "privacy": {
     "title": "Política de Privacidad",

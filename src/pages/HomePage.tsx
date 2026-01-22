@@ -75,8 +75,8 @@ export default function HomePage() {
   ) => {
     if (!title.trim()) {
       toast({
-        title: "Errore",
-        description: "Il titolo del task è obbligatorio",
+        title: "Un momento!",
+        description: "Dai un titolo al tuo task 📝",
         variant: "destructive"
       });
       return;
@@ -87,13 +87,13 @@ export default function HomePage() {
       await syncTaskToCalendar(newTask, 'create');
       setShowAddForm(false);
       toast({
-        title: "✅ Task aggiunto!",
-        description: `"${title}" è stato aggiunto e sincronizzato con il calendario`
+        title: "Fatto! ✨",
+        description: `"${title}" è stato aggiunto`
       });
     } catch (err) {
       toast({
-        title: "Errore",
-        description: "Impossibile aggiungere il task",
+        title: "Ops!",
+        description: "Qualcosa non ha funzionato. Riprova!",
         variant: "destructive"
       });
     }
@@ -109,14 +109,14 @@ export default function HomePage() {
       
       if (!task.completed) {
         toast({
-          title: "✅ Completato!",
-          description: `"${task.title}" è stato completato`,
+          title: "Ottimo lavoro! ✨",
+          description: `"${task.title}" completato`,
         });
       }
     } catch (err) {
       toast({
-        title: "Errore",
-        description: "Impossibile aggiornare il task",
+        title: "Ops!",
+        description: "Qualcosa non ha funzionato. Riprova!",
         variant: "destructive"
       });
     }
@@ -131,8 +131,8 @@ export default function HomePage() {
       await syncTaskToCalendar(task, 'delete');
     } catch (err) {
       toast({
-        title: "Errore",
-        description: "Impossibile eliminare il task",
+        title: "Ops!",
+        description: "Qualcosa non ha funzionato. Riprova!",
         variant: "destructive"
       });
     }
@@ -184,7 +184,7 @@ export default function HomePage() {
         {/* Header */}
         <div className="page-header animate-fade-in">
           <h1 className="page-title">
-            Benvenuto, {userName}
+            Ciao {userName}! ✨
           </h1>
           <p className="page-subtitle">
             {new Date().toLocaleDateString('it-IT', { 

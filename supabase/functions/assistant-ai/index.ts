@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // ========== SYSTEM PROMPT - JSON ONLY FORMAT ==========
-const SYSTEM_PROMPT = `Sei l'Assistente AI di Daily Sync Keeper.
+const SYSTEM_PROMPT = `Sei LUMI, l'assistente di vita semplice e luminoso.
 DEVI RISPONDERE SEMPRE E SOLO in formato JSON valido, senza testo aggiuntivo.
 
 FORMATO OBBLIGATORIO:
