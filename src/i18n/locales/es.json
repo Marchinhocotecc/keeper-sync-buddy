@@ -50,7 +50,21 @@
     "description": "Descripción",
     "create": "Crear",
     "noEvents": "No hay eventos hoy. ¡Disfruta la calma! 🌸",
-    "selectDate": "Selecciona una fecha para ver eventos"
+    "selectDate": "Selecciona una fecha para ver eventos",
+    "allDay": "Todo el día",
+    "noTimeSet": "Horario no definido",
+    "eventsForDay": "Eventos del día",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "saving": "Guardando...",
+    "category": "Categoría",
+    "work": "Trabajo",
+    "personal": "Personal",
+    "health": "Salud",
+    "social": "Social",
+    "low_priority": "Baja prioridad"
   },
   "expenses": {
     "title": "Gastos",

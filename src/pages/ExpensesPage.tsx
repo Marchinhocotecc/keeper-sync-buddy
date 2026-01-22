@@ -15,7 +15,8 @@ import { BudgetCard } from '@/components/BudgetCard';
 import { BudgetEditModal } from '@/components/BudgetEditModal';
 import { getMonthlyBudget, upsertMonthlyBudget } from '@/services/budgetService';
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#f43f5e'];
+// LUMI Palette colors for charts
+const COLORS = ['#6C63FF', '#A39BFF', '#5FD38A', '#F6D860', '#FF6A6A', '#4B44CC', '#8B7EFF'];
 
 export default function ExpensesPage() {
   const { t } = useTranslation();
