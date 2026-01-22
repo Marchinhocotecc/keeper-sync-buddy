@@ -10,7 +10,7 @@ export default function AssistantPage() {
   const [showPanel, setShowPanel] = useState(false);
 
   return (
-    <main className="min-h-screen bg-muted/30">
+    <main className="min-h-screen bg-background">
       <div className="page-container">
         <div className="page-header">
           <h1 className="page-title">{t('assistant.title')}</h1>

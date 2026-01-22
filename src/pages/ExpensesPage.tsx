@@ -16,7 +16,7 @@ import { BudgetEditModal } from '@/components/BudgetEditModal';
 import { getMonthlyBudget, upsertMonthlyBudget } from '@/services/budgetService';
 
 // LUMI Palette colors for charts
-const COLORS = ['#6C63FF', '#A39BFF', '#5FD38A', '#F6D860', '#FF6A6A', '#4B44CC', '#8B7EFF'];
+const COLORS = ['#8C7BFF', '#7A6BFF', '#6458D4', '#5FD38A', '#F6D860', '#FF6A6A', '#A39BFF'];
 
 export default function ExpensesPage() {
   const { t } = useTranslation();
@@ -166,7 +166,7 @@ export default function ExpensesPage() {
 
   if (isLoading || isLoadingBudget) {
     return (
-      <div className="min-h-screen bg-muted/30">
+      <div className="min-h-screen bg-background">
         <div className="page-container">
           <div className="flex items-center justify-center py-20">
             <div className="animate-pulse text-muted-foreground">{t('expenses.loading')}</div>
@@ -177,7 +177,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/30">
+    <main className="min-h-screen bg-background">
       <div className="page-container">
         <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>

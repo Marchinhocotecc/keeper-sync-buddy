@@ -152,10 +152,10 @@ export default function HomePage() {
           <Skeleton className="h-6 w-96 mb-8" />
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <Skeleton className="h-96 w-full" />
+              <Skeleton className="h-96 w-full rounded-[18px]" />
             </div>
             <div>
-              <Skeleton className="h-96 w-full" />
+              <Skeleton className="h-96 w-full rounded-[18px]" />
             </div>
           </div>
         </div>
@@ -167,7 +167,7 @@ export default function HomePage() {
     return (
       <main className="min-h-screen bg-background">
         <div className="page-container">
-          <Alert variant="destructive" className="max-w-2xl">
+          <Alert variant="destructive" className="max-w-2xl rounded-[18px]">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               {error.message || "Errore nel caricamento dei dati"}
@@ -196,22 +196,22 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
+        <div className="grid gap-5 sm:gap-6 lg:grid-cols-3">
           {/* Tasks Section */}
-          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-            <Card className="app-card">
-              <CardHeader className="border-b border-border/50 px-4 sm:px-6 py-4">
+          <div className="lg:col-span-2 space-y-5 sm:space-y-6">
+            <Card>
+              <CardHeader className="border-b border-border px-4 sm:px-6 py-4">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                  <CardTitle className="text-base sm:text-lg font-semibold flex items-center gap-2 text-foreground">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
                     I miei Task
                   </CardTitle>
                   <Button 
                     onClick={() => setShowAddForm(true)} 
                     size="sm" 
-                    className="gap-2 shadow-sm hover-scale h-8 sm:h-9 text-xs sm:text-sm"
+                    className="gap-2 h-9 text-sm"
                   >
-                    <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <Plus className="h-4 w-4" />
                     <span className="hidden sm:inline">Aggiungi</span>
                   </Button>
                 </div>
@@ -219,7 +219,7 @@ export default function HomePage() {
 
               <CardContent className="p-4 sm:p-6">
                 {showAddForm && (
-                  <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-muted/50 rounded-lg border border-border/50 animate-scale-in">
+                  <div className="mb-5 animate-scale-in">
                     <AddTaskForm
                       onAdd={handleAddTask}
                       onCancel={() => setShowAddForm(false)}
@@ -228,27 +228,27 @@ export default function HomePage() {
                 )}
 
                 <Tabs defaultValue="today" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4 mb-3 sm:mb-4 h-auto p-1">
-                    <TabsTrigger value="today" className="gap-1 text-xs sm:text-sm py-2 px-1 sm:px-2">
-                      <Flag className="h-3 w-3 hidden sm:block" />
+                  <TabsList className="grid w-full grid-cols-4 mb-4 h-auto p-1 bg-muted rounded-xl">
+                    <TabsTrigger value="today" className="gap-1.5 text-sm py-2">
+                      <Flag className="h-3.5 w-3.5 hidden sm:block" />
                       <span className="truncate">Oggi ({todayTasks.length})</span>
                     </TabsTrigger>
-                    <TabsTrigger value="upcoming" className="gap-1 text-xs sm:text-sm py-2 px-1 sm:px-2">
-                      <Clock className="h-3 w-3 hidden sm:block" />
+                    <TabsTrigger value="upcoming" className="gap-1.5 text-sm py-2">
+                      <Clock className="h-3.5 w-3.5 hidden sm:block" />
                       <span className="truncate">Prossimi ({upcomingTasks.length})</span>
                     </TabsTrigger>
-                    <TabsTrigger value="low" className="gap-1 text-xs sm:text-sm py-2 px-1 sm:px-2">
+                    <TabsTrigger value="low" className="gap-1.5 text-sm py-2">
                       <span className="truncate">Bassi ({lowPriorityTasks.length})</span>
                     </TabsTrigger>
-                    <TabsTrigger value="completed" className="gap-1 text-xs sm:text-sm py-2 px-1 sm:px-2">
-                      <CheckCircle2 className="h-3 w-3 hidden sm:block" />
+                    <TabsTrigger value="completed" className="gap-1.5 text-sm py-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 hidden sm:block" />
                       <span className="truncate">Fatti ({completedTasks.length})</span>
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="today" className="space-y-2 max-h-[350px] overflow-y-auto">
+                  <TabsContent value="today" className="space-y-2.5 max-h-[350px] overflow-y-auto">
                     {todayTasks.length === 0 ? (
-                      <p className="text-xs sm:text-sm text-muted-foreground py-6 sm:py-8 text-center">
+                      <p className="text-sm text-muted-foreground py-8 text-center">
                         Nessun task prioritario per oggi 🎉
                       </p>
                     ) : (
@@ -266,9 +266,9 @@ export default function HomePage() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="upcoming" className="space-y-2 max-h-[350px] overflow-y-auto">
+                  <TabsContent value="upcoming" className="space-y-2.5 max-h-[350px] overflow-y-auto">
                     {upcomingTasks.length === 0 ? (
-                      <p className="text-xs sm:text-sm text-muted-foreground py-6 sm:py-8 text-center">
+                      <p className="text-sm text-muted-foreground py-8 text-center">
                         Nessun task in programma
                       </p>
                     ) : (
@@ -286,9 +286,9 @@ export default function HomePage() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="low" className="space-y-2 max-h-[350px] overflow-y-auto">
+                  <TabsContent value="low" className="space-y-2.5 max-h-[350px] overflow-y-auto">
                     {lowPriorityTasks.length === 0 ? (
-                      <p className="text-xs sm:text-sm text-muted-foreground py-6 sm:py-8 text-center">
+                      <p className="text-sm text-muted-foreground py-8 text-center">
                         Nessun task a bassa priorità
                       </p>
                     ) : (
@@ -306,9 +306,9 @@ export default function HomePage() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="completed" className="space-y-2 max-h-[350px] overflow-y-auto">
+                  <TabsContent value="completed" className="space-y-2.5 max-h-[350px] overflow-y-auto">
                     {completedTasks.length === 0 ? (
-                      <p className="text-xs sm:text-sm text-muted-foreground py-6 sm:py-8 text-center">
+                      <p className="text-sm text-muted-foreground py-8 text-center">
                         Nessun task completato ancora
                       </p>
                     ) : (
