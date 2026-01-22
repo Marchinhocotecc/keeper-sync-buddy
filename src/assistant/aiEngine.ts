@@ -12,16 +12,44 @@
  * PREMIUM PLAN → Premium Coach (stub, not implemented)
  */
 
-import { format, addDays } from 'date-fns';
 import type { AIEngineResult } from './typesAI';
-import { isFreeUser, isPremiumUser } from './planRouter';
+import { isFreeUser } from './planRouter';
 import { processAIFreeMessage } from './aiFreeOrchestrator';
-import { loadUserContext } from './contextLoader';
 import { clearActiveIntent } from '@/services/assistantStateService';
 import { SAFE_FALLBACK_MESSAGE } from './constants';
 
-// Re-export for backwards compatibility
-export { getSmartGreeting, resetConversation } from './legacyExports';
+/**
+ * Get a smart greeting based on time of day
+ */
+export function getSmartGreeting(): string {
+  const hour = new Date().getHours();
+  
+  if (hour < 6) {
+    return 'Buonanotte! 🌙 Cosa posso fare per te?';
+  } else if (hour < 12) {
+    return 'Buongiorno! ☀️ Cosa posso fare per te?';
+  } else if (hour < 18) {
+    return 'Buon pomeriggio! 🌤️ Cosa posso fare per te?';
+  } else if (hour < 22) {
+    return 'Buonasera! 🌆 Cosa posso fare per te?';
+  } else {
+    return 'Buonanotte! 🌙 Cosa posso fare per te?';
+  }
+}
+
+/**
+ * Reset conversation state for user
+ */
+export async function resetConversation(userId: string): Promise<void> {
+  console.log('[AIEngine] Resetting conversation for:', userId);
+  
+  try {
+    await clearActiveIntent(userId);
+    console.log('[AIEngine] Conversation reset complete');
+  } catch (error) {
+    console.error('[AIEngine] Error resetting conversation:', error);
+  }
+}
 
 /**
  * Process user message

@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Send, Bot, User, Sparkles, Lightbulb, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { clearMemory } from "@/utils/assistant/memory";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Message {
@@ -109,8 +108,22 @@ export default function AssistantPanel() {
     if (!userId) return;
     
     try {
-      await clearMemory(userId);
+      // Clear local state
       setMessages([]);
+      
+      // Clear server-side assistant state
+      await supabase
+        .from('assistant_state')
+        .upsert({
+          user_id: userId,
+          active_intent: 'NONE',
+          intent_payload: {},
+          missing_fields: [],
+          awaiting_confirmation: false,
+          attempts: 0,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+      
       toast({
         title: "Cronologia cancellata",
         description: "La memoria dell'assistente è stata resettata.",
