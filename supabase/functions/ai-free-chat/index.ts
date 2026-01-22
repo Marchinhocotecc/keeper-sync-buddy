@@ -1345,8 +1345,8 @@ async function callOpenRouterAI(systemPrompt: string, userMessage: string): Prom
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://daily-sync-keeper.lovable.app",
-        "X-Title": "Daily Sync Keeper"
+        "HTTP-Referer": "https://lumi-app.lovable.app",
+        "X-Title": "LUMI"
       },
       body: JSON.stringify({
         model: model,

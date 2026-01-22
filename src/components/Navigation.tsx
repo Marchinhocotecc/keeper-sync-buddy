@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Home, Calendar, DollarSign, MessageSquare, Settings, LogOut } from 'lucide-react';
+import { Home, Calendar, DollarSign, MessageSquare, Settings, LogOut, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,8 +19,8 @@ export function Navigation() {
       navigate('/auth');
     } catch (error: any) {
       toast({
-        title: t('nav.logoutError'),
-        description: error.message,
+        title: 'Ops!',
+        description: 'Qualcosa è andato storto. Riprova.',
         variant: 'destructive',
       });
     }
@@ -38,12 +38,12 @@ export function Navigation() {
     <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 sm:px-6 max-w-screen-xl">
         <div className="flex items-center justify-between h-14 sm:h-16">
-          <Link to="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">DS</span>
+          <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+              <Sparkles className="h-5 w-5 text-primary-foreground" />
             </div>
-            <h1 className="text-base sm:text-lg font-semibold text-foreground hidden sm:block">
-              Daily Sync Keeper
+            <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hidden sm:block">
+              LUMI
             </h1>
           </Link>
           
@@ -56,9 +56,9 @@ export function Navigation() {
                   key={link.to}
                   to={link.to}
                   className={cn(
-                    'flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all shrink-0',
+                    'flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all shrink-0',
                     isActive
-                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      ? 'bg-primary text-primary-foreground shadow-md'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   )}
                 >
@@ -71,7 +71,7 @@ export function Navigation() {
               variant="ghost"
               size="icon"
               onClick={handleLogout}
-              className="ml-1 sm:ml-2 h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground shrink-0"
+              className="ml-1 sm:ml-2 h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground shrink-0 rounded-xl"
               title={t('nav.logout')}
             >
               <LogOut className="h-4 w-4" />

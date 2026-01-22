@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -48,8 +48,8 @@ export default function AuthPage() {
 
     if (!termsAccepted) {
       toast({
-        title: 'Errore',
-        description: 'Devi accettare i Termini e Condizioni per registrarti',
+        title: 'Un momento!',
+        description: 'Devi accettare i Termini e Condizioni per continuare 📋',
         variant: 'destructive',
       });
       return;
@@ -73,12 +73,12 @@ export default function AuthPage() {
       if (error) throw error;
 
       toast({
-        title: 'Registrazione completata!',
+        title: 'Perfetto! ✨',
         description: 'Controlla la tua email per il link di conferma.',
       });
     } catch (error: any) {
       toast({
-        title: 'Errore',
+        title: 'Ops!',
         description: error.message,
         variant: 'destructive',
       });
@@ -99,7 +99,6 @@ export default function AuthPage() {
 
       if (error) throw error;
 
-      // Check if terms were accepted
       const termsAccepted = data.user?.user_metadata?.terms_accepted;
       if (!termsAccepted) {
         navigate('/accept-terms');
@@ -108,7 +107,7 @@ export default function AuthPage() {
       }
     } catch (error: any) {
       toast({
-        title: 'Errore',
+        title: 'Ops!',
         description: error.message,
         variant: 'destructive',
       });
@@ -118,31 +117,41 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Daily Sync Keeper</CardTitle>
-          <CardDescription>Sign in to manage your tasks and wellness</CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-secondary/10 p-4">
+      <Card className="w-full max-w-md rounded-2xl shadow-lg border-border/50">
+        <CardHeader className="text-center pb-2">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
+              <Sparkles className="h-8 w-8 text-primary-foreground" />
+            </div>
+          </div>
+          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            LUMI
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Il tuo assistente di vita semplice e luminoso ✨
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 rounded-xl">
+              <TabsTrigger value="signin" className="rounded-lg">Accedi</TabsTrigger>
+              <TabsTrigger value="signup" className="rounded-lg">Registrati</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
+              <form onSubmit={handleSignIn} className="space-y-4 pt-4">
                 <div className="space-y-2">
                   <Label htmlFor="email-signin">Email</Label>
                   <Input
                     id="email-signin"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder="tu@esempio.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={loading}
+                    className="rounded-xl"
                   />
                 </div>
                 <div className="space-y-2">
@@ -154,27 +163,29 @@ export default function AuthPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={loading}
+                    className="rounded-xl"
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full rounded-xl lumi-button" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Sign In
+                  Accedi
                 </Button>
               </form>
             </TabsContent>
             
             <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
+              <form onSubmit={handleSignUp} className="space-y-4 pt-4">
                 <div className="space-y-2">
                   <Label htmlFor="email-signup">Email</Label>
                   <Input
                     id="email-signup"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder="tu@esempio.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={loading}
+                    className="rounded-xl"
                   />
                 </div>
                 <div className="space-y-2">
@@ -188,14 +199,16 @@ export default function AuthPage() {
                     required
                     disabled={loading}
                     minLength={6}
+                    className="rounded-xl"
                   />
                 </div>
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                   <Checkbox
                     id="terms"
                     checked={termsAccepted}
                     onCheckedChange={(checked) => setTermsAccepted(checked === true)}
                     disabled={loading}
+                    className="mt-0.5"
                   />
                   <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
                     Accetto i{' '}
@@ -208,7 +221,7 @@ export default function AuthPage() {
                     </Link>
                   </Label>
                 </div>
-                <Button type="submit" className="w-full" disabled={loading || !termsAccepted}>
+                <Button type="submit" className="w-full rounded-xl lumi-button" disabled={loading || !termsAccepted}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Registrati
                 </Button>

@@ -22,7 +22,7 @@ export default function PrivacyPage() {
           <CardTitle className="text-3xl">{t('privacy.title')}</CardTitle>
         </CardHeader>
         <CardContent className="prose dark:prose-invert max-w-none">
-          <p className="text-muted-foreground">{t('privacy.lastUpdated')}: October 9, 2025</p>
+          <p className="text-muted-foreground">{t('privacy.lastUpdated')}: January 22, 2026</p>
 
           <h2>{t('privacy.section1Title')}</h2>
           <p>{t('privacy.section1Content')}</p>

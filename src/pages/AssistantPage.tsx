@@ -14,22 +14,26 @@ export default function AssistantPage() {
       <div className="page-container">
         <div className="page-header">
           <h1 className="page-title">{t('assistant.title')}</h1>
-          <p className="page-subtitle">Il tuo assistente personale AI</p>
+          <p className="page-subtitle">{t('assistant.subtitle')}</p>
         </div>
         
         {!showPanel ? (
           <Card className="app-card max-w-2xl mx-auto">
             <CardContent className="pt-10 sm:pt-12 pb-10 sm:pb-12 text-center px-4 sm:px-6">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-5 sm:mb-6">
-                <Sparkles className="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto mb-5 sm:mb-6 shadow-lg">
+                <Sparkles className="h-8 w-8 sm:h-10 sm:w-10 text-primary-foreground" />
               </div>
-              <h2 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3">Benvenuto nell'Assistente AI</h2>
-              <p className="text-sm text-muted-foreground mb-6 sm:mb-8 max-w-md mx-auto">
-                Chiedi consigli, suggerimenti o aiuto per organizzare la tua giornata
+              <h2 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-3">Ciao! Sono LUMI ✨</h2>
+              <p className="text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8 max-w-md mx-auto">
+                Il tuo assistente personale per organizzare la giornata con semplicità e leggerezza
               </p>
-              <Button onClick={() => setShowPanel(true)} size="lg" className="gap-2 shadow-sm h-11 sm:h-12">
-                <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
-                Inizia una conversazione
+              <Button 
+                onClick={() => setShowPanel(true)} 
+                size="lg" 
+                className="gap-2 shadow-md h-12 sm:h-14 px-6 sm:px-8 rounded-xl lumi-button text-base"
+              >
+                <Sparkles className="h-5 w-5" />
+                Iniziamo a chiacchierare
               </Button>
             </CardContent>
           </Card>

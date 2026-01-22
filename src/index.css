@@ -2,130 +2,148 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* 
+ * LUMI Design System
+ * "Il tuo assistente di vita semplice e luminoso"
+ * 
+ * Palette: Soft & Bright - minimal, calmo, moderno, gentle tech
+ * All colors MUST be HSL.
+ */
 
 @layer base {
   :root {
-    /* Core colors - light, minimal palette */
-    --background: 0 0% 99%;
-    --foreground: 220 13% 18%;
+    /* LUMI Core Colors - Light Mode */
+    
+    /* Lumi Cream - sfondo principale chiaro e fresco */
+    --background: 45 33% 98%;
+    --foreground: 240 6% 12%;
 
+    /* Cards & Popovers */
     --card: 0 0% 100%;
-    --card-foreground: 220 13% 18%;
+    --card-foreground: 240 6% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 13% 18%;
+    --popover-foreground: 240 6% 12%;
 
-    --primary: 215 85% 55%;
+    /* Lumi Glow - Primary (#6C63FF) */
+    --primary: 244 97% 69%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 13% 95%;
-    --secondary-foreground: 220 13% 18%;
+    /* Lumi Sky - Secondary (#A39BFF) */
+    --secondary: 246 100% 81%;
+    --secondary-foreground: 240 6% 12%;
 
-    --muted: 220 13% 96%;
-    --muted-foreground: 220 9% 46%;
+    /* Muted tones */
+    --muted: 45 20% 94%;
+    --muted-foreground: 0 0% 34%;
 
-    --accent: 215 85% 55%;
+    /* Accent (same as primary for consistency) */
+    --accent: 244 97% 69%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    /* Error - rosso tenue (#FF6A6A) */
+    --destructive: 0 100% 71%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 215 85% 55%;
+    /* Borders & Inputs */
+    --border: 45 10% 88%;
+    --input: 45 10% 88%;
+    --ring: 244 97% 69%;
 
-    --success: 142 71% 45%;
+    /* Success - verde luminoso (#5FD38A) */
+    --success: 146 58% 60%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    /* Warning - giallo pastello (#F6D860) */
+    --warning: 47 90% 67%;
+    --warning-foreground: 240 6% 12%;
 
-    /* Modern minimal radius */
-    --radius: 0.75rem;
+    /* Modern soft radius (12-20px) */
+    --radius: 1rem;
     
-    /* Minimal, subtle shadows */
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-    --shadow-md: 0 2px 8px -2px rgb(0 0 0 / 0.08);
-    --shadow-lg: 0 8px 24px -4px rgb(0 0 0 / 0.1);
-    --shadow-xl: 0 16px 48px -8px rgb(0 0 0 / 0.12);
+    /* Gentle shadows */
+    --shadow-sm: 0 1px 3px 0 rgb(108 99 255 / 0.04);
+    --shadow-md: 0 4px 12px -2px rgb(108 99 255 / 0.08);
+    --shadow-lg: 0 10px 30px -4px rgb(108 99 255 / 0.12);
+    --shadow-xl: 0 20px 50px -8px rgb(108 99 255 / 0.16);
     
-    /* Clean gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(215 85% 55%), hsl(215 85% 65%));
-    --gradient-hero: linear-gradient(135deg, hsl(215 85% 55%) 0%, hsl(215 75% 60%) 100%);
+    /* Lumi gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(244 97% 69%), hsl(246 100% 81%));
+    --gradient-hero: linear-gradient(135deg, hsl(244 97% 69%) 0%, hsl(246 100% 81%) 100%);
+    --gradient-glow: radial-gradient(circle at 50% 50%, hsl(244 97% 69% / 0.15), transparent 70%);
     
     /* Smooth transitions */
     --transition-base: all 0.2s ease;
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar */
+    --sidebar-background: 45 33% 97%;
+    --sidebar-foreground: 240 6% 26%;
+    --sidebar-primary: 244 97% 69%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 246 100% 95%;
+    --sidebar-accent-foreground: 244 97% 50%;
+    --sidebar-border: 45 10% 88%;
+    --sidebar-ring: 244 97% 69%;
   }
 
   .dark {
-    --background: 220 15% 10%;
+    /* LUMI Dark Mode - Soft & Refined */
+    
+    /* Dark background with warm undertone */
+    --background: 240 10% 8%;
     --foreground: 0 0% 98%;
 
-    --card: 220 15% 14%;
+    --card: 240 10% 12%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 220 15% 14%;
+    --popover: 240 10% 12%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 215 85% 55%;
+    /* Primary stays vibrant */
+    --primary: 244 97% 69%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 18%;
+    /* Secondary slightly muted */
+    --secondary: 240 10% 18%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 220 15% 18%;
-    --muted-foreground: 220 9% 60%;
+    --muted: 240 10% 16%;
+    --muted-foreground: 0 0% 64%;
 
-    --accent: 215 85% 55%;
+    --accent: 244 97% 69%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 100% 71%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 22%;
-    --input: 220 15% 18%;
-    --ring: 215 85% 55%;
+    --border: 240 10% 20%;
+    --input: 240 10% 16%;
+    --ring: 244 97% 69%;
     
-    --success: 142 71% 45%;
+    --success: 146 58% 55%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 47 90% 60%;
+    --warning-foreground: 240 6% 12%;
     
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
-    --shadow-md: 0 2px 8px -2px rgb(0 0 0 / 0.6);
-    --shadow-lg: 0 8px 24px -4px rgb(0 0 0 / 0.7);
-    --shadow-xl: 0 16px 48px -8px rgb(0 0 0 / 0.8);
+    /* Darker shadows */
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 10px 30px -4px rgb(0 0 0 / 0.6);
+    --shadow-xl: 0 20px 50px -8px rgb(0 0 0 / 0.7);
     
-    --gradient-hero: linear-gradient(135deg, hsl(215 85% 45%) 0%, hsl(215 75% 50%) 100%);
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --gradient-hero: linear-gradient(135deg, hsl(244 97% 55%) 0%, hsl(246 100% 70%) 100%);
+    --gradient-glow: radial-gradient(circle at 50% 50%, hsl(244 97% 69% / 0.2), transparent 70%);
+    
+    --sidebar-background: 240 10% 6%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 244 97% 69%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 240 10% 15%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 240 10% 18%;
+    --sidebar-ring: 244 97% 69%;
   }
 }
 
@@ -136,6 +154,7 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
@@ -148,6 +167,11 @@ All colors MUST be HSL.
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+  
+  /* Lumi glow effect */
+  .lumi-glow {
+    box-shadow: 0 0 20px hsl(244 97% 69% / 0.3);
   }
 }
 
@@ -169,9 +193,9 @@ All colors MUST be HSL.
   @apply text-sm sm:text-base text-muted-foreground;
 }
 
-/* Consistent card styles */
+/* Consistent card styles - soft radius 12-20px */
 .app-card {
-  @apply border-border/50 shadow-sm rounded-lg;
+  @apply border-border/50 shadow-sm rounded-2xl;
 }
 
 .app-card-header {
@@ -184,4 +208,15 @@ All colors MUST be HSL.
 
 .app-card-value {
   @apply text-xl sm:text-2xl font-bold;
+}
+
+/* Lumi Button glow on hover */
+.lumi-button {
+  @apply relative overflow-hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lumi-button:hover {
+  box-shadow: 0 4px 20px hsl(244 97% 69% / 0.4);
+  transform: translateY(-1px);
 }
