@@ -50,7 +50,7 @@ export function WellnessCard() {
 
   if (isLoading) {
     return (
-      <Card className="p-4 sm:p-6 app-card">
+      <Card className="p-4 sm:p-6">
         <Skeleton className="h-6 w-32 mb-4" />
         <div className="space-y-3 sm:space-y-4">
           <Skeleton className="h-16 sm:h-20 w-full" />
@@ -63,20 +63,20 @@ export function WellnessCard() {
   }
 
   return (
-    <Card className="p-4 sm:p-6 app-card">
-      <div className="flex items-center justify-between mb-3 sm:mb-4">
-        <h3 className="text-base sm:text-xl font-semibold">Benessere</h3>
+    <Card className="p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-5">
+        <h3 className="text-lg sm:text-[22px] font-semibold text-foreground">Benessere</h3>
         {wellnessScore > 0 && (
-          <div className="flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full bg-primary/10 animate-fade-in">
-            <span className="text-xs sm:text-sm font-medium text-primary">{wellnessScore}%</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 animate-fade-in">
+            <span className="text-sm font-semibold text-primary">{wellnessScore}%</span>
           </div>
         )}
       </div>
 
-      <div className="space-y-3 sm:space-y-4">
-        <div className="space-y-1.5 sm:space-y-2">
-          <Label htmlFor="steps" className="flex items-center gap-2 text-xs sm:text-sm font-medium">
-            <Footprints className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+      <div className="space-y-4 sm:space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="steps" className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Footprints className="h-4 w-4 text-primary" />
             Passi (obiettivo: 10.000)
           </Label>
           <Input
@@ -85,14 +85,13 @@ export function WellnessCard() {
             placeholder="0"
             value={steps}
             onChange={(e) => setSteps(e.target.value)}
-            className="transition-all h-9 sm:h-10 text-sm"
           />
-          {steps && <Progress value={stepsProgress} className="h-1.5 sm:h-2 animate-scale-in" />}
+          {steps && <Progress value={stepsProgress} className="h-2 animate-scale-in" />}
         </div>
 
-        <div className="space-y-1.5 sm:space-y-2">
-          <Label htmlFor="sleep" className="flex items-center gap-2 text-xs sm:text-sm font-medium">
-            <Moon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-accent" />
+        <div className="space-y-2">
+          <Label htmlFor="sleep" className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Moon className="h-4 w-4 text-secondary" />
             Ore di sonno (obiettivo: 8h)
           </Label>
           <Input
@@ -101,14 +100,13 @@ export function WellnessCard() {
             placeholder="0"
             value={sleep}
             onChange={(e) => setSleep(e.target.value)}
-            className="transition-all h-9 sm:h-10 text-sm"
           />
-          {sleep && <Progress value={sleepProgress} className="h-1.5 sm:h-2 animate-scale-in" />}
+          {sleep && <Progress value={sleepProgress} className="h-2 animate-scale-in" />}
         </div>
 
-        <div className="space-y-1.5 sm:space-y-2">
-          <Label htmlFor="meditation" className="flex items-center gap-2 text-xs sm:text-sm font-medium">
-            <Brain className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-secondary" />
+        <div className="space-y-2">
+          <Label htmlFor="meditation" className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Brain className="h-4 w-4 text-primary" />
             Meditazione (obiettivo: 20min)
           </Label>
           <Input
@@ -117,14 +115,13 @@ export function WellnessCard() {
             placeholder="0"
             value={meditation}
             onChange={(e) => setMeditation(e.target.value)}
-            className="transition-all h-9 sm:h-10 text-sm"
           />
-          {meditation && <Progress value={meditationProgress} className="h-1.5 sm:h-2 animate-scale-in" />}
+          {meditation && <Progress value={meditationProgress} className="h-2 animate-scale-in" />}
         </div>
 
-        <div className="space-y-1.5 sm:space-y-2">
-          <Label htmlFor="heartRate" className="flex items-center gap-2 text-xs sm:text-sm font-medium">
-            <Heart className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
+        <div className="space-y-2">
+          <Label htmlFor="heartRate" className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Heart className="h-4 w-4 text-destructive" />
             Battito cardiaco medio (opzionale)
           </Label>
           <Input
@@ -133,13 +130,12 @@ export function WellnessCard() {
             placeholder="70"
             value={heartRate}
             onChange={(e) => setHeartRate(e.target.value)}
-            className="transition-all h-9 sm:h-10 text-sm"
           />
         </div>
 
         <Button 
           onClick={handleSave} 
-          className="w-full transition-all hover-scale h-9 sm:h-10 text-sm" 
+          className="w-full h-10 sm:h-11 text-[15px]" 
           disabled={updateWellness.isPending}
         >
           {updateWellness.isPending ? "Salvataggio..." : "Salva"}

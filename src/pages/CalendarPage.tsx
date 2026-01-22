@@ -275,7 +275,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <main className="min-h-screen bg-muted/30">
+    <main className="min-h-screen bg-background">
       <div className="page-container">
         {/* Header */}
         <div className="page-header animate-fade-in">

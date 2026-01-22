@@ -26,21 +26,21 @@ export function AddTaskForm({ onAdd, onCancel }: AddTaskFormProps) {
   };
 
   return (
-    <Card className="p-4 border-2 border-primary/20">
+    <Card className="p-4 border-2 border-primary/20 bg-muted/50">
       <form onSubmit={handleSubmit} className="space-y-3">
         <Input
           placeholder={t('home.taskTitle')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           autoFocus
-          className="border-none bg-background/50"
+          className="bg-card border-border"
         />
         <div className="flex gap-2">
           <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
-            <SelectTrigger className="flex-1">
+            <SelectTrigger className="flex-1 bg-card">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-card border-border">
               <SelectItem value="low">{t('home.low')}</SelectItem>
               <SelectItem value="medium">{t('home.medium')}</SelectItem>
               <SelectItem value="high">{t('home.high')}</SelectItem>
