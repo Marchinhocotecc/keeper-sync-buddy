@@ -50,7 +50,21 @@
     "description": "Description",
     "create": "Create",
     "noEvents": "No events for today. Enjoy the calm! 🌸",
-    "selectDate": "Select a date to view events"
+    "selectDate": "Select a date to view events",
+    "allDay": "All day",
+    "noTimeSet": "No time set",
+    "eventsForDay": "Events for the day",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "category": "Category",
+    "work": "Work",
+    "personal": "Personal",
+    "health": "Health",
+    "social": "Social",
+    "low_priority": "Low priority"
   },
   "expenses": {
     "title": "Expenses",
