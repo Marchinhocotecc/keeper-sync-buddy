@@ -1,7 +1,7 @@
 /**
  * Context Store - Persistent storage for user context and conversations
  * 
- * CLEANED: Removed legacy pendingIntents (all state now in Supabase assistant_state)
+ * CONSOLIDATED: Uses only assistant_state table (unified from assistant_memory + user_context)
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -28,29 +28,27 @@ const defaultContext: Omit<UserContext, 'userId'> = {
 };
 
 /**
- * Get user context from Supabase
+ * Get user context from assistant_state table
  */
 export async function getContext(userId: string): Promise<UserContext> {
   try {
     const { data, error } = await supabase
-      .from('user_context')
-      .select('*')
+      .from('assistant_state')
+      .select('intent_payload, updated_at')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
-      // Return default context if not found
       return { userId, ...defaultContext };
     }
 
-    // Parse stored data
-    const lastAction = data.last_action as Record<string, any> | null;
+    const payload = data.intent_payload as Record<string, any> | null;
 
     return {
       userId,
-      preferences: lastAction?.preferences || defaultContext.preferences,
-      routines: lastAction?.routines || [],
-      goals: lastAction?.goals || [],
+      preferences: payload?.preferences || defaultContext.preferences,
+      routines: payload?.routines || [],
+      goals: payload?.goals || [],
       lastUpdated: data.updated_at || new Date().toISOString()
     };
   } catch (error) {
@@ -60,7 +58,7 @@ export async function getContext(userId: string): Promise<UserContext> {
 }
 
 /**
- * Update user context in Supabase
+ * Update user context in assistant_state
  */
 export async function updateContext(
   userId: string, 
@@ -75,19 +73,31 @@ export async function updateContext(
       lastUpdated: new Date().toISOString()
     };
 
+    // Get current state to merge intent_payload
+    const { data: currentState } = await supabase
+      .from('assistant_state')
+      .select('intent_payload')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const currentPayload = (currentState?.intent_payload as Record<string, any>) || {};
+
+    const newPayload = {
+      ...currentPayload,
+      preferences: newContext.preferences,
+      routines: newContext.routines,
+      goals: newContext.goals
+    };
+
     const { error } = await supabase
-      .from('user_context')
+      .from('assistant_state')
       .upsert([{
         user_id: userId,
-        last_action: {
-          preferences: newContext.preferences,
-          routines: newContext.routines,
-          goals: newContext.goals
-        } as any,
+        intent_payload: newPayload as any,
         updated_at: newContext.lastUpdated
       }], {
         onConflict: 'user_id'
-      })
+      });
 
     if (error) {
       console.error('Error updating context:', error);
@@ -115,12 +125,12 @@ export async function updatePreferences(
 }
 
 /**
- * Get conversation history from assistant_memory table
+ * Get conversation history from assistant_state.messages
  */
 export async function getConversationHistory(userId: string): Promise<ConversationMessage[]> {
   try {
     const { data, error } = await supabase
-      .from('assistant_memory')
+      .from('assistant_state')
       .select('messages')
       .eq('user_id', userId)
       .maybeSingle();
@@ -167,7 +177,7 @@ export async function addToConversationHistory(
     const updatedMessages = [...existingMessages, message].slice(-MAX_MESSAGES_PER_CONVERSATION);
 
     const { error } = await supabase
-      .from('assistant_memory')
+      .from('assistant_state')
       .upsert([{
         user_id: userId,
         messages: updatedMessages as any,
@@ -194,7 +204,7 @@ export async function addToConversationHistory(
 export async function clearConversationHistory(userId: string): Promise<boolean> {
   try {
     const { error } = await supabase
-      .from('assistant_memory')
+      .from('assistant_state')
       .update({ messages: [], updated_at: new Date().toISOString() })
       .eq('user_id', userId);
 
