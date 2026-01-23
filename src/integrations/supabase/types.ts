@@ -59,30 +59,6 @@ export type Database = {
         }
         Relationships: []
       }
-      assistant_memory: {
-        Row: {
-          created_at: string
-          id: string
-          messages: Json
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          messages?: Json
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          messages?: Json
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       assistant_state: {
         Row: {
           active_intent: string
@@ -91,6 +67,7 @@ export type Database = {
           intent_payload: Json
           last_action_payload: Json
           last_action_type: string
+          messages: Json
           missing_fields: Json
           updated_at: string
           user_id: string
@@ -102,6 +79,7 @@ export type Database = {
           intent_payload?: Json
           last_action_payload?: Json
           last_action_type?: string
+          messages?: Json
           missing_fields?: Json
           updated_at?: string
           user_id: string
@@ -113,6 +91,7 @@ export type Database = {
           intent_payload?: Json
           last_action_payload?: Json
           last_action_type?: string
+          messages?: Json
           missing_fields?: Json
           updated_at?: string
           user_id?: string
@@ -399,33 +378,6 @@ export type Database = {
           },
         ]
       }
-      tasks: {
-        Row: {
-          completed: boolean | null
-          created_at: string | null
-          id: string
-          priority: string | null
-          title: string
-          user_id: string | null
-        }
-        Insert: {
-          completed?: boolean | null
-          created_at?: string | null
-          id?: string
-          priority?: string | null
-          title: string
-          user_id?: string | null
-        }
-        Update: {
-          completed?: boolean | null
-          created_at?: string | null
-          id?: string
-          priority?: string | null
-          title?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       todos: {
         Row: {
           completed: boolean | null
@@ -453,36 +405,6 @@ export type Database = {
           priority?: string | null
           title?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      user_context: {
-        Row: {
-          id: string
-          last_action: Json | null
-          last_intent: string | null
-          mood_tag: string | null
-          suggestion_history: Json | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          id?: string
-          last_action?: Json | null
-          last_intent?: string | null
-          mood_tag?: string | null
-          suggestion_history?: Json | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          id?: string
-          last_action?: Json | null
-          last_intent?: string | null
-          mood_tag?: string | null
-          suggestion_history?: Json | null
-          updated_at?: string | null
-          user_id?: string | null
         }
         Relationships: []
       }

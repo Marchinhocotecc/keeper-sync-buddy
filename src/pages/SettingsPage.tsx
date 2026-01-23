@@ -129,14 +129,26 @@ export default function SettingsPage() {
   // Handle assistant memory toggle
   const handleAssistantMemoryChange = async (checked: boolean) => {
     setAssistantMemory(checked);
-    // Store in user_context or a separate field
+    // Store in assistant_state (consolidated table)
     if (user?.id) {
       try {
+        // Get current state
+        const { data: currentState } = await supabase
+          .from('assistant_state')
+          .select('intent_payload')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const currentPayload = (currentState?.intent_payload as Record<string, any>) || {};
+
         await supabase
-          .from('user_context')
+          .from('assistant_state')
           .upsert({
             user_id: user.id,
-            mood_tag: checked ? 'memory_enabled' : 'memory_disabled',
+            intent_payload: {
+              ...currentPayload,
+              memory_enabled: checked
+            },
             updated_at: new Date().toISOString()
           }, { onConflict: 'user_id' });
         toast({ title: checked ? 'Memoria assistente attivata' : 'Memoria assistente disattivata' });
@@ -151,9 +163,16 @@ export default function SettingsPage() {
     setIsResettingMemory(true);
     try {
       if (user?.id) {
+        // Reset messages and intent in assistant_state
         await supabase
-          .from('user_context')
-          .delete()
+          .from('assistant_state')
+          .update({ 
+            messages: [],
+            active_intent: 'NONE',
+            intent_payload: {},
+            awaiting_confirmation: false,
+            updated_at: new Date().toISOString()
+          })
           .eq('user_id', user.id);
         
         toast({ title: 'Memoria assistente resettata con successo' });
