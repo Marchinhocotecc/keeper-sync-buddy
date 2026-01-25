@@ -1,16 +1,16 @@
-# LUMI - Il tuo assistente di vita semplice e luminoso ✨
+# AYVO - Intelligent Productivity
 
-Un'app moderna per organizzare task, tracciare il benessere e gestire le spese con gentilezza e semplicità.
+A premium, dark-mode-first productivity app for ambitious minds.
 
 ## 🎨 Brand Identity
 
-- **Nome**: LUMI
-- **Tagline**: Il tuo assistente di vita semplice e luminoso
-- **Colore Primario**: #6C63FF (Lumi Glow)
-- **Colore Secondario**: #A39BFF (Lumi Sky)
-- **Stile**: Minimal, calmo, moderno, gentle tech
+- **Name**: AYVO
+- **Tagline**: Intelligent productivity for ambitious minds
+- **Primary Color**: #5B8CFF (AYVO Neon)
+- **Background**: #1F242C (AYVO Slate)
+- **Style**: Premium, minimal, professional, unisex
 
-## 🚀 Tecnologie
+## 🚀 Tech Stack
 
 - React + TypeScript
 - Vite
@@ -19,29 +19,29 @@ Un'app moderna per organizzare task, tracciare il benessere e gestire le spese c
 - Supabase (Auth, Database, Edge Functions)
 - Framer Motion
 
-## 📦 Funzionalità
+## 📦 Features
 
-- ✅ Gestione Task con priorità
-- 📅 Calendario eventi
-- 💰 Tracciamento spese e budget
-- 🤖 Assistente AI conversazionale
-- 🧘 Monitoraggio benessere
-- 🌙 Tema chiaro/scuro
-- 🌍 Multilingua (IT, EN, ES)
+- ✅ Task management with priorities
+- 📅 Calendar events
+- 💰 Expense tracking and budgets
+- 🤖 AI conversational assistant
+- 🧘 Wellness monitoring
+- 🌙 Dark mode first design
+- 🌍 Multi-language (IT, EN, ES)
 
-## 🛠️ Sviluppo
+## 🛠️ Development
 
 ```bash
-# Installa dipendenze
+# Install dependencies
 npm install
 
-# Avvia dev server
+# Start dev server
 npm run dev
 
-# Build produzione
+# Build for production
 npm run build
 ```
 
-## 📄 Licenza
+## 📄 License
 
-Proprietaria - LUMI Team
+Proprietary - AYVO Team

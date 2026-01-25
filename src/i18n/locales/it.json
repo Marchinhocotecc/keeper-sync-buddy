@@ -11,8 +11,8 @@
     "logout": "Esci"
   },
   "home": {
-    "title": "LUMI",
-    "subtitle": "Il tuo assistente di vita semplice e luminoso",
+    "title": "AYVO",
+    "subtitle": "Il tuo assistente produttivo e intelligente",
     "dailyActivities": "Attività Quotidiane",
     "todayActivities": "Attività di Oggi",
     "tasks": "Task",
@@ -32,13 +32,13 @@
     "sleepHours": "Sonno (ore)",
     "meditationMinutes": "Meditazione (min)",
     "completed": "Completati",
-    "noActiveTasks": "Nessun task attivo. Aggiungine uno per iniziare! ✨",
+    "noActiveTasks": "Nessun task attivo. Aggiungine uno per iniziare!",
     "errorLoadingTasks": "Ops, qualcosa è andato storto. Riprova!",
     "taskReminder": "Promemoria Task"
   },
   "calendar": {
     "title": "Calendario",
-    "subtitle": "Gestisci il tuo tempo con serenità",
+    "subtitle": "Gestisci il tuo tempo con efficienza",
     "events": "Eventi",
     "calendar": "Calendario",
     "filters": "Filtri",
@@ -49,7 +49,7 @@
     "time": "Ora",
     "description": "Descrizione",
     "create": "Crea",
-    "noEvents": "Nessun evento per oggi. Goditi la calma! 🌸",
+    "noEvents": "Nessun evento per oggi.",
     "selectDate": "Seleziona una data per vedere gli eventi",
     "allDay": "Tutto il giorno",
     "noTimeSet": "Orario non definito",
@@ -68,7 +68,7 @@
   },
   "expenses": {
     "title": "Spese",
-    "subtitle": "Tieni traccia delle tue finanze",
+    "subtitle": "Monitora le tue finanze",
     "budget": "Budget",
     "transactions": "Transazioni",
     "addExpense": "Aggiungi Spesa",
@@ -94,14 +94,14 @@
     "startDate": "Data Inizio",
     "endDate": "Data Fine",
     "noData": "Nessun dato disponibile",
-    "noExpenses": "Nessuna spesa ancora. Inizia a tracciare! 💰",
+    "noExpenses": "Nessuna spesa ancora. Inizia a tracciare!",
     "loading": "Caricamento spese...",
     "errorLoading": "Ops, errore nel caricamento"
   },
   "assistant": {
-    "title": "Assistente LUMI",
+    "title": "Assistente AYVO",
     "subtitle": "Sono qui per aiutarti",
-    "placeholder": "Scrivi qui... sono tutto orecchi! 👂",
+    "placeholder": "Scrivi qui...",
     "send": "Invia",
     "getSuggestion": "Suggerimenti",
     "suggestionHint": "Chiedimi consigli per organizzare la tua giornata"
@@ -112,7 +112,7 @@
     "language": "Lingua",
     "languageDesc": "Scegli la tua lingua preferita",
     "theme": "Tema",
-    "themeDesc": "Personalizza l'aspetto di LUMI",
+    "themeDesc": "Personalizza l'aspetto di AYVO",
     "light": "Chiaro",
     "dark": "Scuro",
     "system": "Sistema",
@@ -124,7 +124,7 @@
     "contactDesc": "Hai bisogno di aiuto?",
     "contactEmail": "Scrivici a:",
     "about": "Informazioni",
-    "aboutDesc": "LUMI - Il tuo assistente di vita semplice e luminoso"
+    "aboutDesc": "AYVO - Il tuo assistente produttivo e intelligente"
   },
   "auth": {
     "signIn": "Accedi",
@@ -134,22 +134,22 @@
     "noAccount": "Non hai un account?",
     "haveAccount": "Hai già un account?",
     "signInGoogle": "Accedi con Google",
-    "welcome": "Benvenuto in LUMI",
+    "welcome": "Benvenuto in AYVO",
     "welcomeBack": "Bentornato!"
   },
   "terms": {
     "title": "Termini e Condizioni",
     "lastUpdated": "Ultimo aggiornamento",
     "section1Title": "1. Accettazione dei Termini",
-    "section1Content": "Accedendo e utilizzando LUMI, accetti e acconsenti a essere vincolato dai termini e dalle disposizioni di questo accordo.",
+    "section1Content": "Accedendo e utilizzando AYVO, accetti e acconsenti a essere vincolato dai termini e dalle disposizioni di questo accordo.",
     "section2Title": "2. Licenza d'Uso",
-    "section2Content": "È concesso il permesso di utilizzare temporaneamente LUMI per uso personale e non commerciale.",
+    "section2Content": "È concesso il permesso di utilizzare temporaneamente AYVO per uso personale e non commerciale.",
     "section3Title": "3. Disclaimer",
-    "section3Content": "I materiali su LUMI sono forniti 'così come sono'. LUMI non fornisce garanzie, espresse o implicite.",
+    "section3Content": "I materiali su AYVO sono forniti 'così come sono'. AYVO non fornisce garanzie, espresse o implicite.",
     "section4Title": "4. Limitazioni",
-    "section4Content": "In nessun caso LUMI o i suoi fornitori saranno responsabili per eventuali danni derivanti dall'uso o dall'impossibilità di utilizzare i materiali su LUMI.",
+    "section4Content": "In nessun caso AYVO o i suoi fornitori saranno responsabili per eventuali danni derivanti dall'uso o dall'impossibilità di utilizzare i materiali su AYVO.",
     "section5Title": "5. Modifiche",
-    "section5Content": "LUMI può rivedere questi termini di servizio in qualsiasi momento senza preavviso. Utilizzando questa app, accetti di essere vincolato dalla versione corrente di questi termini."
+    "section5Content": "AYVO può rivedere questi termini di servizio in qualsiasi momento senza preavviso. Utilizzando questa app, accetti di essere vincolato dalla versione corrente di questi termini."
   },
   "privacy": {
     "title": "Informativa Privacy",
