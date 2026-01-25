@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button';
 import { TaskCard } from '@/components/TaskCard';
 import { AddTaskForm } from '@/components/AddTaskForm';
 import { WellnessCard } from '@/components/WellnessCard';
-import { Plus, AlertCircle, CheckCircle2, Clock, Flag } from 'lucide-react';
+import { Plus, AlertCircle, CheckCircle2, Clock, Flag, TrendingUp, Wallet } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useHomeData } from '@/hooks/useHomeData';
+import { useExpenses } from '@/hooks/useExpenses';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,7 +19,22 @@ export default function HomePage() {
   const { userId, userName, isLoading, error } = useHomeData();
   const { tasks, addTask, toggleTask, deleteTask } = useTasks(userId);
   const { addEvent, updateEvent, deleteEvent } = useCalendarEvents(userId);
+  const { expenses } = useExpenses(userId);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Quick stats
+  const todayTasks = tasks.filter((t) => !t.completed && t.priority === 'high');
+  const completedToday = tasks.filter((t) => t.completed).length;
+  const upcomingTasks = tasks.filter((t) => !t.completed && t.priority === 'medium');
+  const lowPriorityTasks = tasks.filter((t) => !t.completed && t.priority === 'low');
+  const completedTasks = tasks.filter((t) => t.completed);
+
+  // Week expenses
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 7);
+  const weekExpenses = expenses
+    .filter(e => new Date(e.date) >= weekStart)
+    .reduce((sum, e) => sum + Number(e.amount), 0);
 
   // Sync task with calendar event
   const syncTaskToCalendar = useCallback(async (
@@ -35,7 +51,6 @@ export default function HomePage() {
           category: task.priority === 'low' ? 'low_priority' : 'task',
         };
 
-        // Low priority tasks → no specific time
         if (task.priority === 'low') {
           eventData.start_time = new Date().toISOString();
           eventData.end_time = new Date().toISOString();
@@ -45,7 +60,6 @@ export default function HomePage() {
           endTime.setHours(endTime.getHours() + 1);
           eventData.end_time = endTime.toISOString();
         } else {
-          // Default: today at 9am
           const startTime = new Date();
           startTime.setHours(9, 0, 0, 0);
           eventData.start_time = startTime.toISOString();
@@ -138,18 +152,17 @@ export default function HomePage() {
     }
   }, [tasks, deleteTask, syncTaskToCalendar, toast]);
 
-  // Filter tasks by priority and completion
-  const todayTasks = tasks.filter((t) => !t.completed && t.priority === 'high');
-  const upcomingTasks = tasks.filter((t) => !t.completed && t.priority === 'medium');
-  const lowPriorityTasks = tasks.filter((t) => !t.completed && t.priority === 'low');
-  const completedTasks = tasks.filter((t) => t.completed);
-
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background">
         <div className="page-container">
           <Skeleton className="h-10 w-64 mb-2" />
           <Skeleton className="h-6 w-96 mb-8" />
+          <div className="grid gap-4 sm:grid-cols-3 mb-6">
+            <Skeleton className="h-24 rounded-[18px]" />
+            <Skeleton className="h-24 rounded-[18px]" />
+            <Skeleton className="h-24 rounded-[18px]" />
+          </div>
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
               <Skeleton className="h-96 w-full rounded-[18px]" />
@@ -194,6 +207,43 @@ export default function HomePage() {
               day: 'numeric' 
             })}
           </p>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid gap-4 sm:grid-cols-3 mb-6 animate-fade-in">
+          <Card className="bg-card border-border">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-success/10">
+                <CheckCircle2 className="h-5 w-5 text-success" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-foreground">{completedToday}</p>
+                <p className="text-sm text-muted-foreground">Task completati</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/10">
+                <TrendingUp className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-foreground">{todayTasks.length}</p>
+                <p className="text-sm text-muted-foreground">Priorità alta</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-warning/10">
+                <Wallet className="h-5 w-5 text-warning" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-foreground">€{weekExpenses.toFixed(0)}</p>
+                <p className="text-sm text-muted-foreground">Spese settimana</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid gap-5 sm:gap-6 lg:grid-cols-3">

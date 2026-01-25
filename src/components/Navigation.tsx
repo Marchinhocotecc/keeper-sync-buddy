@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Home, Calendar, DollarSign, MessageSquare, Settings, LogOut, Zap } from 'lucide-react';
+import { Home, Calendar, DollarSign, MessageSquare, Settings, LogOut, Zap, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,6 +30,7 @@ export function Navigation() {
     { to: '/', icon: Home, label: t('nav.home') },
     { to: '/calendar', icon: Calendar, label: t('nav.calendar') },
     { to: '/expenses', icon: DollarSign, label: t('nav.expenses') },
+    { to: '/notes', icon: FileText, label: 'Note' },
     { to: '/assistant', icon: MessageSquare, label: t('nav.assistant') },
     { to: '/settings', icon: Settings, label: t('nav.settings') },
   ];

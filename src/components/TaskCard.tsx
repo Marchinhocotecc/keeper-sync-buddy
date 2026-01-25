@@ -29,7 +29,7 @@ export function TaskCard({ task, onToggle, onDelete }: TaskCardProps) {
   return (
     <Card
       className={cn(
-        "p-3 sm:p-4 transition-all hover:shadow-lumi-card border",
+        "p-3 sm:p-4 transition-all hover:shadow-ayvo border",
         task.completed && "opacity-60",
         priorityStyles[task.priority]
       )}
