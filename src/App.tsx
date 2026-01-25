@@ -13,7 +13,7 @@ import CalendarPage from "./pages/CalendarPage";
 import ExpensesPage from "./pages/ExpensesPage";
 import AssistantPage from "./pages/AssistantPage";
 import SettingsPage from "./pages/SettingsPage";
-import NotesPage from "./pages/NotesPage";
+
 import OnboardingPage from "./pages/OnboardingPage";
 import AuthPage from "./pages/AuthPage";
 import TermsPage from "./pages/TermsPage";
@@ -80,15 +80,6 @@ const App = () => (
                 <ProtectedRoute>
                   <Navigation />
                   <SettingsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/notes"
-              element={
-                <ProtectedRoute>
-                  <Navigation />
-                  <NotesPage />
                 </ProtectedRoute>
               }
             />
