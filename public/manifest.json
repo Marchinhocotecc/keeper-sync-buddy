@@ -1,11 +1,11 @@
 {
-  "name": "LUMI",
-  "short_name": "LUMI",
-  "description": "Il tuo assistente di vita semplice e luminoso",
+  "name": "AYVO",
+  "short_name": "AYVO",
+  "description": "Intelligent productivity for ambitious minds",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FDFCF9",
-  "theme_color": "#6C63FF",
+  "background_color": "#1F242C",
+  "theme_color": "#5B8CFF",
   "orientation": "portrait-primary",
   "categories": ["productivity", "lifestyle", "utilities"],
   "icons": [

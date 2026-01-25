@@ -1,76 +1,83 @@
 /**
- * LUMI Brand Configuration
- * "Il tuo assistente di vita semplice e luminoso"
+ * AYVO Brand Configuration
+ * "Intelligent productivity for ambitious minds"
  * 
- * This file contains all brand-related constants for the LUMI app.
+ * This file contains all brand-related constants for the AYVO app.
  * Use these values for consistent branding across the application.
  */
 
-export const APP_NAME = "LUMI";
-export const APP_TAGLINE = "Il tuo assistente di vita semplice e luminoso";
-export const APP_TAGLINE_EN = "Your simple and bright life assistant";
-export const SUPPORT_EMAIL = "support@lumi-app.com";
+export const APP_NAME = "AYVO";
+export const APP_TAGLINE = "Il tuo assistente produttivo e intelligente";
+export const APP_TAGLINE_EN = "Intelligent productivity for ambitious minds";
+export const SUPPORT_EMAIL = "support@ayvo.app";
 
 /**
- * LUMI Brand Colors
+ * AYVO Brand Colors
  * These are provided for reference - in components, always use
  * Tailwind CSS classes with semantic tokens (bg-primary, text-foreground, etc.)
  */
 export const BRAND_COLORS = {
-  // Primary - Lumi Glow
-  primary: "#6C63FF",
-  primaryHsl: "244 97% 69%",
+  // Backgrounds
+  slate: "#1F242C",
+  slateHsl: "216 17% 15%",
   
-  // Secondary - Lumi Sky  
-  secondary: "#A39BFF",
-  secondaryHsl: "246 100% 81%",
+  graphite: "#2A303A",
+  graphiteHsl: "216 15% 20%",
   
-  // Primary Dark (for contrast)
-  primaryDark: "#4B44CC",
-  primaryDarkHsl: "244 55% 54%",
+  tintGray: "#3A414D",
+  tintGrayHsl: "216 13% 26%",
   
-  // Background - Lumi Cream
-  background: "#FDFCF9",
-  backgroundHsl: "45 33% 98%",
+  // Accent Colors
+  neon: "#5B8CFF",
+  neonHsl: "220 100% 68%",
   
-  // Text colors
-  foreground: "#1C1C1E",
-  foregroundHsl: "240 6% 12%",
+  electricBlue: "#76A4FF",
+  electricBlueHsl: "220 100% 73%",
   
-  textSecondary: "#575757",
-  textSecondaryHsl: "0 0% 34%",
+  iceBlue: "#CFE1FF",
+  iceBlueHsl: "218 100% 91%",
+  
+  // Text Colors
+  textPrimary: "#F4F7FA",
+  textPrimaryHsl: "214 25% 97%",
+  
+  textSecondary: "#AEB4C2",
+  textSecondaryHsl: "218 12% 72%",
+  
+  textMuted: "#6D7480",
+  textMutedHsl: "218 8% 46%",
   
   // Semantic colors
-  success: "#5FD38A",
-  successHsl: "146 58% 60%",
+  success: "#4BE3C6",
+  successHsl: "168 72% 59%",
   
-  warning: "#F6D860",
-  warningHsl: "47 90% 67%",
+  warning: "#FFB457",
+  warningHsl: "32 100% 67%",
   
-  error: "#FF6A6A",
+  error: "#FF6B6B",
   errorHsl: "0 100% 71%",
 } as const;
 
 /**
- * LUMI Design Tokens
+ * AYVO Design Tokens
  */
 export const DESIGN_TOKENS = {
-  // Border radius
-  radiusSm: "0.5rem",   // 8px
-  radiusMd: "0.75rem",  // 12px
-  radiusLg: "1rem",     // 16px
-  radiusXl: "1.25rem",  // 20px
-  radius2xl: "1.5rem",  // 24px
+  // Border radius - clean, modern
+  radiusSm: "0.375rem",  // 6px
+  radiusMd: "0.5rem",    // 8px
+  radiusLg: "0.75rem",   // 12px
+  radiusXl: "1rem",      // 16px
+  radius2xl: "1.25rem",  // 20px
   
-  // Shadows
-  shadowSm: "0 1px 3px 0 rgb(108 99 255 / 0.04)",
-  shadowMd: "0 4px 12px -2px rgb(108 99 255 / 0.08)",
-  shadowLg: "0 10px 30px -4px rgb(108 99 255 / 0.12)",
-  shadowXl: "0 20px 50px -8px rgb(108 99 255 / 0.16)",
+  // Shadows - subtle, professional
+  shadowSm: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  shadowMd: "0 4px 16px rgba(0, 0, 0, 0.08)",
+  shadowLg: "0 8px 24px rgba(0, 0, 0, 0.12)",
+  shadowXl: "0 16px 48px rgba(0, 0, 0, 0.16)",
   
-  // Transitions
-  transitionBase: "all 0.2s ease",
-  transitionSmooth: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+  // Transitions - snappy
+  transitionBase: "all 0.15s ease",
+  transitionSmooth: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
 } as const;
 
 /**
@@ -80,6 +87,6 @@ export const PWA_CONFIG = {
   name: APP_NAME,
   shortName: APP_NAME,
   description: APP_TAGLINE,
-  themeColor: BRAND_COLORS.primary,
-  backgroundColor: BRAND_COLORS.background,
+  themeColor: BRAND_COLORS.neon,
+  backgroundColor: BRAND_COLORS.slate,
 } as const;

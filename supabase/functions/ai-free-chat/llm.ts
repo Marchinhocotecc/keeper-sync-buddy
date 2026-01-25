@@ -20,41 +20,41 @@ export function buildSystemPrompt(context: UserContext): string {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   
-  return `Sei un assistente personale italiano. Rispondi SOLO in JSON valido.
+  return `You are AYVO, an intelligent productivity assistant. Respond ONLY in valid JSON.
 
-DATA OGGI: ${today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-DOMANI: ${tomorrow.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
+TODAY: ${today.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+TOMORROW: ${tomorrow.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" })}
 
-CONTESTO UTENTE:
-- Task aperti: ${pendingTasks.length} (${pendingTasks.slice(0, 3).map((t: any) => t.title).join(", ") || "nessuno"})
-- Eventi prossimi: ${todayEvents.length}
-- Spese mese: €${totalExpenses.toFixed(2)} / €${budget}
+USER CONTEXT:
+- Open tasks: ${pendingTasks.length} (${pendingTasks.slice(0, 3).map((t: any) => t.title).join(", ") || "none"})
+- Upcoming events: ${todayEvents.length}
+- Month expenses: €${totalExpenses.toFixed(2)} / €${budget}
 
-CONTRATTO JSON OBBLIGATORIO - NESSUNA ECCEZIONE:
+MANDATORY JSON CONTRACT - NO EXCEPTIONS:
 {
-  "reply": "risposta breve",
+  "reply": "brief response",
   "intent": "CREATE_TASK|CREATE_EVENT|RECORD_EXPENSE|QUERY_TASKS|QUERY_EVENTS|QUERY_BUDGET|ADVICE|SMALL_TALK",
   "action": {"type": "CREATE_TASK|CREATE_EVENT|RECORD_EXPENSE|NONE", "title": "...", "start_at": "ISO", "amount": 0, "category": "..."},
   "needsConfirmation": true/false,
-  "confirmationQuestion": "domanda se needsConfirmation=true",
+  "confirmationQuestion": "question if needsConfirmation=true",
   "missingFields": ["title", "date", "time", "amount", "category"]
 }
 
-REGOLE RIGIDE:
-1. Se l'utente chiede un'AZIONE (crea, aggiungi, registra, elimina) → intent DEVE essere un'azione, MAI "NONE"
-2. Se mancano dati per l'azione → imposta missingFields e fai UNA domanda breve
-3. MAI rispondere "Dimmi di più" o frasi vaghe
-4. Per eventi: se manca data o ora, chiedi SOLO quella mancante
-5. Per spese: se manca importo o categoria, chiedi SOLO quello mancante
-6. Titoli: rimuovi prefissi (crea/aggiungi/fai) - "crea task lavoro" → title:"Lavoro"
-7. Date: "domai" = domani, interpreta giorni settimana correttamente
+STRICT RULES:
+1. If user requests an ACTION (create, add, record, delete) → intent MUST be an action, NEVER "NONE"
+2. If data is missing for action → set missingFields and ask ONE brief question
+3. NEVER respond "Tell me more" or vague phrases
+4. For events: if date or time is missing, ask ONLY for that missing field
+5. For expenses: if amount or category is missing, ask ONLY for that missing field
+6. Titles: remove prefixes (create/add/make) - "create task work" → title:"Work"
+7. Dates: interpret weekdays correctly relative to today
 
-ESEMPI:
-- "padel domani alle 20" → intent:CREATE_EVENT, action:{type:CREATE_EVENT, title:"Padel", start_at:"ISO"}
-- "sigarette 5 euro" → intent:RECORD_EXPENSE, action:{type:RECORD_EXPENSE, amount:5, category:"vizi"}
-- "crea evento" → intent:CREATE_EVENT, missingFields:["title","date","time"], reply:"Che evento?"
+EXAMPLES:
+- "padel tomorrow at 8pm" → intent:CREATE_EVENT, action:{type:CREATE_EVENT, title:"Padel", start_at:"ISO"}
+- "cigarettes 5 euros" → intent:RECORD_EXPENSE, action:{type:RECORD_EXPENSE, amount:5, category:"vices"}
+- "create event" → intent:CREATE_EVENT, missingFields:["title","date","time"], reply:"What event?"
 
-Rispondi SOLO JSON, niente altro.`;
+Respond ONLY JSON, nothing else.`;
 }
 
 // ============================================================================
@@ -68,7 +68,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
     console.error("[AI-FREE] Invalid or missing OPENROUTER_API_KEY");
     return {
       intent: "ERROR",
-      reply: "Configurazione AI non valida. Riprova più tardi.",
+      reply: "AI configuration invalid. Try again later.",
       action: { type: "NONE" },
       needsConfirmation: false,
       confirmationQuestion: null,
@@ -92,8 +92,8 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://lumi-app.lovable.app",
-        "X-Title": "LUMI"
+        "HTTP-Referer": "https://ayvo.app",
+        "X-Title": "AYVO"
       },
       body: JSON.stringify({
         model: model,
@@ -114,7 +114,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
       console.error(`[AI-FREE] API error: status=${response.status}, error=${errorText.substring(0, 200)}`);
       return {
         intent: "ERROR",
-        reply: response.status === 401 ? "Configurazione AI non valida." : "Servizio AI non disponibile.",
+        reply: response.status === 401 ? "AI configuration invalid." : "AI service unavailable.",
         action: { type: "NONE" },
         needsConfirmation: false,
         confirmationQuestion: null,
@@ -133,7 +133,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
       const jsonStr = jsonMatch ? jsonMatch[1].trim() : cleanContent.trim();
       const parsed = JSON.parse(jsonStr);
       
-      if (!parsed.reply) parsed.reply = "Come posso aiutarti?";
+      if (!parsed.reply) parsed.reply = "How can I help?";
       if (!parsed.intent) parsed.intent = "SMALL_TALK";
       if (!parsed.action) parsed.action = { type: "NONE" };
       if (parsed.needsConfirmation === undefined) parsed.needsConfirmation = false;
@@ -155,13 +155,13 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
         };
       }
       return {
-        reply: "Puoi provare a riformulare?",
+        reply: "Can you rephrase that?",
         intent: "ADVICE",
         action: { type: "NONE" },
         needsConfirmation: false,
         confirmationQuestion: null,
         missingFields: [],
-        suggestions: ["Mostra task", "Aggiungi evento", "Mostra spese"]
+        suggestions: ["Show tasks", "Add event", "Show expenses"]
       };
     }
     
@@ -170,7 +170,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
       console.error("[AI-FREE] Timeout");
       return {
         intent: "ERROR",
-        reply: "Richiesta scaduta. Riprova.",
+        reply: "Request timed out. Try again.",
         action: { type: "NONE" },
         needsConfirmation: false,
         confirmationQuestion: null,
@@ -181,7 +181,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
     console.error("[AI-FREE] Error:", error instanceof Error ? error.message : "Unknown");
     return {
       intent: "ERROR",
-      reply: "Errore imprevisto. Riprova.",
+      reply: "Unexpected error. Try again.",
       action: { type: "NONE" },
       needsConfirmation: false,
       confirmationQuestion: null,

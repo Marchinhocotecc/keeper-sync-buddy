@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Zap } from 'lucide-react';
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -48,8 +48,8 @@ export default function AuthPage() {
 
     if (!termsAccepted) {
       toast({
-        title: 'Un momento!',
-        description: 'Devi accettare i Termini e Condizioni per continuare 📋',
+        title: 'Terms required',
+        description: 'Please accept the Terms and Conditions to continue.',
         variant: 'destructive',
       });
       return;
@@ -73,12 +73,12 @@ export default function AuthPage() {
       if (error) throw error;
 
       toast({
-        title: 'Perfetto! ✨',
-        description: 'Controlla la tua email per il link di conferma.',
+        title: 'Check your email',
+        description: 'We sent you a confirmation link.',
       });
     } catch (error: any) {
       toast({
-        title: 'Ops!',
+        title: 'Error',
         description: error.message,
         variant: 'destructive',
       });
@@ -107,7 +107,7 @@ export default function AuthPage() {
       }
     } catch (error: any) {
       toast({
-        title: 'Ops!',
+        title: 'Error',
         description: error.message,
         variant: 'destructive',
       });
@@ -117,45 +117,45 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-secondary/10 p-4">
-      <Card className="w-full max-w-md rounded-2xl shadow-lg border-border/50">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md rounded-xl border-border bg-card">
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-              <Sparkles className="h-8 w-8 text-primary-foreground" />
+            <div className="w-14 h-14 rounded-xl bg-primary flex items-center justify-center shadow-ayvo">
+              <Zap className="h-7 w-7 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            LUMI
+          <CardTitle className="text-2xl font-semibold text-foreground tracking-tight">
+            AYVO
           </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Il tuo assistente di vita semplice e luminoso ✨
+          <CardDescription className="text-muted-foreground text-sm">
+            Intelligent productivity for ambitious minds
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 rounded-xl">
-              <TabsTrigger value="signin" className="rounded-lg">Accedi</TabsTrigger>
-              <TabsTrigger value="signup" className="rounded-lg">Registrati</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 rounded-lg bg-muted p-1">
+              <TabsTrigger value="signin" className="rounded-md text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">Sign In</TabsTrigger>
+              <TabsTrigger value="signup" className="rounded-md text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">Sign Up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email-signin">Email</Label>
+                  <Label htmlFor="email-signin" className="text-sm">Email</Label>
                   <Input
                     id="email-signin"
                     type="email"
-                    placeholder="tu@esempio.com"
+                    placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={loading}
-                    className="rounded-xl"
+                    className="h-10 rounded-lg bg-muted border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password-signin">Password</Label>
+                  <Label htmlFor="password-signin" className="text-sm">Password</Label>
                   <Input
                     id="password-signin"
                     type="password"
@@ -163,12 +163,12 @@ export default function AuthPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={loading}
-                    className="rounded-xl"
+                    className="h-10 rounded-lg bg-muted border-border"
                   />
                 </div>
-                <Button type="submit" className="w-full rounded-xl lumi-button" disabled={loading}>
+                <Button type="submit" className="w-full h-10 rounded-lg font-medium" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Accedi
+                  Sign In
                 </Button>
               </form>
             </TabsContent>
@@ -176,33 +176,33 @@ export default function AuthPage() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email-signup">Email</Label>
+                  <Label htmlFor="email-signup" className="text-sm">Email</Label>
                   <Input
                     id="email-signup"
                     type="email"
-                    placeholder="tu@esempio.com"
+                    placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={loading}
-                    className="rounded-xl"
+                    className="h-10 rounded-lg bg-muted border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password-signup">Password</Label>
+                  <Label htmlFor="password-signup" className="text-sm">Password</Label>
                   <Input
                     id="password-signup"
                     type="password"
-                    placeholder="Almeno 6 caratteri"
+                    placeholder="At least 6 characters"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={loading}
                     minLength={6}
-                    className="rounded-xl"
+                    className="h-10 rounded-lg bg-muted border-border"
                   />
                 </div>
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border">
                   <Checkbox
                     id="terms"
                     checked={termsAccepted}
@@ -210,20 +210,20 @@ export default function AuthPage() {
                     disabled={loading}
                     className="mt-0.5"
                   />
-                  <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
-                    Accetto i{' '}
+                  <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer text-muted-foreground">
+                    I accept the{' '}
                     <Link
                       to="/terms-and-conditions"
                       className="text-primary hover:underline font-medium"
                       target="_blank"
                     >
-                      Termini e Condizioni
+                      Terms and Conditions
                     </Link>
                   </Label>
                 </div>
-                <Button type="submit" className="w-full rounded-xl lumi-button" disabled={loading || !termsAccepted}>
+                <Button type="submit" className="w-full h-10 rounded-lg font-medium" disabled={loading || !termsAccepted}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Registrati
+                  Create Account
                 </Button>
               </form>
             </TabsContent>
