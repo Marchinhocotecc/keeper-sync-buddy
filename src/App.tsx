@@ -13,6 +13,8 @@ import CalendarPage from "./pages/CalendarPage";
 import ExpensesPage from "./pages/ExpensesPage";
 import AssistantPage from "./pages/AssistantPage";
 import SettingsPage from "./pages/SettingsPage";
+import NotesPage from "./pages/NotesPage";
+import OnboardingPage from "./pages/OnboardingPage";
 import AuthPage from "./pages/AuthPage";
 import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
@@ -81,6 +83,16 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/notes"
+              element={
+                <ProtectedRoute>
+                  <Navigation />
+                  <NotesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/onboarding" element={<OnboardingPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
