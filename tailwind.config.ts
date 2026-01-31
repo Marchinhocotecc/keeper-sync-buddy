@@ -67,31 +67,21 @@ export default {
         },
         // AYVO specific colors
         ayvo: {
-          slate: "#1F242C",
-          graphite: "#2A303A",
+          primary: "#4C4EFF",
+          "primary-hover": "#5B5FFF",
+          slate: "#1B1D2A",
+          graphite: "#252838",
           "tint-gray": "#3A414D",
-          neon: "#5B8CFF",
-          "electric-blue": "#76A4FF",
-          "ice-blue": "#CFE1FF",
+          neon: "#4C4EFF",
+          accent: "#C6FFE9",
+          neutral: "#FDF7EE",
           mint: "#4BE3C6",
           amber: "#FFB457",
           coral: "#FF6B6B",
           "text-primary": "#F4F7FA",
           "text-secondary": "#AEB4C2",
           "text-muted": "#6D7480",
-          glow: "rgba(91, 140, 255, 0.15)",
-        },
-        // Legacy LUMI colors (for backward compatibility)
-        lumi: {
-          purple: "#5B8CFF",
-          "purple-hover": "#76A4FF",
-          deep: "#4A7AE8",
-          surface: "#1F242C",
-          panel: "#2A303A",
-          line: "#3A414D",
-          ink: "#F4F7FA",
-          grey: "#AEB4C2",
-          glow: "rgba(91, 140, 255, 0.15)",
+          glow: "rgba(76, 78, 255, 0.15)",
         },
       },
       borderRadius: {
@@ -103,15 +93,10 @@ export default {
         "3xl": "1.25rem",
       },
       boxShadow: {
-        ayvo: "0 2px 8px rgba(91, 140, 255, 0.25)",
+        ayvo: "0 2px 8px rgba(76, 78, 255, 0.25)",
         "ayvo-card": "0 4px 16px rgba(0, 0, 0, 0.08)",
         "ayvo-nav": "0 1px 3px rgba(0, 0, 0, 0.05)",
-        "ayvo-glow": "0 0 12px rgba(91, 140, 255, 0.15)",
-        // Legacy
-        lumi: "0 2px 8px rgba(91, 140, 255, 0.25)",
-        "lumi-card": "0 4px 16px rgba(0, 0, 0, 0.08)",
-        "lumi-nav": "0 1px 3px rgba(0, 0, 0, 0.05)",
-        "lumi-glow": "0 0 12px rgba(91, 140, 255, 0.15)",
+        "ayvo-glow": "0 0 12px rgba(76, 78, 255, 0.15)",
       },
       keyframes: {
         "accordion-down": {

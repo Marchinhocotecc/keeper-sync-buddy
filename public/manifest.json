@@ -4,8 +4,8 @@
   "description": "Intelligent productivity for ambitious minds",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1F242C",
-  "theme_color": "#5B8CFF",
+  "background_color": "#1B1D2A",
+  "theme_color": "#4C4EFF",
   "orientation": "portrait-primary",
   "categories": ["productivity", "lifestyle", "utilities"],
   "icons": [

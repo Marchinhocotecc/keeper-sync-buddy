@@ -1,5 +1,5 @@
 /**
- * LUMI - Shared Constants for AI Assistant
+ * AYVO - Shared Constants for AI Assistant
  * 
  * RULE: Risposte brevi, naturali, umane, gentili
  * Tono: calmo, accogliente, competente, non robotico
@@ -18,7 +18,7 @@ export const CONFIRM_NO_INTENT_RESPONSE = 'Perfetto! Dimmi cosa posso fare per t
 export const NEGATIVE_FEEDBACK_RESPONSE = 'Scusa! Come posso aiutarti meglio?';
 
 // Welcome message
-export const WELCOME_MESSAGE = 'Ciao! Sono LUMI ✨ Come posso aiutarti oggi?';
+export const WELCOME_MESSAGE = 'Ciao! Sono AYVO ✨ Come posso aiutarti oggi?';
 
 // Error messages (gentle tone)
 export const ERROR_MESSAGES = {

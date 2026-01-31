@@ -7,56 +7,55 @@
  * "Intelligent productivity for ambitious minds"
  * 
  * Premium Dark-Mode-First Palette
- * AYVO Slate: #1F242C (primary background)
- * AYVO Graphite: #2A303A (secondary, cards)
- * AYVO Tint Gray: #3A414D (borders, stroke)
- * AYVO Neon: #5B8CFF (primary accent)
- * AYVO Electric Blue: #76A4FF (hover, indicators)
- * AYVO Ice Blue: #CFE1FF (micro-details)
+ * AYVO Primary: #4C4EFF (main accent)
+ * AYVO Background Light: #ECECF8
+ * AYVO Background Dark: #1B1D2A
+ * AYVO Accent: #C6FFE9 (mint green)
+ * AYVO Neutral: #FDF7EE (warm cream)
  */
 
 @layer base {
   :root {
     /* AYVO Light Mode - Clean Professional */
     
-    /* Background - Slate tones */
-    --background: 216 14% 96%;
-    --foreground: 216 20% 15%;
+    /* Background - Light mode (#ECECF8) */
+    --background: 240 33% 95%;
+    --foreground: 240 20% 15%;
 
     /* Cards & Popovers */
     --card: 0 0% 100%;
-    --card-foreground: 216 20% 15%;
+    --card-foreground: 240 20% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 216 20% 15%;
+    --popover-foreground: 240 20% 15%;
 
-    /* AYVO Neon - Primary (#5B8CFF) */
-    --primary: 220 100% 68%;
+    /* AYVO Primary (#4C4EFF) */
+    --primary: 239 100% 65%;
     --primary-foreground: 0 0% 100%;
 
-    /* AYVO Electric Blue - Hover (#76A4FF) */
-    --primary-hover: 220 100% 73%;
+    /* AYVO Primary Hover */
+    --primary-hover: 239 100% 70%;
 
     /* Secondary */
-    --secondary: 216 14% 93%;
-    --secondary-foreground: 216 20% 25%;
+    --secondary: 240 33% 92%;
+    --secondary-foreground: 240 20% 25%;
 
     /* Muted tones */
-    --muted: 216 14% 95%;
-    --muted-foreground: 216 10% 46%;
+    --muted: 240 33% 94%;
+    --muted-foreground: 240 10% 46%;
 
-    /* Accent */
-    --accent: 220 100% 68%;
-    --accent-foreground: 0 0% 100%;
+    /* Accent (#C6FFE9 - mint) */
+    --accent: 157 100% 89%;
+    --accent-foreground: 240 20% 15%;
 
     /* Error - AYVO Coral (#FF6B6B) */
     --destructive: 0 100% 71%;
     --destructive-foreground: 0 0% 100%;
 
     /* Borders & Inputs */
-    --border: 216 14% 88%;
-    --input: 216 14% 95%;
-    --ring: 220 100% 68%;
+    --border: 240 20% 88%;
+    --input: 240 33% 94%;
+    --ring: 239 100% 65%;
 
     /* Success - AYVO Mint (#4BE3C6) */
     --success: 168 72% 59%;
@@ -64,85 +63,85 @@
 
     /* Warning - AYVO Amber (#FFB457) */
     --warning: 32 100% 67%;
-    --warning-foreground: 216 20% 15%;
+    --warning-foreground: 240 20% 15%;
 
     /* Radius */
     --radius: 0.75rem;
     
-    /* AYVO shadows - subtle dark */
+    /* AYVO shadows */
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
     --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
     --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
     
-    /* Button shadows with neon tint */
-    --shadow-button: 0 2px 8px rgba(91, 140, 255, 0.25);
+    /* Button shadows with AYVO primary tint */
+    --shadow-button: 0 2px 8px rgba(76, 78, 255, 0.25);
     --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.05);
     
     /* AYVO glow accent */
-    --ayvo-glow: rgba(91, 140, 255, 0.15);
+    --ayvo-glow: rgba(76, 78, 255, 0.15);
     
     /* AYVO gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(220 100% 68%), hsl(220 100% 73%));
-    --gradient-hero: linear-gradient(135deg, hsl(220 100% 68%) 0%, hsl(220 100% 78%) 100%);
-    --gradient-glow: radial-gradient(circle at 50% 50%, rgba(91, 140, 255, 0.12), transparent 70%);
+    --gradient-primary: linear-gradient(135deg, hsl(239 100% 65%), hsl(239 100% 70%));
+    --gradient-hero: linear-gradient(135deg, hsl(239 100% 65%) 0%, hsl(239 100% 75%) 100%);
+    --gradient-glow: radial-gradient(circle at 50% 50%, rgba(76, 78, 255, 0.12), transparent 70%);
     
     /* Smooth transitions */
     --transition-base: all 0.15s ease;
     --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
     /* Sidebar */
-    --sidebar-background: 216 14% 96%;
-    --sidebar-foreground: 216 20% 25%;
-    --sidebar-primary: 220 100% 68%;
+    --sidebar-background: 240 33% 95%;
+    --sidebar-foreground: 240 20% 25%;
+    --sidebar-primary: 239 100% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 216 14% 93%;
-    --sidebar-accent-foreground: 220 100% 68%;
-    --sidebar-border: 216 14% 88%;
-    --sidebar-ring: 220 100% 68%;
+    --sidebar-accent: 240 33% 92%;
+    --sidebar-accent-foreground: 239 100% 65%;
+    --sidebar-border: 240 20% 88%;
+    --sidebar-ring: 239 100% 65%;
   }
 
   .dark {
-    /* AYVO Dark Mode - Premium Default */
+    /* AYVO Dark Mode - Premium Default (#1B1D2A) */
     
-    /* AYVO Slate - Primary Background (#1F242C) */
-    --background: 216 17% 15%;
-    --foreground: 214 25% 97%;
+    /* AYVO Dark Background */
+    --background: 235 22% 14%;
+    --foreground: 240 25% 97%;
 
-    /* AYVO Graphite - Cards (#2A303A) */
-    --card: 216 15% 20%;
-    --card-foreground: 214 25% 97%;
+    /* Cards - slightly lighter than bg */
+    --card: 235 20% 18%;
+    --card-foreground: 240 25% 97%;
 
-    --popover: 216 15% 20%;
-    --popover-foreground: 214 25% 97%;
+    --popover: 235 20% 18%;
+    --popover-foreground: 240 25% 97%;
 
-    /* AYVO Neon - Primary (#5B8CFF) */
-    --primary: 220 100% 68%;
+    /* AYVO Primary (#4C4EFF) */
+    --primary: 239 100% 65%;
     --primary-foreground: 0 0% 100%;
 
-    --primary-hover: 220 100% 73%;
+    --primary-hover: 239 100% 70%;
 
     /* Secondary */
-    --secondary: 216 15% 25%;
-    --secondary-foreground: 214 25% 97%;
+    --secondary: 235 20% 22%;
+    --secondary-foreground: 240 25% 97%;
 
-    /* Muted - AYVO Secondary (#AEB4C2) */
-    --muted: 216 15% 22%;
-    --muted-foreground: 218 12% 72%;
+    /* Muted */
+    --muted: 235 20% 20%;
+    --muted-foreground: 240 12% 72%;
 
     /* Accent */
-    --accent: 220 100% 68%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 157 100% 89%;
+    --accent-foreground: 235 22% 14%;
 
     /* Error - AYVO Coral */
     --destructive: 0 100% 71%;
     --destructive-foreground: 0 0% 100%;
 
-    /* AYVO Tint Gray - Borders (#3A414D) */
-    --border: 216 13% 26%;
-    --input: 216 15% 22%;
-    --ring: 220 100% 68%;
+    /* Borders */
+    --border: 235 18% 24%;
+    --input: 235 20% 20%;
+    --ring: 239 100% 65%;
     
     /* Success - AYVO Mint */
     --success: 168 72% 55%;
@@ -150,7 +149,7 @@
 
     /* Warning - AYVO Amber */
     --warning: 32 100% 62%;
-    --warning-foreground: 216 20% 15%;
+    --warning-foreground: 235 22% 14%;
     
     /* Darker shadows */
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -159,22 +158,22 @@
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.7);
     --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.8);
     
-    --shadow-button: 0 2px 12px rgba(91, 140, 255, 0.35);
+    --shadow-button: 0 2px 12px rgba(76, 78, 255, 0.35);
     --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.4);
     
-    --ayvo-glow: rgba(91, 140, 255, 0.25);
+    --ayvo-glow: rgba(76, 78, 255, 0.25);
     
-    --gradient-hero: linear-gradient(135deg, hsl(220 100% 58%) 0%, hsl(220 100% 68%) 100%);
-    --gradient-glow: radial-gradient(circle at 50% 50%, rgba(91, 140, 255, 0.2), transparent 70%);
+    --gradient-hero: linear-gradient(135deg, hsl(239 100% 55%) 0%, hsl(239 100% 65%) 100%);
+    --gradient-glow: radial-gradient(circle at 50% 50%, rgba(76, 78, 255, 0.2), transparent 70%);
     
-    --sidebar-background: 216 17% 12%;
-    --sidebar-foreground: 214 25% 92%;
-    --sidebar-primary: 220 100% 68%;
+    --sidebar-background: 235 22% 11%;
+    --sidebar-foreground: 240 25% 92%;
+    --sidebar-primary: 239 100% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 216 15% 18%;
-    --sidebar-accent-foreground: 214 25% 92%;
-    --sidebar-border: 216 13% 22%;
-    --sidebar-ring: 220 100% 68%;
+    --sidebar-accent: 235 20% 16%;
+    --sidebar-accent-foreground: 240 25% 92%;
+    --sidebar-border: 235 18% 20%;
+    --sidebar-ring: 239 100% 65%;
   }
 }
 
@@ -219,7 +218,7 @@
     box-shadow: 0 0 20px var(--ayvo-glow);
   }
   
-  /* AYVO button glow */
+  /* AYVO button shadow */
   .shadow-ayvo {
     box-shadow: var(--shadow-button);
   }
@@ -306,7 +305,7 @@
 }
 
 .ayvo-button:hover {
-  box-shadow: 0 4px 16px rgba(91, 140, 255, 0.4);
+  box-shadow: 0 4px 16px rgba(76, 78, 255, 0.4);
   transform: translateY(-1px);
 }
 
@@ -314,12 +313,3 @@
 .ayvo-active {
   box-shadow: 0 0 12px var(--ayvo-glow);
 }
-
-/* Legacy class mappings for compatibility */
-.shadow-lumi { @apply shadow-ayvo; }
-.shadow-lumi-card { @apply shadow-ayvo-card; }
-.shadow-lumi-nav { @apply shadow-ayvo-nav; }
-.shadow-lumi-glow { @apply ayvo-glow; }
-.lumi-button { @apply ayvo-button; }
-.lumi-active { @apply ayvo-active; }
-.lumi-glow { @apply ayvo-glow; }

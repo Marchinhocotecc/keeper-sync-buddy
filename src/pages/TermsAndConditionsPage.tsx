@@ -39,7 +39,7 @@ export default function TermsAndConditionsPage() {
             <section>
               <h2 className="text-lg font-semibold mb-3">2. Descrizione del Servizio</h2>
               <p className="text-muted-foreground leading-relaxed">
-                LUMI è un'applicazione per la gestione personale che include funzionalità 
+                AYVO è un'applicazione per la gestione personale che include funzionalità 
                 di tracciamento delle attività, gestione delle spese, calendario e assistente virtuale. 
                 Il servizio è fornito "così com'è" senza garanzie di alcun tipo.
               </p>
@@ -96,7 +96,7 @@ export default function TermsAndConditionsPage() {
               <h2 className="text-lg font-semibold mb-3">8. Contatti</h2>
               <p className="text-muted-foreground leading-relaxed">
                 Per domande riguardanti questi Termini e Condizioni, contattaci all'indirizzo 
-                email: support@lumi-app.com
+                email: support@ayvo-app.com
               </p>
             </section>
 
