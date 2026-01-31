@@ -1,5 +1,6 @@
 /**
  * State Module - Assistant State Management
+ * Safe merge: non sovrascrive mai con undefined/null
  */
 
 import { PendingAction } from "./types.ts";
@@ -22,11 +23,14 @@ export async function getPendingAction(supabase: any, userId: string): Promise<P
 }
 
 export async function setPendingAction(supabase: any, userId: string, action: PendingAction | null): Promise<void> {
+  const current = await getAssistantState(supabase, userId);
+  const currentPayload = current.intent_payload || {};
+  
   await supabase
     .from("assistant_state")
     .upsert({
       user_id: userId,
-      intent_payload: { pendingAction: action },
+      intent_payload: { ...currentPayload, pendingAction: action },
       updated_at: new Date().toISOString()
     }, { onConflict: "user_id" });
 }
@@ -45,15 +49,32 @@ export async function getAssistantState(supabase: any, userId: string): Promise<
   return data || { active_intent: 'NONE', intent_payload: {} };
 }
 
+/**
+ * SAFE MERGE: aggiorna lo stato facendo deep-merge del payload
+ * NON sovrascrive valori esistenti con undefined/null
+ */
 export async function updateAssistantState(supabase: any, userId: string, patch: any): Promise<void> {
   const current = await getAssistantState(supabase, userId);
+  
+  // Deep merge del payload: mantieni valori esistenti se i nuovi sono undefined/null
+  const currentPayload = current.intent_payload || {};
+  const patchPayload = patch.intent_payload || {};
+  
+  const mergedPayload: any = { ...currentPayload };
+  for (const [key, value] of Object.entries(patchPayload)) {
+    // Solo se il nuovo valore è definito e non null
+    if (value !== undefined && value !== null) {
+      mergedPayload[key] = value;
+    }
+  }
+  
   await supabase
     .from("assistant_state")
     .upsert({
       user_id: userId,
       ...current,
       ...patch,
-      intent_payload: { ...current.intent_payload, ...patch.intent_payload },
+      intent_payload: mergedPayload,
       updated_at: new Date().toISOString()
     }, { onConflict: "user_id" });
 }
