@@ -87,12 +87,14 @@ export const FORBIDDEN_TITLES = [
   "ok", "no", "sì", "si", "yes", "ciao", "salve", "grazie", "boh", 
   "vediamo", "pianifichiamo", "perfetto", "va bene", "top", "dai",
   "annulla", "lascia stare", "niente", "nulla", "stop", "task", "evento",
-  "un", "una", "il", "la", "lo", "i", "gli", "le"
+  "un", "una", "il", "la", "lo", "i", "gli", "le", "crea", "aggiungi"
 ];
 
+// CANCEL: SOLO parole di annullamento esplicito
+// NON include "elimina", "rimuovi", "cancella" (sono DELETE, non CANCEL)
 export const CANCEL_PATTERNS_STANDALONE = [
   "no", "annulla", "lascia stare", "stop", "niente", "cambia idea", 
-  "non importa", "lascia perdere", "basta"
+  "non importa", "lascia perdere", "basta", "chiudi"
 ];
 
 export const CANCEL_PREFIX_PATTERNS = [
