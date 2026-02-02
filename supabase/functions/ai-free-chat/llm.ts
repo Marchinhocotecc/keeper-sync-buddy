@@ -1,6 +1,6 @@
 /**
  * LLM Module - OpenRouter API Integration
- * LINGUA: Sempre italiano
+ * LINGUA: Dinamica basata sulle preferenze utente
  */
 
 import { UserContext } from "./types.ts";
@@ -8,10 +8,78 @@ import { UserContext } from "./types.ts";
 const DEFAULT_MODEL = "deepseek/deepseek-r1-0528:free";
 
 // ============================================================================
-// SYSTEM PROMPT (ITALIANO)
+// LANGUAGE CONFIGURATION
 // ============================================================================
 
-export function buildSystemPrompt(context: UserContext): string {
+interface LanguageConfig {
+  code: string;
+  name: string;
+}
+
+const LANGUAGE_TRANSLATIONS: Record<string, Record<string, string>> = {
+  it: {
+    today: "oggi",
+    tomorrow: "domani",
+    noTasks: "nessuno",
+    openTasks: "Task aperti",
+    upcomingEvents: "Eventi imminenti",
+    monthlyExpenses: "Spese mese",
+    configError: "Configurazione AI non valida. Riprova più tardi.",
+    serviceUnavailable: "Servizio AI non disponibile.",
+    timeout: "Richiesta scaduta. Riprova.",
+    unexpectedError: "Errore imprevisto. Riprova.",
+    howCanIHelp: "Come posso aiutarti?",
+    rephrase: "Puoi riformulare?",
+    showTasks: "Mostra task",
+    addEvent: "Aggiungi evento",
+    showExpenses: "Mostra spese"
+  },
+  en: {
+    today: "today",
+    tomorrow: "tomorrow",
+    noTasks: "none",
+    openTasks: "Open tasks",
+    upcomingEvents: "Upcoming events",
+    monthlyExpenses: "Monthly expenses",
+    configError: "Invalid AI configuration. Please try again later.",
+    serviceUnavailable: "AI service unavailable.",
+    timeout: "Request timed out. Please retry.",
+    unexpectedError: "Unexpected error. Please retry.",
+    howCanIHelp: "How can I help you?",
+    rephrase: "Could you rephrase that?",
+    showTasks: "Show tasks",
+    addEvent: "Add event",
+    showExpenses: "Show expenses"
+  },
+  es: {
+    today: "hoy",
+    tomorrow: "mañana",
+    noTasks: "ninguno",
+    openTasks: "Tareas pendientes",
+    upcomingEvents: "Próximos eventos",
+    monthlyExpenses: "Gastos del mes",
+    configError: "Configuración de IA inválida. Inténtalo más tarde.",
+    serviceUnavailable: "Servicio de IA no disponible.",
+    timeout: "Tiempo de espera agotado. Reintenta.",
+    unexpectedError: "Error inesperado. Reintenta.",
+    howCanIHelp: "¿Cómo puedo ayudarte?",
+    rephrase: "¿Puedes reformular?",
+    showTasks: "Mostrar tareas",
+    addEvent: "Agregar evento",
+    showExpenses: "Mostrar gastos"
+  }
+};
+
+function getTranslation(langCode: string, key: string): string {
+  const lang = LANGUAGE_TRANSLATIONS[langCode] || LANGUAGE_TRANSLATIONS["en"];
+  return lang[key] || LANGUAGE_TRANSLATIONS["en"][key] || key;
+}
+
+// ============================================================================
+// SYSTEM PROMPT (MULTILINGUAL)
+// ============================================================================
+
+export function buildSystemPrompt(context: UserContext, language: LanguageConfig = { code: "it", name: "italiano" }): string {
   const pendingTasks = context.todos.filter((t: any) => !t.completed);
   const todayEvents = context.events.slice(0, 5);
   const totalExpenses = context.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
@@ -21,75 +89,106 @@ export function buildSystemPrompt(context: UserContext): string {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   
-  return `Sei AYVO, un assistente intelligente per la produttività. Rispondi SEMPRE in italiano. Output SOLO JSON valido.
+  const t = (key: string) => getTranslation(language.code, key);
+  
+  // Date formatting based on language
+  const dateLocale = language.code === "es" ? "es-ES" : language.code === "en" ? "en-US" : "it-IT";
+  const todayStr = today.toLocaleDateString(dateLocale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const tomorrowStr = tomorrow.toLocaleDateString(dateLocale, { weekday: "long", day: "numeric", month: "long" });
+  
+  const taskList = pendingTasks.slice(0, 3).map((t: any) => t.title).join(", ") || t("noTasks");
+  
+  return `You are AYVO, an intelligent productivity assistant. You MUST respond ALWAYS in ${language.name} (${language.code}). Output ONLY valid JSON.
 
-OGGI: ${today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-DOMANI: ${tomorrow.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
+TODAY: ${todayStr}
+TOMORROW: ${tomorrowStr}
 
-CONTESTO UTENTE:
-- Task aperti: ${pendingTasks.length} (${pendingTasks.slice(0, 3).map((t: any) => t.title).join(", ") || "nessuno"})
-- Eventi imminenti: ${todayEvents.length}
-- Spese mese: €${totalExpenses.toFixed(2)} / €${budget}
+USER CONTEXT:
+- ${t("openTasks")}: ${pendingTasks.length} (${taskList})
+- ${t("upcomingEvents")}: ${todayEvents.length}
+- ${t("monthlyExpenses")}: €${totalExpenses.toFixed(2)} / €${budget}
 
-CONTRATTO JSON OBBLIGATORIO:
+MANDATORY JSON CONTRACT:
 {
-  "reply": "risposta breve IN ITALIANO",
+  "reply": "short response IN ${language.name.toUpperCase()}",
   "intent": "CREATE_TASK|CREATE_EVENT|RECORD_EXPENSE|QUERY_TASKS|QUERY_EVENTS|QUERY_BUDGET|ADVICE|SMALL_TALK",
   "action": {"type": "CREATE_TASK|CREATE_EVENT|RECORD_EXPENSE|NONE", "title": "...", "start_at": "ISO", "amount": 0, "category": "..."},
   "needsConfirmation": true/false,
-  "confirmationQuestion": "domanda se needsConfirmation=true",
+  "confirmationQuestion": "question if needsConfirmation=true",
   "missingFields": ["title", "date", "time", "amount", "category"]
 }
 
-REGOLE RIGIDE:
-1. LINGUA: Rispondi SEMPRE in italiano. Mai in inglese.
-2. Se l'utente chiede un'AZIONE (crea, aggiungi, registra) → intent DEVE essere un'azione, MAI "NONE"
-3. Se mancano dati → imposta missingFields e fai UNA breve domanda
-4. Per task: serve SOLO il titolo. NON chiedere orari.
-5. Per eventi: serve titolo + data + ora. Chiedi SOLO il campo mancante.
-6. Per spese: serve importo + categoria. Supporta virgola (5,5 = €5.50)
-7. Titoli: rimuovi prefissi (crea/aggiungi) - "crea task lavoro" → title:"Lavoro"
-8. Date: interpreta giorni della settimana relativi a oggi
+STRICT RULES:
+1. LANGUAGE: ALWAYS respond in ${language.name}. NEVER in other languages.
+2. If user requests an ACTION (create, add, record) → intent MUST be an action, NEVER "NONE"
+3. If data is missing → set missingFields and ask ONE short question
+4. For tasks: only title is required. Do NOT ask for time.
+5. For events: title + date + time required. Ask ONLY for missing field.
+6. For expenses: amount + category required. Support comma decimal (5,5 = €5.50)
+7. Titles: remove prefixes (create/add) - "create task work" → title:"Work"
+8. Dates: interpret weekday names relative to today
 
-ESEMPI:
-- "crea un task: compra latte" → intent:CREATE_TASK, action:{type:CREATE_TASK, title:"Compra latte"}
-- "ricordami di pagare bolletta domani" → intent:CREATE_TASK, action:{type:CREATE_TASK, title:"Pagare bolletta", due_date:"ISO"}
-- "padel domani alle 20" → intent:CREATE_EVENT, action:{type:CREATE_EVENT, title:"Padel", start_at:"ISO"}
-- "sigarette 5,5" → intent:RECORD_EXPENSE, action:{type:RECORD_EXPENSE, amount:5.5, category:"vizi"}
-- "crea evento" → intent:CREATE_EVENT, missingFields:["title","date","time"], reply:"Che evento?"
+EXAMPLES:
+- "create a task: buy milk" → intent:CREATE_TASK, action:{type:CREATE_TASK, title:"Buy milk"}
+- "remind me to pay bill tomorrow" → intent:CREATE_TASK, action:{type:CREATE_TASK, title:"Pay bill", due_date:"ISO"}
+- "padel tomorrow at 8pm" → intent:CREATE_EVENT, action:{type:CREATE_EVENT, title:"Padel", start_at:"ISO"}
+- "cigarettes 5.5" → intent:RECORD_EXPENSE, action:{type:RECORD_EXPENSE, amount:5.5, category:"vices"}
+- "create event" → intent:CREATE_EVENT, missingFields:["title","date","time"], reply:"What event?"
 
-Rispondi SOLO con JSON valido, nient'altro.`;
+Reply ONLY with valid JSON, nothing else.`;
 }
 
 // ============================================================================
-// FALLBACK ITALIANO
+// LANGUAGE ENFORCEMENT (POST-PROCESSING)
 // ============================================================================
 
-function ensureItalian(response: any): any {
-  // Se la risposta contiene inglese comune, traduci
-  const englishFallbacks: Record<string, string> = {
-    "Can you rephrase that?": "Puoi riformulare?",
-    "Tell me more": "Dimmi di più",
-    "I don't understand": "Non ho capito",
-    "What do you mean?": "Cosa intendi?",
-    "Could you be more specific?": "Puoi essere più specifico?",
-    "I'm not sure": "Non sono sicuro",
-    "How can I help?": "Come posso aiutarti?",
-    "What would you like to do?": "Cosa vorresti fare?"
-  };
+const ENGLISH_FALLBACK_PATTERNS = [
+  "Can you rephrase",
+  "Tell me more",
+  "I don't understand",
+  "What do you mean",
+  "Could you be more specific",
+  "I'm not sure",
+  "How can I help",
+  "What would you like"
+];
+
+function ensureCorrectLanguage(response: any, targetLang: string): any {
+  if (!response.reply) return response;
   
-  if (response.reply) {
-    for (const [eng, ita] of Object.entries(englishFallbacks)) {
-      if (response.reply.toLowerCase().includes(eng.toLowerCase())) {
-        response.reply = response.reply.replace(new RegExp(eng, "gi"), ita);
+  const reply = response.reply;
+  const t = (key: string) => getTranslation(targetLang, key);
+  
+  // Check for English fallback patterns when target is not English
+  if (targetLang !== "en") {
+    for (const pattern of ENGLISH_FALLBACK_PATTERNS) {
+      if (reply.toLowerCase().includes(pattern.toLowerCase())) {
+        // Replace with target language equivalent
+        if (pattern.includes("rephrase")) {
+          response.reply = t("rephrase");
+        } else if (pattern.includes("help")) {
+          response.reply = t("howCanIHelp");
+        } else {
+          response.reply = t("howCanIHelp");
+        }
+        break;
       }
     }
     
-    // Se la reply è principalmente in inglese e l'intent è NONE/ADVICE, usa fallback italiano
-    if (/^[a-zA-Z\s,.'!?]+$/.test(response.reply) && 
+    // If reply looks purely English (ASCII letters only) and intent is NONE/ADVICE/SMALL_TALK
+    if (/^[a-zA-Z\s,.'!?]+$/.test(reply) && 
         (response.intent === "NONE" || response.intent === "ADVICE" || response.intent === "SMALL_TALK")) {
-      response.reply = "Come posso aiutarti?";
+      response.reply = t("howCanIHelp");
     }
+  }
+  
+  // Update suggestions to target language if present
+  if (response.suggestions && Array.isArray(response.suggestions)) {
+    response.suggestions = [
+      t("showTasks"),
+      t("addEvent"),
+      t("showExpenses")
+    ];
   }
   
   return response;
@@ -99,14 +198,19 @@ function ensureItalian(response: any): any {
 // OPENROUTER API CALL
 // ============================================================================
 
-export async function callOpenRouterAI(systemPrompt: string, userMessage: string): Promise<any> {
+export async function callOpenRouterAI(
+  systemPrompt: string, 
+  userMessage: string,
+  targetLanguage: string = "it"
+): Promise<any> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+  const t = (key: string) => getTranslation(targetLanguage, key);
   
   if (!apiKey || apiKey.trim() === "" || !apiKey.startsWith("sk-or-")) {
     console.error("[AI-FREE] Invalid or missing OPENROUTER_API_KEY");
     return {
       intent: "ERROR",
-      reply: "Configurazione AI non valida. Riprova più tardi.",
+      reply: t("configError"),
       action: { type: "NONE" },
       needsConfirmation: false,
       confirmationQuestion: null,
@@ -119,7 +223,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
     model = DEFAULT_MODEL;
   }
   
-  console.log(`[AI-FREE] Calling LLM: ${model}`);
+  console.log(`[AI-FREE] Calling LLM: ${model}, targetLang: ${targetLanguage}`);
   
   try {
     const controller = new AbortController();
@@ -152,7 +256,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
       console.error(`[AI-FREE] API error: status=${response.status}, error=${errorText.substring(0, 200)}`);
       return {
         intent: "ERROR",
-        reply: response.status === 401 ? "Configurazione AI non valida." : "Servizio AI non disponibile.",
+        reply: response.status === 401 ? t("configError") : t("serviceUnavailable"),
         action: { type: "NONE" },
         needsConfirmation: false,
         confirmationQuestion: null,
@@ -171,22 +275,22 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
       const jsonStr = jsonMatch ? jsonMatch[1].trim() : cleanContent.trim();
       const parsed = JSON.parse(jsonStr);
       
-      if (!parsed.reply) parsed.reply = "Come posso aiutarti?";
+      if (!parsed.reply) parsed.reply = t("howCanIHelp");
       if (!parsed.intent) parsed.intent = "SMALL_TALK";
       if (!parsed.action) parsed.action = { type: "NONE" };
       if (parsed.needsConfirmation === undefined) parsed.needsConfirmation = false;
       if (!parsed.missingFields) parsed.missingFields = [];
       
-      // Assicura che la risposta sia in italiano
-      return ensureItalian(parsed);
+      // Ensure response is in correct language
+      return ensureCorrectLanguage(parsed, targetLanguage);
       
     } catch (e) {
       console.error("[AI-FREE] JSON parse error");
       let cleanText = content.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/```json|```/g, "").trim();
       if (cleanText.length > 5 && cleanText.length < 400) {
-        // Verifica che non sia inglese
-        if (/^[a-zA-Z\s,.'!?]+$/.test(cleanText)) {
-          cleanText = "Come posso aiutarti?";
+        // Check if it's in wrong language
+        if (targetLanguage !== "en" && /^[a-zA-Z\s,.'!?]+$/.test(cleanText)) {
+          cleanText = t("howCanIHelp");
         }
         return {
           reply: cleanText,
@@ -198,13 +302,13 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
         };
       }
       return {
-        reply: "Puoi riformulare?",
+        reply: t("rephrase"),
         intent: "ADVICE",
         action: { type: "NONE" },
         needsConfirmation: false,
         confirmationQuestion: null,
         missingFields: [],
-        suggestions: ["Mostra task", "Aggiungi evento", "Mostra spese"]
+        suggestions: [t("showTasks"), t("addEvent"), t("showExpenses")]
       };
     }
     
@@ -213,7 +317,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
       console.error("[AI-FREE] Timeout");
       return {
         intent: "ERROR",
-        reply: "Richiesta scaduta. Riprova.",
+        reply: t("timeout"),
         action: { type: "NONE" },
         needsConfirmation: false,
         confirmationQuestion: null,
@@ -224,7 +328,7 @@ export async function callOpenRouterAI(systemPrompt: string, userMessage: string
     console.error("[AI-FREE] Error:", error instanceof Error ? error.message : "Unknown");
     return {
       intent: "ERROR",
-      reply: "Errore imprevisto. Riprova.",
+      reply: t("unexpectedError"),
       action: { type: "NONE" },
       needsConfirmation: false,
       confirmationQuestion: null,

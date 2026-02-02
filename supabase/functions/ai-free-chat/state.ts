@@ -116,3 +116,70 @@ export async function fetchUserContext(supabase: any, userId: string) {
     budget: budgetRes.data
   };
 }
+
+// ============================================================================
+// USER LANGUAGE PREFERENCES
+// ============================================================================
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  it: "italiano",
+  en: "English",
+  es: "español",
+  fr: "français",
+  de: "Deutsch"
+};
+
+/**
+ * Carica la lingua preferita dell'utente da:
+ * 1. Impostazioni utente (tabella settings)
+ * 2. Profilo utente (tabella profiles)
+ * 3. Fallback al parametro passato o "it"
+ */
+export async function loadPreferredLanguage(
+  supabase: any, 
+  userId: string, 
+  fallbackLocale: string = "it"
+): Promise<{ code: string; name: string }> {
+  try {
+    // Prima prova settings
+    const { data: settings } = await supabase
+      .from("settings")
+      .select("language")
+      .eq("user_id", userId)
+      .maybeSingle();
+    
+    if (settings?.language) {
+      return {
+        code: settings.language,
+        name: LANGUAGE_NAMES[settings.language] || settings.language
+      };
+    }
+    
+    // Poi prova profiles
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("language")
+      .eq("user_id", userId)
+      .maybeSingle();
+    
+    if (profile?.language) {
+      return {
+        code: profile.language,
+        name: LANGUAGE_NAMES[profile.language] || profile.language
+      };
+    }
+    
+    // Fallback
+    return {
+      code: fallbackLocale,
+      name: LANGUAGE_NAMES[fallbackLocale] || fallbackLocale
+    };
+    
+  } catch (error) {
+    console.error("[STATE] Error loading language preference:", error);
+    return {
+      code: fallbackLocale,
+      name: LANGUAGE_NAMES[fallbackLocale] || fallbackLocale
+    };
+  }
+}
