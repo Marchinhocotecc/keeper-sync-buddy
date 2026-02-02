@@ -28,7 +28,8 @@ import {
   clearAssistantState,
   getPendingAction,
   setPendingAction,
-  fetchUserContext
+  fetchUserContext,
+  loadPreferredLanguage
 } from "./state.ts";
 import { 
   deterministicRouter, 
@@ -130,6 +131,10 @@ serve(async (req) => {
 
     const message = userMessage.trim();
     console.log(`[AI-FREE] User: ${userId}, Message: "${message.substring(0, 100)}"`);
+    
+    // Load user's preferred language
+    const userLang = await loadPreferredLanguage(supabase, userId, locale);
+    console.log(`[AI-FREE] User language: ${userLang.code} (${userLang.name})`);
     
     // Get current state for slot filling
     const state = await getAssistantState(supabase, userId);
@@ -251,8 +256,8 @@ serve(async (req) => {
         }
         
         const context = await fetchUserContext(supabase, userId);
-        const systemPrompt = buildSystemPrompt(context);
-        const aiResponse = await callOpenRouterAI(systemPrompt, cancelResult.continuation);
+        const systemPrompt = buildSystemPrompt(context, userLang);
+        const aiResponse = await callOpenRouterAI(systemPrompt, cancelResult.continuation, userLang.code);
         return jsonResponse(createResponse({
           intent: aiResponse.intent,
           action: aiResponse.action || { type: "NONE" },
@@ -550,8 +555,8 @@ serve(async (req) => {
     // === LLM FALLBACK ===
     console.log("[AI-FREE] Using LLM fallback");
     const context = await fetchUserContext(supabase, userId);
-    const systemPrompt = buildSystemPrompt(context);
-    const aiResponse = await callOpenRouterAI(systemPrompt, message);
+    const systemPrompt = buildSystemPrompt(context, userLang);
+    const aiResponse = await callOpenRouterAI(systemPrompt, message, userLang.code);
     
     if (aiResponse.intent === "ERROR") {
       return jsonResponse(createResponse({
