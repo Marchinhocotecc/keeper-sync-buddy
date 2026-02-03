@@ -40,6 +40,7 @@ import {
 } from "./router.ts";
 import { executeAction } from "./executor.ts";
 import { buildSystemPrompt, callOpenRouterAI } from "./llm.ts";
+import { splitIntents, convertIntentToRouterResult } from "./intentSplitter.ts";
 
 // ============================================================================
 // RESPONSE HELPERS
@@ -299,6 +300,42 @@ serve(async (req) => {
         if (isConfirm(message)) {
           const actionTypeStr = pendingAction.type.replace("CONFIRM_", "");
           
+          // === MULTI-INTENT EXECUTION ===
+          if (actionTypeStr === "MULTI") {
+            const intentsToExecute = pendingAction.payload?.intents || [];
+            const results: string[] = [];
+            let successCount = 0;
+            
+            for (const intentData of intentsToExecute) {
+              const singleActionType = intentData.type.replace("CONFIRM_", "");
+              const actionObj: AIAction = {
+                type: singleActionType as any,
+                ...intentData.payload
+              };
+              
+              try {
+                const result = await executeAction(supabase, userId, actionObj);
+                if (result.success) {
+                  successCount++;
+                  results.push(`✅ ${result.message}`);
+                } else {
+                  results.push(`❌ ${result.message}`);
+                }
+              } catch (e) {
+                results.push(`❌ Errore: ${intentData.payload?.title || 'azione'}`);
+              }
+            }
+            
+            await setPendingAction(supabase, userId, null);
+            await clearAssistantState(supabase, userId);
+            
+            return jsonResponse(createResponse({
+              intent: "CREATE_TASK",
+              reply: `Eseguite ${successCount}/${intentsToExecute.length} azioni:\n${results.join("\n")}`,
+              mode: "OPERATIVE"
+            }));
+          }
+          
           // Premium check
           if (isPremiumOnlyAction(actionTypeStr)) {
             await setPendingAction(supabase, userId, null);
@@ -457,6 +494,45 @@ serve(async (req) => {
           needsConfirmation: slotResult.needsConfirmation || false,
           confirmationQuestion: slotResult.confirmationQuestion || null,
           missingFields: slotResult.missingFields || []
+        }));
+      }
+    }
+    
+    // === MULTI-INTENT EXTRACTION ===
+    const multiIntentResult = splitIntents(message);
+    
+    if (multiIntentResult.success && multiIntentResult.intents.length > 1) {
+      console.log(`[AI-FREE] Multi-intent: ${multiIntentResult.intents.length} intents detected`);
+      
+      // Process all intents and collect confirmations
+      const confirmations: string[] = [];
+      const pendingIntents: any[] = [];
+      
+      for (const intent of multiIntentResult.intents) {
+        const converted = convertIntentToRouterResult(intent);
+        if (converted.actionType !== 'NONE') {
+          confirmations.push(converted.confirmMessage);
+          pendingIntents.push({
+            type: `CONFIRM_${converted.actionType}`,
+            payload: converted.payload,
+          });
+        }
+      }
+      
+      if (pendingIntents.length > 0) {
+        // Store all pending intents for batch confirmation
+        await setPendingAction(supabase, userId, {
+          type: "CONFIRM_MULTI",
+          payload: { intents: pendingIntents },
+          question: confirmations.join("\n")
+        });
+        
+        return jsonResponse(createResponse({
+          intent: "CREATE_TASK",
+          reply: `Ho trovato ${pendingIntents.length} azioni:\n${confirmations.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nConfermi tutto?`,
+          needsConfirmation: true,
+          confirmationQuestion: "Confermi tutto?",
+          mode: "OPERATIVE"
         }));
       }
     }
