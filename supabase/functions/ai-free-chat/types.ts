@@ -70,6 +70,36 @@ export interface RouterResult {
   suggestions?: string[];
 }
 
+// ============================================================================
+// MULTI-INTENT EXTRACTION
+// ============================================================================
+
+export type IntentType = 
+  | 'TASK'
+  | 'REMINDER'
+  | 'EVENT'
+  | 'EXPENSE'
+  | 'QUERY'
+  | 'DELETE'
+  | 'UNKNOWN';
+
+export interface ParsedIntent {
+  type: IntentType;
+  title?: string;
+  date?: string;
+  time?: string;
+  amount?: number;
+  category?: string;
+  raw?: string;
+}
+
+export interface MultiIntentResult {
+  success: boolean;
+  intents: ParsedIntent[];
+  originalMessage: string;
+  splitMethod: 'pattern' | 'llm' | 'single';
+}
+
 export interface UserContext {
   todos: any[];
   events: any[];
