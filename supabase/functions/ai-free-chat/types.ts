@@ -71,7 +71,7 @@ export interface RouterResult {
 }
 
 // ============================================================================
-// MULTI-INTENT EXTRACTION
+// COGNITIVE CORE - MULTI-INTENT EXTRACTION
 // ============================================================================
 
 export type IntentType = 
@@ -79,18 +79,35 @@ export type IntentType =
   | 'REMINDER'
   | 'EVENT'
   | 'EXPENSE'
+  | 'NOTE'
+  | 'GOAL'
+  | 'QUESTION'
+  | 'REFLECTION'
   | 'QUERY'
   | 'DELETE'
   | 'UNKNOWN';
 
+export interface ExtractedEntities {
+  people: string[];
+  locations: string[];
+  dates: string[];
+  times: string[];
+  amounts: { value: number; currency: string }[];
+}
+
 export interface ParsedIntent {
   type: IntentType;
   title?: string;
+  description?: string;
   date?: string;
   time?: string;
   amount?: number;
   category?: string;
   raw?: string;
+  people?: string[];
+  location?: string;
+  recurrence?: string;
+  confidence: number; // 0-1
 }
 
 export interface MultiIntentResult {
@@ -98,6 +115,10 @@ export interface MultiIntentResult {
   intents: ParsedIntent[];
   originalMessage: string;
   splitMethod: 'pattern' | 'llm' | 'single';
+  language: string;
+  entities: ExtractedEntities;
+  uncertainties: string[];
+  understanding?: string;
 }
 
 export interface UserContext {
