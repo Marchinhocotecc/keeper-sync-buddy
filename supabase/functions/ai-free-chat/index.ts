@@ -39,8 +39,9 @@ import {
   isConfirm
 } from "./router.ts";
 import { executeAction } from "./executor.ts";
+// NOTE: buildSystemPrompt and callOpenRouterAI kept for cancel+continuation LLM fallback
 import { buildSystemPrompt, callOpenRouterAI } from "./llm.ts";
-import { splitIntents, convertIntentToRouterResult } from "./intentSplitter.ts";
+import { analyzeMessage, AnalyzedItem, AnalyzeResult } from "./analyzeCore.ts";
 
 // ============================================================================
 // RESPONSE HELPERS
@@ -83,6 +84,148 @@ function getPremiumBlockedMessage(): AIResponse {
     reply: "⭐ Questa funzione (bulk delete) è disponibile nel piano Premium. Per ora puoi eliminare uno alla volta.",
     suggestions: ["Mostra task", "Mostra eventi"]
   });
+}
+
+// ============================================================================
+// ANALYZE → VALIDATE → EXECUTE HELPERS
+// ============================================================================
+
+function validateAnalyzedItem(item: AnalyzedItem): { item: AnalyzedItem; valid: boolean; missingFields: string[] } {
+  const missing: string[] = [];
+  
+  switch (item.type) {
+    case 'task':
+    case 'reminder':
+    case 'note':
+      if (!item.title || item.title.trim().length < 2 || isForbiddenTitle(item.title)) {
+        missing.push('title');
+      }
+      break;
+    case 'event':
+      if (!item.title || item.title.trim().length < 2 || isForbiddenTitle(item.title)) {
+        missing.push('title');
+      }
+      if (!item.date) missing.push('date');
+      if (!item.time) missing.push('time');
+      break;
+    case 'expense':
+      if (item.amount === null || item.amount === undefined || item.amount <= 0) {
+        missing.push('amount');
+      }
+      break;
+    case 'question':
+    case 'reflection':
+      // These are always "valid" - they just need a reply
+      break;
+    default:
+      if (!item.title || item.title.trim().length < 2) {
+        missing.push('title');
+      }
+  }
+  
+  return { item, valid: missing.length === 0, missingFields: missing };
+}
+
+function analyzedItemToAction(item: AnalyzedItem): { type: string; payload: any; confirmMessage: string } | null {
+  const title = item.title ? normalizeTitle(item.title) : null;
+  
+  switch (item.type) {
+    case 'task':
+    case 'reminder':
+    case 'note':
+      if (!title) return null;
+      return {
+        type: 'CREATE_TASK',
+        payload: { title, due_date: item.date || undefined },
+        confirmMessage: item.date
+          ? `Creo task "${title}" per ${formatDateIT(item.date)}?`
+          : `Creo "${title}"?`
+      };
+    case 'event':
+      if (!title || !item.date || !item.time) return null;
+      const start_at = buildISODateTime(item.date, item.time);
+      return {
+        type: 'CREATE_EVENT',
+        payload: { title, start_at },
+        confirmMessage: `Creo "${title}" per ${formatDateIT(item.date)} alle ${item.time}?`
+      };
+    case 'expense':
+      if (!item.amount || item.amount <= 0) return null;
+      // Use description or title for category if available
+      const category = item.title?.toLowerCase() || 'altro';
+      return {
+        type: 'RECORD_EXPENSE',
+        payload: { amount: item.amount, category },
+        confirmMessage: `Registro €${item.amount.toFixed(2)} in ${category}?`
+      };
+    case 'question':
+    case 'reflection':
+      // Not actionable
+      return null;
+    default:
+      return null;
+  }
+}
+
+function buildMissingFieldQuestion(item: AnalyzedItem, missingFields: string[], language: string): string {
+  const title = item.title ? `"${normalizeTitle(item.title)}"` : '';
+  
+  if (missingFields.includes('title')) {
+    switch (item.type) {
+      case 'task': case 'reminder': return 'Che task vuoi creare?';
+      case 'event': return 'Che evento vuoi creare?';
+      case 'expense': return 'Che spesa vuoi registrare?';
+      default: return 'Cosa vuoi fare?';
+    }
+  }
+  
+  if (missingFields.includes('date') && missingFields.includes('time')) {
+    return `Quando ${title}?`;
+  }
+  if (missingFields.includes('date')) {
+    return `Che giorno ${title}?`;
+  }
+  if (missingFields.includes('time')) {
+    return `A che ora ${title}?`;
+  }
+  if (missingFields.includes('amount')) {
+    return 'Quanto hai speso?';
+  }
+  
+  return 'Puoi darmi più dettagli?';
+}
+
+function handleQueryIntent(intent: string, context: any): Partial<AIResponse> {
+  if (intent === "QUERY_TASKS") {
+    const pending = context.todos.filter((t: any) => !t.completed);
+    if (pending.length === 0) return { intent: "QUERY_TASKS", reply: "Non hai task 🎉" };
+    const list = pending.map((t: any, i: number) => `${i + 1}. ${t.title}`).join("\n");
+    return { intent: "QUERY_TASKS", reply: `📋 Task:\n${list}` };
+  }
+  if (intent === "QUERY_EVENTS") {
+    if (context.events.length === 0) return { intent: "QUERY_EVENTS", reply: "Non hai eventi 📅" };
+    const list = context.events.map((e: any, i: number) => {
+      const d = new Date(e.start_time).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
+      return `${i + 1}. ${e.title} — ${d}`;
+    }).join("\n");
+    return { intent: "QUERY_EVENTS", reply: `📅 Eventi:\n${list}` };
+  }
+  if (intent === "QUERY_BUDGET") {
+    const total = context.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+    const budget = context.budget?.amount || 0;
+    return { intent: "QUERY_BUDGET", reply: `💰 Spese: €${total.toFixed(2)} / €${budget}` };
+  }
+  return { intent: "NONE" as AIIntent, reply: "Come posso aiutarti?" };
+}
+
+const TRANSLATED_REPLIES: Record<string, Record<string, string>> = {
+  it: { howCanIHelp: "Come posso aiutarti?", showTasks: "Mostra task", addEvent: "Aggiungi evento", showExpenses: "Mostra spese" },
+  en: { howCanIHelp: "How can I help you?", showTasks: "Show tasks", addEvent: "Add event", showExpenses: "Show expenses" },
+  es: { howCanIHelp: "¿Cómo puedo ayudarte?", showTasks: "Mostrar tareas", addEvent: "Agregar evento", showExpenses: "Mostrar gastos" }
+};
+
+function getTranslatedReply(lang: string, key: string): string {
+  return TRANSLATED_REPLIES[lang]?.[key] || TRANSLATED_REPLIES["it"][key] || key;
 }
 
 // ============================================================================
@@ -462,7 +605,7 @@ serve(async (req) => {
       }
     }
     
-    // === SLOT FILLING ===
+    // === SLOT FILLING (only for active conversations awaiting data) ===
     if (state.active_intent && state.active_intent !== 'NONE') {
       const slotResult = handleSlotFilling(message, state);
       if (slotResult && slotResult.matched) {
@@ -498,201 +641,178 @@ serve(async (req) => {
       }
     }
     
-    // === MULTI-INTENT EXTRACTION ===
-    const multiIntentResult = splitIntents(message);
+    // ================================================================
+    // === NEW PIPELINE: ANALYZE → VALIDATE → EXECUTE → RESPOND ===
+    // ================================================================
     
-    if (multiIntentResult.success && multiIntentResult.intents.length > 1) {
-      console.log(`[AI-FREE] Multi-intent: ${multiIntentResult.intents.length} intents detected`);
-      
-      // Process all intents and collect confirmations
-      const confirmations: string[] = [];
-      const pendingIntents: any[] = [];
-      
-      for (const intent of multiIntentResult.intents) {
-        const converted = convertIntentToRouterResult(intent);
-        if (converted.actionType !== 'NONE') {
-          confirmations.push(converted.confirmMessage);
-          pendingIntents.push({
-            type: `CONFIRM_${converted.actionType}`,
-            payload: converted.payload,
-          });
+    // --- PHASE 1: ANALYZE (LLM #1 - pure semantic analysis → JSON) ---
+    console.log("[AI-FREE] === PHASE 1: ANALYZE ===");
+    const analysis: AnalyzeResult = await analyzeMessage(message);
+    console.log("ANALYZE OUTPUT", JSON.stringify(analysis, null, 2));
+    
+    // If analyze failed completely or returned no items, handle gracefully
+    if (!analysis.items || analysis.items.length === 0) {
+      // Check if it's a greeting/small talk via deterministic router as fallback
+      const routerResult = deterministicRouter(message, state);
+      if (routerResult.matched) {
+        if (routerResult.intent === "SMALL_TALK" || routerResult.intent === "ADVICE") {
+          return jsonResponse(createResponse({
+            intent: routerResult.intent,
+            reply: routerResult.reply!,
+            suggestions: routerResult.suggestions
+          }));
+        }
+        // Queries
+        if (routerResult.intent === "QUERY_TASKS" || routerResult.intent === "QUERY_EVENTS" || routerResult.intent === "QUERY_BUDGET") {
+          const context = await fetchUserContext(supabase, userId);
+          return jsonResponse(createResponse(handleQueryIntent(routerResult.intent, context)));
         }
       }
       
-      if (pendingIntents.length > 0) {
-        // Store all pending intents for batch confirmation
-        await setPendingAction(supabase, userId, {
-          type: "CONFIRM_MULTI",
-          payload: { intents: pendingIntents },
-          question: confirmations.join("\n")
-        });
-        
-        return jsonResponse(createResponse({
-          intent: "CREATE_TASK",
-          reply: `Ho trovato ${pendingIntents.length} azioni:\n${confirmations.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nConfermi tutto?`,
-          needsConfirmation: true,
-          confirmationQuestion: "Confermi tutto?",
-          mode: "OPERATIVE"
-        }));
-      }
-    }
-    
-    // === DETERMINISTIC ROUTER ===
-    const routerResult = deterministicRouter(message, state);
-    
-    if (routerResult.matched) {
-      console.log(`[AI-FREE] Router matched: intent=${routerResult.intent}`);
-      
-      // Handle queries directly
-      if (routerResult.intent === "QUERY_TASKS") {
-        const context = await fetchUserContext(supabase, userId);
-        const pending = context.todos.filter((t: any) => !t.completed);
-        if (pending.length === 0) {
-          return jsonResponse(createResponse({ intent: "QUERY_TASKS", reply: "Non hai task 🎉" }));
-        }
-        const list = pending.map((t: any, i: number) => `${i + 1}. ${t.title}`).join("\n");
-        return jsonResponse(createResponse({ intent: "QUERY_TASKS", reply: `📋 Task:\n${list}` }));
-      }
-      
-      if (routerResult.intent === "QUERY_EVENTS") {
-        const context = await fetchUserContext(supabase, userId);
-        if (context.events.length === 0) {
-          return jsonResponse(createResponse({ intent: "QUERY_EVENTS", reply: "Non hai eventi 📅" }));
-        }
-        const list = context.events.map((e: any, i: number) => {
-          const d = new Date(e.start_time).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
-          return `${i + 1}. ${e.title} — ${d}`;
-        }).join("\n");
-        return jsonResponse(createResponse({ intent: "QUERY_EVENTS", reply: `📅 Eventi:\n${list}` }));
-      }
-      
-      if (routerResult.intent === "QUERY_BUDGET") {
-        const context = await fetchUserContext(supabase, userId);
-        const total = context.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
-        const budget = context.budget?.amount || 0;
-        return jsonResponse(createResponse({ intent: "QUERY_BUDGET", reply: `💰 Spese: €${total.toFixed(2)} / €${budget}` }));
-      }
-      
-      // Handle greetings/small talk/advice
-      if (routerResult.intent === "SMALL_TALK" || routerResult.intent === "ADVICE") {
-        return jsonResponse(createResponse({
-          intent: routerResult.intent,
-          reply: routerResult.reply!,
-          suggestions: routerResult.suggestions
-        }));
-      }
-      
-      // Handle actions that need confirmation or have missing fields
-      if (routerResult.needsConfirmation || (routerResult.missingFields && routerResult.missingFields.length > 0)) {
-        if (routerResult.intent && routerResult.intent !== "NONE") {
-          const newPayload: any = { expectedInput: routerResult.missingFields?.[0]?.toUpperCase() };
-          if (routerResult.action?.title) newPayload.title = routerResult.action.title;
-          if (routerResult.action?.start_at) newPayload.start_at = routerResult.action.start_at;
-          
-          const { date, time } = parseDateTime(message);
-          if (date) newPayload.date = date;
-          if (time) newPayload.time = time;
-          
-          await updateAssistantState(supabase, userId, {
-            active_intent: routerResult.intent,
-            intent_payload: newPayload
-          });
-        }
-        
-        // Set pending action for confirmation if action is complete
-        if (routerResult.action && routerResult.action.type !== "NONE" && 
-            (!routerResult.missingFields || routerResult.missingFields.length === 0)) {
-          await setPendingAction(supabase, userId, {
-            type: `CONFIRM_${routerResult.action.type}`,
-            payload: routerResult.action,
-            question: routerResult.confirmationQuestion || ""
-          });
-        } else if (routerResult.missingFields && routerResult.missingFields.length > 0) {
-          const pendingType = routerResult.intent === "CREATE_TASK" ? "AWAIT_TASK_TITLE" : "AWAIT_EVENT_DETAILS";
-          await setPendingAction(supabase, userId, {
-            type: pendingType,
-            payload: routerResult.action || {},
-            question: routerResult.confirmationQuestion || routerResult.reply || ""
-          });
-        }
-        
-        return jsonResponse(createResponse({
-          intent: routerResult.intent || "NONE",
-          action: routerResult.action || { type: "NONE" },
-          reply: routerResult.reply!,
-          needsConfirmation: true,
-          confirmationQuestion: routerResult.confirmationQuestion || null,
-          missingFields: routerResult.missingFields || [],
-          suggestions: routerResult.suggestions
-        }));
-      }
-    }
-    
-    // === LLM FALLBACK ===
-    console.log("[AI-FREE] Using LLM fallback");
-    const context = await fetchUserContext(supabase, userId);
-    const systemPrompt = buildSystemPrompt(context, userLang);
-    const aiResponse = await callOpenRouterAI(systemPrompt, message, userLang.code);
-    
-    if (aiResponse.intent === "ERROR") {
+      // No items and no deterministic match → conversational reply
       return jsonResponse(createResponse({
-        intent: "ERROR",
-        reply: aiResponse.reply,
-        suggestions: ["Mostra task", "Aggiungi evento", "Mostra spese"]
+        intent: "SMALL_TALK",
+        reply: analysis.summary || getTranslatedReply(userLang.code, "howCanIHelp"),
+        suggestions: [
+          getTranslatedReply(userLang.code, "showTasks"),
+          getTranslatedReply(userLang.code, "addEvent"),
+          getTranslatedReply(userLang.code, "showExpenses")
+        ]
       }));
     }
     
-    // If LLM suggests a write action with complete data
-    const writeIntents = ["CREATE_TASK", "CREATE_EVENT", "RECORD_EXPENSE"];
-    if (writeIntents.includes(aiResponse.intent) && aiResponse.action?.type !== "NONE") {
-      if (aiResponse.action.type === "CREATE_TASK" && aiResponse.action.title) {
-        const title = normalizeTitle(aiResponse.action.title);
-        if (!isForbiddenTitle(title)) {
-          await setPendingAction(supabase, userId, {
-            type: "CONFIRM_CREATE_TASK",
-            payload: { ...aiResponse.action, title },
-            question: aiResponse.confirmationQuestion || `Creo "${title}"?`
-          });
-        }
-      } else if (aiResponse.action.type === "CREATE_EVENT" && aiResponse.action.start_at) {
-        await setPendingAction(supabase, userId, {
-          type: "CONFIRM_CREATE_EVENT",
-          payload: aiResponse.action,
-          question: aiResponse.confirmationQuestion || "Confermi?"
-        });
-      } else if (aiResponse.action.type === "RECORD_EXPENSE" && aiResponse.action.amount) {
-        await setPendingAction(supabase, userId, {
-          type: "CONFIRM_RECORD_EXPENSE",
-          payload: aiResponse.action,
-          question: aiResponse.confirmationQuestion || "Registro?"
-        });
-      }
-    } else if (aiResponse.missingFields && aiResponse.missingFields.length > 0 && writeIntents.includes(aiResponse.intent)) {
+    // --- PHASE 2: VALIDATE (code, no AI) ---
+    console.log("[AI-FREE] === PHASE 2: VALIDATE ===");
+    const validatedItems: Array<{ item: AnalyzedItem; valid: boolean; missingFields: string[] }> = [];
+    
+    for (const item of analysis.items) {
+      const validation = validateAnalyzedItem(item);
+      validatedItems.push(validation);
+      console.log(`[AI-FREE] Validate: type=${item.type}, title=${item.title}, valid=${validation.valid}, missing=${validation.missingFields.join(',')}`);
+    }
+    
+    // Check if any items have missing fields
+    const invalidItems = validatedItems.filter(v => !v.valid);
+    const validItems = validatedItems.filter(v => v.valid);
+    
+    // If ALL items are invalid (missing data), ask for clarification
+    if (validItems.length === 0 && invalidItems.length > 0) {
+      const firstInvalid = invalidItems[0];
+      const missingStr = firstInvalid.missingFields.join(', ');
+      
+      // Set state for slot filling
+      const intentMap: Record<string, string> = {
+        'task': 'CREATE_TASK', 'event': 'CREATE_EVENT', 'expense': 'RECORD_EXPENSE',
+        'reminder': 'CREATE_TASK', 'note': 'CREATE_TASK'
+      };
+      const activeIntent = intentMap[firstInvalid.item.type] || 'NONE';
+      
+      const payload: any = {};
+      if (firstInvalid.item.title) payload.title = firstInvalid.item.title;
+      if (firstInvalid.item.date) payload.date = firstInvalid.item.date;
+      if (firstInvalid.item.time) payload.time = firstInvalid.item.time;
+      
       await updateAssistantState(supabase, userId, {
-        active_intent: aiResponse.intent,
-        intent_payload: { 
-          expectedInput: aiResponse.missingFields[0]?.toUpperCase(),
-          ...aiResponse.action
-        }
+        active_intent: activeIntent,
+        intent_payload: payload
       });
       
-      const pendingType = aiResponse.intent === "CREATE_TASK" ? "AWAIT_TASK_TITLE" : "AWAIT_EVENT_DETAILS";
+      const pendingType = activeIntent === 'CREATE_TASK' ? 'AWAIT_TASK_TITLE' : 'AWAIT_EVENT_DETAILS';
       await setPendingAction(supabase, userId, {
         type: pendingType,
-        payload: aiResponse.action || {},
-        question: aiResponse.confirmationQuestion || ""
+        payload,
+        question: buildMissingFieldQuestion(firstInvalid.item, firstInvalid.missingFields, analysis.language)
+      });
+      
+      return jsonResponse(createResponse({
+        intent: activeIntent as AIIntent,
+        reply: buildMissingFieldQuestion(firstInvalid.item, firstInvalid.missingFields, analysis.language),
+        needsConfirmation: true,
+        confirmationQuestion: buildMissingFieldQuestion(firstInvalid.item, firstInvalid.missingFields, analysis.language),
+        missingFields: firstInvalid.missingFields
+      }));
+    }
+    
+    // --- PHASE 3: EXECUTE (via confirmation) ---
+    console.log("[AI-FREE] === PHASE 3: PREPARE EXECUTION ===");
+    
+    // Convert validated items to actions
+    const actionsToConfirm: Array<{ type: string; payload: any; confirmMessage: string }> = [];
+    
+    for (const v of validItems) {
+      const action = analyzedItemToAction(v.item);
+      if (action) {
+        actionsToConfirm.push(action);
+      }
+    }
+    
+    if (actionsToConfirm.length === 0) {
+      return jsonResponse(createResponse({
+        intent: "SMALL_TALK",
+        reply: analysis.summary || getTranslatedReply(userLang.code, "howCanIHelp")
+      }));
+    }
+    
+    // --- PHASE 4: RESPOND (template, no LLM) ---
+    console.log("[AI-FREE] === PHASE 4: RESPOND ===");
+    
+    if (actionsToConfirm.length === 1) {
+      // Single action → standard confirmation
+      const single = actionsToConfirm[0];
+      
+      // Premium check
+      if (isPremiumOnlyAction(single.type)) {
+        return jsonResponse(getPremiumBlockedMessage());
+      }
+      
+      await setPendingAction(supabase, userId, {
+        type: `CONFIRM_${single.type}`,
+        payload: single.payload,
+        question: single.confirmMessage
+      });
+      
+      return jsonResponse(createResponse({
+        intent: single.type as AIIntent,
+        action: { type: single.type as any, ...single.payload },
+        reply: single.confirmMessage,
+        needsConfirmation: true,
+        confirmationQuestion: single.confirmMessage
+      }));
+    }
+    
+    // Multiple actions → batch confirmation
+    const confirmations: string[] = [];
+    const pendingIntents: any[] = [];
+    
+    for (const action of actionsToConfirm) {
+      if (isPremiumOnlyAction(action.type)) continue;
+      confirmations.push(action.confirmMessage);
+      pendingIntents.push({
+        type: `CONFIRM_${action.type}`,
+        payload: action.payload,
       });
     }
     
+    if (pendingIntents.length > 0) {
+      await setPendingAction(supabase, userId, {
+        type: "CONFIRM_MULTI",
+        payload: { intents: pendingIntents },
+        question: confirmations.join("\n")
+      });
+      
+      return jsonResponse(createResponse({
+        intent: "CREATE_TASK",
+        reply: `Ho trovato ${pendingIntents.length} azioni:\n${confirmations.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nConfermi tutto?`,
+        needsConfirmation: true,
+        confirmationQuestion: "Confermi tutto?",
+        mode: "OPERATIVE"
+      }));
+    }
+    
     return jsonResponse(createResponse({
-      intent: aiResponse.intent,
-      action: aiResponse.action || { type: "NONE" },
-      reply: aiResponse.reply,
-      needsConfirmation: aiResponse.needsConfirmation || false,
-      confirmationQuestion: aiResponse.confirmationQuestion || null,
-      missingFields: aiResponse.missingFields || []
+      intent: "SMALL_TALK",
+      reply: getTranslatedReply(userLang.code, "howCanIHelp")
     }));
-
   } catch (error) {
     console.error("[AI-FREE] Error:", error);
     
