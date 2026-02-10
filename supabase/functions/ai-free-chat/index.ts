@@ -650,11 +650,14 @@ serve(async (req) => {
     const analysis: AnalyzeResult = await analyzeMessage(message);
     console.log("ANALYZE OUTPUT", JSON.stringify(analysis, null, 2));
     
-    // If analyze failed completely or returned no items, handle gracefully
+    // If analyze failed completely or returned no items, use deterministic router as full fallback
     if (!analysis.items || analysis.items.length === 0) {
-      // Check if it's a greeting/small talk via deterministic router as fallback
+      const analysisFailed = analysis.uncertainties?.some(u => u.includes("API error") || u.includes("timeout"));
+      console.log(`[AI-FREE] Analyze returned 0 items, analysisFailed=${analysisFailed}`);
+      
       const routerResult = deterministicRouter(message, state);
       if (routerResult.matched) {
+        // Greetings / small talk / advice
         if (routerResult.intent === "SMALL_TALK" || routerResult.intent === "ADVICE") {
           return jsonResponse(createResponse({
             intent: routerResult.intent,
@@ -666,6 +669,36 @@ serve(async (req) => {
         if (routerResult.intent === "QUERY_TASKS" || routerResult.intent === "QUERY_EVENTS" || routerResult.intent === "QUERY_BUDGET") {
           const context = await fetchUserContext(supabase, userId);
           return jsonResponse(createResponse(handleQueryIntent(routerResult.intent, context)));
+        }
+        // When analyze failed, also use deterministic router for creation intents
+        if (analysisFailed && routerResult.action && routerResult.action.type !== "NONE") {
+          console.log(`[AI-FREE] Using deterministic fallback for creation: ${routerResult.intent}`);
+          if (routerResult.needsConfirmation || (routerResult.missingFields && routerResult.missingFields.length > 0)) {
+            if (routerResult.intent && routerResult.intent !== "NONE") {
+              const newPayload: any = { expectedInput: routerResult.missingFields?.[0]?.toUpperCase() };
+              if (routerResult.action?.title) newPayload.title = routerResult.action.title;
+              await updateAssistantState(supabase, userId, {
+                active_intent: routerResult.intent,
+                intent_payload: newPayload
+              });
+            }
+          }
+          if (routerResult.action.type !== "NONE") {
+            await setPendingAction(supabase, userId, {
+              type: `CONFIRM_${routerResult.action.type}`,
+              payload: routerResult.action,
+              question: routerResult.confirmationQuestion || routerResult.reply || ""
+            });
+          }
+          return jsonResponse(createResponse({
+            intent: routerResult.intent || "NONE",
+            action: routerResult.action || { type: "NONE" },
+            reply: routerResult.reply!,
+            needsConfirmation: routerResult.needsConfirmation || false,
+            confirmationQuestion: routerResult.confirmationQuestion || null,
+            missingFields: routerResult.missingFields || [],
+            suggestions: routerResult.suggestions
+          }));
         }
       }
       

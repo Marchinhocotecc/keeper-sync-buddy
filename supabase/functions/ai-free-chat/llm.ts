@@ -5,7 +5,7 @@
 
 import { UserContext } from "./types.ts";
 
-const DEFAULT_MODEL = "deepseek/deepseek-r1-0528:free";
+const DEFAULT_MODEL = "deepseek/deepseek-r1:free";
 
 // ============================================================================
 // LANGUAGE CONFIGURATION
