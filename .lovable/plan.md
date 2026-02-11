@@ -1,74 +1,52 @@
 
-# Fix AYVO Cognitive Pipeline - Analyze Core 400 Error
 
-## Problem Diagnosis
+# Fix: Risposta LLM troncata per max_tokens insufficiente
 
-The pipeline structure (ANALYZE -> VALIDATE -> EXECUTE -> RESPOND) is already wired correctly in `index.ts`. The `analyzeMessage()` function IS called for every message. However, **every single call fails with a 400 error from OpenRouter**, causing:
+## Diagnosi
 
-- All messages fall back to the deterministic router (regex-based)
-- Simple greetings work (matched by regex), but complex multi-intent messages like "sabato spesa, domani lavoro alle 10..." are treated as SMALL_TALK
-- The `ANALYZE OUTPUT` log shows empty results with "Analysis failed - API error" every time
+L'analisi semantica FUNZIONA. Il modello `deepseek/deepseek-r1-0528:free` capisce correttamente le frasi multi-intent e produce JSON strutturato. Ma il parametro `max_tokens: 1000` e` troppo basso: il JSON per 3-4 items con tutti i campi richiede circa 1500-2000 token. La risposta viene tagliata a meta e il parser JSON fallisce.
 
-The root cause is in `analyzeCore.ts`:
-1. The model `deepseek/deepseek-r1-0528:free` may be temporarily down or rate-limited
-2. The error response body is never logged (only the status code), so we're debugging blind
-3. There is no fallback model when the primary model fails
-4. The `llm.ts` module (used for the legacy path) uses the exact same model but logs the error body -- the legacy path also fails silently
+Inoltre, i modelli `deepseek/deepseek-r1:free` e `deepseek/deepseek-chat:free` restituiscono 404 ("No endpoints found"), quindi la fallback chain non serve a nulla con quei nomi.
 
-## Plan (3 changes, all in edge function)
+## Piano (2 modifiche, stesso file)
 
-### 1. Fix `analyzeCore.ts` - Log error body + fallback model + robust request
+### 1. Aumentare max_tokens da 1000 a 2500
 
-**What changes:**
-- Log the actual response body when the API returns 400 (to understand WHY it fails)
-- Add a fallback model chain: try `deepseek/deepseek-r1-0528:free` first, if it fails try `deepseek/deepseek-chat:free`, then `deepseek/deepseek-r1:free`
-- Add `response_format` hint if supported
-- Reduce the system prompt size slightly (the prompt is 3000+ chars which may hit free-tier limits on some providers)
-
-### 2. Fix `index.ts` - Handle analyze failure gracefully with deterministic fallback
-
-**What changes:**
-- When analyze returns 0 items AND has "API error" in uncertainties, fall through to the deterministic router for ALL patterns (not just greetings/queries) before giving up
-- This ensures the app still works while the LLM issue is resolved
-
-### 3. Redeploy and test
-
-After the fix, verify with the test phrase that either:
-- The LLM call succeeds and returns 3-4 items, OR
-- The error body is logged so we can diagnose and fix the exact cause
-
-## Technical Details
-
-### File: `supabase/functions/ai-free-chat/analyzeCore.ts`
-
-Changes:
-- Line ~265-267: When `!response.ok`, read and log the response body:
-```typescript
-const errorBody = await response.text();
-console.error(`[ANALYZE-CORE] API error: ${response.status}, body: ${errorBody.substring(0, 500)}`);
+In `analyzeCore.ts`, cambiare:
 ```
-- Add fallback model logic: if first model returns 400/404, retry with alternative model
-- Use `deepseek/deepseek-r1:free` as the default (the currently correct free model name per OpenRouter docs), not `deepseek/deepseek-r1-0528:free`
+max_tokens: 1000
+```
+in:
+```
+max_tokens: 2500
+```
 
-### File: `supabase/functions/ai-free-chat/llm.ts`
+Questo garantisce spazio sufficiente per JSON con 4-5 items completi + tag `<think>` che il modello R1 genera.
 
-Change the `DEFAULT_MODEL` constant from `"deepseek/deepseek-r1-0528:free"` to `"deepseek/deepseek-r1:free"` to match the current OpenRouter naming.
+### 2. Aggiornare la fallback chain con modelli che esistono davvero
 
-### File: `supabase/functions/ai-free-chat/index.ts`
+I due modelli che danno 404 vanno sostituiti. I modelli free attualmente disponibili su OpenRouter per DeepSeek sono:
+- `deepseek/deepseek-r1-0528:free` (funzionante, confermato dai log)
+- `deepseek/deepseek-chat-v3-0324:free` (alternativa chat)
+- `google/gemini-2.0-flash-exp:free` (backup non-DeepSeek)
 
-No structural changes needed -- the pipeline is already correct. Minor improvement: when analyze fails with API error, try the deterministic router for creation patterns too (not just greetings/queries).
+La nuova chain:
+```typescript
+const FALLBACK_MODELS = [
+  "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "google/gemini-2.0-flash-exp:free",
+];
+```
 
-## What this does NOT change
+### File modificato
 
-- No UI changes
-- No new features
-- No premium logic
-- No schema changes
-- The pipeline architecture stays exactly as-is
+Solo `supabase/functions/ai-free-chat/analyzeCore.ts`:
+- Riga con `max_tokens: 1000` diventa `max_tokens: 2500`
+- Array `FALLBACK_MODELS` aggiornato con modelli esistenti
+- Nessun altro cambiamento
 
-## Expected outcome
+### Risultato atteso
 
-After this fix:
-- The 400 error will be diagnosed (error body logged)
-- The model name will be corrected to the currently available free model
-- The test phrase "sabato spesa, domani lavoro alle 10 e dopodomani vado a sciare e spendo 50" will produce 3-4 structured items from ANALYZE
+La frase "sabato spesa, domani lavoro alle 10 e dopodomani vado a sciare e spendo 50" produrra un JSON completo con 3-4 items, non troncato, e il parser lo leggerà correttamente.
+
