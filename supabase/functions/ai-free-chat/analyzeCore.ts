@@ -44,9 +44,9 @@ export interface AnalyzeResult {
 // ============================================================================
 
 const FALLBACK_MODELS = [
-  "deepseek/deepseek-r1:free",
-  "deepseek/deepseek-chat:free",
   "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "google/gemini-2.0-flash-exp:free",
 ];
 
 // ============================================================================
@@ -150,7 +150,7 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage }
           ],
-          max_tokens: 1000,
+          max_tokens: 2500,
           temperature: 0.1
         }),
         signal: controller.signal
