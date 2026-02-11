@@ -1,7 +1,14 @@
 /**
- * AYVO Analyze Core
- * Pure semantic understanding layer - NO execution, NO UI, NO confirmation
- * Output: Structured JSON only
+ * LAYER 1 — COGNITIVE ANALYZE (LLM)
+ * 
+ * RESPONSIBILITY: Understand what the user INTENDS to do.
+ * OUTPUT: Structured JSON with atomic items.
+ * 
+ * RULES:
+ * - NO execution, NO UI, NO confirmation
+ * - ONE call to LLM, ONE JSON output
+ * - If a phrase implies a future action → MUST produce an item
+ * - If it doesn't → architectural bug, not "stupid LLM"
  */
 
 // ============================================================================
@@ -9,33 +16,20 @@
 // ============================================================================
 
 export interface AnalyzedItem {
-  type: 'task' | 'event' | 'reminder' | 'expense' | 'note' | 'question' | 'reflection';
+  type: 'task' | 'event' | 'expense' | 'query' | 'greeting';
   title: string;
   description: string | null;
-  date: string | null;      // ISO date
+  date: string | null;      // YYYY-MM-DD
   time: string | null;      // HH:mm
-  datetime: string | null;  // ISO datetime
   amount: number | null;
   currency: string | null;
-  people: string[];
-  location: string | null;
-  recurrence: string | null;
-}
-
-export interface AnalyzedEntities {
-  dates: string[];
-  times: string[];
-  people: string[];
-  places: string[];
-  amounts: { value: number; currency: string | null }[];
+  category: string | null;
+  confidence: number;        // 0.0 - 1.0
 }
 
 export interface AnalyzeResult {
   language: string;
-  confidence: number;
-  summary: string;
   items: AnalyzedItem[];
-  entities: AnalyzedEntities;
   uncertainties: string[];
 }
 
@@ -50,52 +44,110 @@ const FALLBACK_MODELS = [
 ];
 
 // ============================================================================
-// SYSTEM PROMPT
+// HARDENED SYSTEM PROMPT
 // ============================================================================
 
-function buildAnalyzePrompt(currentDate: string): string {
-  return `You are AYVO Analyze Core. Your ONLY task: understand the user's message and return structured JSON.
+function buildAnalyzePrompt(currentDate: string, dayOfWeek: string): string {
+  return `You are AYVO Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.
 
-RULES:
-- Do NOT execute actions, ask questions, confirm anything, or generate UI text.
-- Detect user's language. Preserve it in all text fields.
-- Today is: ${currentDate}. Resolve relative dates (tomorrow, next week, sabato, dopodomani, etc.)
+TODAY: ${currentDate} (${dayOfWeek})
 
-MULTI-INTENT: One message may contain multiple intentions. Split them correctly.
-Example: "Saturday shopping, Sunday trip, spent 50" → Task + Event + Expense
+STRICT RULES:
+1. Each distinct intention = ONE separate item. NEVER merge multiple actions into one.
+2. Detect the user's language. Keep all text fields in that language.
+3. Resolve relative dates:
+   - "oggi" / "today" → ${currentDate}
+   - "domani" / "tomorrow" → next day
+   - "dopodomani" / "day after tomorrow" → +2 days
+   - "sabato", "venerdì", etc. → next occurrence (calculate from today)
+4. If date/time is ambiguous or missing → set to null. Do NOT invent.
+5. Remove action prefixes from titles: "crea task lavoro" → title: "Lavoro"
+6. Comma decimals: "5,5" = 5.50
+7. "ricordami di X" → type: "task" (NOT event)
+8. If a phrase implies a future action, it MUST produce an item. Zero tolerance.
 
-ALLOWED TYPES: task, event, reminder, expense, note, question, reflection
+ALLOWED TYPES:
+- "task": something to do (reminder, to-do, chore)
+- "event": something with a specific date+time (appointment, meeting)
+- "expense": money spent or to spend
+- "query": user asking to see/list their data
+- "greeting": hello, thanks, small talk
 
-For every item extract:
-- title (short, meaningful - NO verb prefixes like "crea", "aggiungi", "ricordami")
-- description (optional, null if none)
-- date (YYYY-MM-DD or null)
-- time (HH:mm or null)
-- datetime (YYYY-MM-DDTHH:mm:ss if both date+time exist, else null)
-- amount (number if money, else null)
-- currency (ISO code or null)
-- people (array of names)
-- location (string or null)
-- recurrence (daily/weekly/monthly or null)
+TYPE DECISION RULES:
+- Has specific time (e.g. "alle 10", "at 3pm") → "event"
+- Has only date, no time → "task" with date
+- Has amount/money → "expense"
+- "mostra task", "vedi eventi" → "query"
+- "ciao", "grazie" → "greeting"
 
-TEMPORAL REASONING:
-- today → ${currentDate}
-- tomorrow → next day
-- dopodomani → day after tomorrow
-- sabato/domenica → next occurrence
-- If ambiguous → null + add to uncertainties
+TITLE RULES:
+- Short, meaningful, capitalized first letter
+- NO verb prefixes: remove "crea", "aggiungi", "ricordami di", "devo"
+- NO generic titles: "task", "evento", "cosa" are FORBIDDEN
 
-OUTPUT FORMAT (STRICT - JSON only, no markdown, no comments):
+NEGATIVE EXAMPLES (DO NOT DO THIS):
+❌ "sabato spesa, domani lavoro alle 10" → 1 item with title "Sabato spesa, domani lavoro alle 10"
+❌ Merging distinct actions into one item
+❌ Title: "Task" or "Evento" or "Cosa"
+❌ Inventing a time when user didn't specify one
+❌ Returning 0 items for "devo comprare il latte" (this is clearly a task!)
+
+POSITIVE EXAMPLES:
+
+Input: "sabato spesa, domani lavoro alle 10 e dopodomani vado a sciare e spendo 50"
+Output: 4 items:
+1. {"type":"task","title":"Spesa","date":"SATURDAY_DATE","time":null,"amount":null,"confidence":0.9}
+2. {"type":"event","title":"Lavoro","date":"TOMORROW_DATE","time":"10:00","amount":null,"confidence":0.95}
+3. {"type":"event","title":"Sciare","date":"DAY_AFTER_DATE","time":null,"amount":null,"confidence":0.85}
+4. {"type":"expense","title":"Sci","date":"DAY_AFTER_DATE","time":null,"amount":50,"currency":"EUR","category":"svago","confidence":0.9}
+
+Input: "domani lavoro, venerdì ho padel e sabato ho il dottore"
+Output: 3 items (all events because they have specific days):
+1. {"type":"event","title":"Lavoro","date":"TOMORROW","time":null,"confidence":0.9}
+2. {"type":"event","title":"Padel","date":"FRIDAY","time":null,"confidence":0.9}
+3. {"type":"event","title":"Dottore","date":"SATURDAY","time":null,"confidence":0.9}
+
+Input: "ciao"
+Output: 1 item: {"type":"greeting","title":"ciao","confidence":1.0}
+
+Input: "ricordami di comprare il latte"
+Output: 1 item: {"type":"task","title":"Comprare il latte","date":null,"time":null,"confidence":0.95}
+
+Input: "mostra i miei task"
+Output: 1 item: {"type":"query","title":"tasks","confidence":0.95}
+
+Input: "pizza 12 euro"
+Output: 1 item: {"type":"expense","title":"Pizza","amount":12,"currency":"EUR","category":"cibo","confidence":0.95}
+
+OUTPUT FORMAT (STRICT JSON, no markdown, no comments, no extra text):
 {
-  "language": "",
-  "confidence": 0.0,
-  "summary": "",
-  "items": [{ "type": "", "title": "", "description": null, "date": null, "time": null, "datetime": null, "amount": null, "currency": null, "people": [], "location": null, "recurrence": null }],
-  "entities": { "dates": [], "times": [], "people": [], "places": [], "amounts": [] },
+  "language": "it",
+  "items": [
+    {
+      "type": "task|event|expense|query|greeting",
+      "title": "Short Title",
+      "description": null,
+      "date": "YYYY-MM-DD or null",
+      "time": "HH:mm or null",
+      "amount": null,
+      "currency": null,
+      "category": null,
+      "confidence": 0.9
+    }
+  ],
   "uncertainties": []
+}`;
 }
 
-If no actionable intent exists, return empty items array.`;
+// ============================================================================
+// DAY OF WEEK HELPER
+// ============================================================================
+
+function getDayOfWeek(dateStr: string): string {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const daysIT = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+  const d = new Date(dateStr);
+  return `${daysIT[d.getDay()]} / ${days[d.getDay()]}`;
 }
 
 // ============================================================================
@@ -107,10 +159,7 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
   
   const fallbackResult: AnalyzeResult = {
     language: "unknown",
-    confidence: 0,
-    summary: "",
     items: [],
-    entities: { dates: [], times: [], people: [], places: [], amounts: [] },
     uncertainties: ["Analysis failed - API error"]
   };
   
@@ -125,9 +174,10 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
     : [...FALLBACK_MODELS];
   
   const currentDate = new Date().toISOString().split('T')[0];
-  const systemPrompt = buildAnalyzePrompt(currentDate);
+  const dayOfWeek = getDayOfWeek(currentDate);
+  const systemPrompt = buildAnalyzePrompt(currentDate, dayOfWeek);
   
-  console.log(`[ANALYZE-CORE] Processing: "${userMessage.substring(0, 100)}", models: ${modelsToTry.join(', ')}`);
+  console.log(`[ANALYZE-CORE] Processing: "${userMessage.substring(0, 100)}", today=${currentDate} (${dayOfWeek})`);
   
   for (const model of modelsToTry) {
     try {
@@ -161,14 +211,13 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
       if (!response.ok) {
         const errorBody = await response.text();
         console.error(`[ANALYZE-CORE] API error: ${response.status}, model: ${model}, body: ${errorBody.substring(0, 500)}`);
-        // Try next model
         continue;
       }
       
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || "";
       
-      console.log(`[ANALYZE-CORE] Raw response (model=${model}):`, content.substring(0, 500));
+      console.log(`[ANALYZE-CORE] Raw response (model=${model}):`, content.substring(0, 800));
       
       // Parse JSON - handle <think> tags and code blocks
       let cleanContent = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
@@ -183,13 +232,10 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
       
       const parsed = JSON.parse(jsonMatch[0]) as AnalyzeResult;
       
-      // Validate and normalize
+      // Normalize
       if (!parsed.items) parsed.items = [];
-      if (!parsed.entities) parsed.entities = { dates: [], times: [], people: [], places: [], amounts: [] };
       if (!parsed.uncertainties) parsed.uncertainties = [];
-      if (typeof parsed.confidence !== 'number') parsed.confidence = 0.5;
       if (!parsed.language) parsed.language = "unknown";
-      if (!parsed.summary) parsed.summary = "";
       
       // Normalize items
       parsed.items = parsed.items.map(item => ({
@@ -198,15 +244,13 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
         description: item.description || null,
         date: item.date || null,
         time: item.time || null,
-        datetime: item.datetime || null,
         amount: typeof item.amount === 'number' ? item.amount : null,
         currency: item.currency || null,
-        people: Array.isArray(item.people) ? item.people : [],
-        location: item.location || null,
-        recurrence: item.recurrence || null
+        category: item.category || null,
+        confidence: typeof item.confidence === 'number' ? item.confidence : 0.5
       }));
       
-      console.log(`[ANALYZE-CORE] Success (model=${model}): ${parsed.items.length} items, confidence: ${parsed.confidence}`);
+      console.log(`[ANALYZE-CORE] Success (model=${model}): ${parsed.items.length} items`);
       
       return parsed;
       
@@ -215,13 +259,11 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
         console.error(`[ANALYZE-CORE] Timeout on model: ${model}`);
         continue;
       }
-      
       console.error(`[ANALYZE-CORE] Error on model ${model}:`, error instanceof Error ? error.message : "Unknown");
       continue;
     }
   }
   
-  // All models failed
   console.error("[ANALYZE-CORE] All models failed");
   return fallbackResult;
 }
