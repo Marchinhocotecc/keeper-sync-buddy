@@ -62,8 +62,8 @@ export function itemToAction(item: AnalyzedItem): ActionToConfirm | null {
         type: 'CREATE_TASK',
         payload: { title, due_date: item.date || undefined },
         confirmMessage: item.date
-          ? `Creo "${title}" per ${formatDateIT(item.date)}?`
-          : `Creo "${title}"?`
+          ? `${title}, ${formatDateIT(item.date)}. Ok?`
+          : `${title}. Ok?`
       };
       
     case 'event':
@@ -71,7 +71,7 @@ export function itemToAction(item: AnalyzedItem): ActionToConfirm | null {
       return {
         type: 'CREATE_EVENT',
         payload: { title, start_at: buildISODateTime(item.date, item.time) },
-        confirmMessage: `Creo "${title}" per ${formatDateIT(item.date)} alle ${item.time}?`
+        confirmMessage: `${title}, ${formatDateIT(item.date)} alle ${item.time}. Ok?`
       };
       
     case 'expense':
@@ -80,7 +80,7 @@ export function itemToAction(item: AnalyzedItem): ActionToConfirm | null {
       return {
         type: 'RECORD_EXPENSE',
         payload: { amount: item.amount, category },
-        confirmMessage: `Registro €${item.amount.toFixed(2)} in ${category}?`
+        confirmMessage: `${item.amount.toFixed(2)} euro, ${category}. Ok?`
       };
       
     default:
@@ -115,5 +115,5 @@ export function buildMultiConfirmation(actions: ActionToConfirm[]): PendingActio
 
 export function buildMultiConfirmMessage(actions: ActionToConfirm[]): string {
   const lines = actions.map((a, i) => `${i + 1}. ${a.confirmMessage}`).join("\n");
-  return `Ho trovato ${actions.length} azioni:\n${lines}\n\nConfermi tutto?`;
+  return `${actions.length} azioni:\n${lines}\n\nConfermi?`;
 }
