@@ -1,36 +1,36 @@
 /**
  * AYVO - Shared Constants for AI Assistant
  * 
- * RULE: Risposte brevi, naturali, umane, gentili
- * Tono: calmo, accogliente, competente, non robotico
+ * RULE: Conciso, neutro, umano, niente emoji
+ * Tono: calmo, competente, affidabile
  */
 
 // Safe fallback message - returned when unclear
-export const SAFE_FALLBACK_MESSAGE = 'Dimmi pure 🙂';
+export const SAFE_FALLBACK_MESSAGE = 'Dimmi.';
 
 // Cancel response
-export const CANCEL_RESPONSE = 'Va bene! 🙂';
+export const CANCEL_RESPONSE = 'Ok, annullato.';
 
 // Confirm with no intent response
-export const CONFIRM_NO_INTENT_RESPONSE = 'Perfetto! Dimmi cosa posso fare per te.';
+export const CONFIRM_NO_INTENT_RESPONSE = 'Ok. Dimmi cosa fare.';
 
 // Negative feedback response
-export const NEGATIVE_FEEDBACK_RESPONSE = 'Scusa! Come posso aiutarti meglio?';
+export const NEGATIVE_FEEDBACK_RESPONSE = 'Scusa. Come posso aiutarti?';
 
 // Welcome message
-export const WELCOME_MESSAGE = 'Ciao! Sono AYVO ✨ Come posso aiutarti oggi?';
+export const WELCOME_MESSAGE = 'Ciao. Sono AYVO. Come posso aiutarti?';
 
-// Error messages (gentle tone)
+// Error messages
 export const ERROR_MESSAGES = {
-  generic: 'Ops, qualcosa non ha funzionato. Riproviamo? 🙂',
-  timeout: 'Mi sono perso un attimo! Puoi ripetere?',
-  network: 'Sembra esserci un problema di connessione. Riprova tra poco!',
+  generic: 'Qualcosa non ha funzionato. Riprova.',
+  timeout: 'Ci ho messo troppo. Puoi ripetere?',
+  network: 'Problema di connessione. Riprova tra poco.',
 };
 
-// Success messages (celebratory but calm)
+// Success messages
 export const SUCCESS_MESSAGES = {
-  taskCreated: 'Fatto! ✅ Ho aggiunto il task.',
-  eventCreated: 'Perfetto! 📅 Evento creato.',
-  expenseRecorded: 'Registrato! 💰 Spesa salvata.',
-  taskCompleted: 'Ottimo lavoro! ✨',
+  taskCreated: 'Fatto. Task aggiunto.',
+  eventCreated: 'Fatto. Evento creato.',
+  expenseRecorded: 'Fatto. Spesa registrata.',
+  taskCompleted: 'Fatto.',
 };
