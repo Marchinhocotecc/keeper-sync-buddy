@@ -1,8 +1,11 @@
 /**
  * Local Notification Service
  * Handles scheduling, displaying, and managing notifications
- * Works offline, uses Web Notifications API
+ * Works offline, uses Web Notifications API (browser only).
+ * On native Capacitor (Android/iOS) notifications are silently disabled.
  */
+
+import { Capacitor } from '@capacitor/core';
 
 import { supabase } from '@/integrations/supabase/client';
 import { format, addMinutes, subMinutes, isAfter, isBefore, parseISO, setHours, setMinutes } from 'date-fns';
@@ -45,6 +48,13 @@ let lastCountResetDate = '';
  * Initialize the notification service
  */
 export async function initNotificationService(): Promise<boolean> {
+  // On native Android/iOS WebView the Web Notifications API is not available.
+  // Disable silently – no crash, no warning to the user.
+  if (Capacitor.isNativePlatform()) {
+    console.info('Native platform detected: Web Notifications disabled (use Push Notifications plugin instead)');
+    return false;
+  }
+
   // Check if notifications are supported
   if (!('Notification' in window)) {
     console.warn('Notifications not supported in this browser');
@@ -126,7 +136,7 @@ export function showNotification(title: string, body: string, options?: {
     });
 
     notification.onclick = () => {
-      window.focus();
+      // window.focus() removed: no-op in WebView, causes runtime warnings
       notification.close();
     };
 
