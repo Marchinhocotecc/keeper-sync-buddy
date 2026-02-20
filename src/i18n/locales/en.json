@@ -11,7 +11,7 @@
     "logout": "Logout"
   },
   "home": {
-    "title": "AYVO",
+    "title": "Ayro",
     "subtitle": "Intelligent productivity for ambitious minds",
     "dailyActivities": "Daily Activities",
     "todayActivities": "Today's Activities",
@@ -99,7 +99,7 @@
     "errorLoading": "Oops, loading error"
   },
   "assistant": {
-    "title": "AYVO Assistant",
+    "title": "Ayro Assistant",
     "subtitle": "I'm here to help",
     "placeholder": "Type here...",
     "send": "Send",
@@ -112,7 +112,7 @@
     "language": "Language",
     "languageDesc": "Choose your preferred language",
     "theme": "Theme",
-    "themeDesc": "Customize AYVO's appearance",
+    "themeDesc": "Customize Ayro's appearance",
     "light": "Light",
     "dark": "Dark",
     "system": "System",
@@ -124,7 +124,7 @@
     "contactDesc": "Need help?",
     "contactEmail": "Email us at:",
     "about": "About",
-    "aboutDesc": "AYVO - Intelligent productivity for ambitious minds"
+    "aboutDesc": "Ayro - Intelligent productivity for ambitious minds"
   },
   "auth": {
     "signIn": "Sign In",
@@ -134,22 +134,22 @@
     "noAccount": "Don't have an account?",
     "haveAccount": "Already have an account?",
     "signInGoogle": "Sign in with Google",
-    "welcome": "Welcome to AYVO",
+    "welcome": "Welcome to Ayro",
     "welcomeBack": "Welcome back!"
   },
   "terms": {
     "title": "Terms & Conditions",
     "lastUpdated": "Last updated",
     "section1Title": "1. Acceptance of Terms",
-    "section1Content": "By accessing and using AYVO, you accept and agree to be bound by the terms and provision of this agreement.",
+    "section1Content": "By accessing and using Ayro, you accept and agree to be bound by the terms and provision of this agreement.",
     "section2Title": "2. Use License",
-    "section2Content": "Permission is granted to temporarily use AYVO for personal, non-commercial transitory viewing only.",
+    "section2Content": "Permission is granted to temporarily use Ayro for personal, non-commercial transitory viewing only.",
     "section3Title": "3. Disclaimer",
-    "section3Content": "The materials on AYVO are provided on an 'as is' basis. AYVO makes no warranties, expressed or implied.",
+    "section3Content": "The materials on Ayro are provided on an 'as is' basis. Ayro makes no warranties, expressed or implied.",
     "section4Title": "4. Limitations",
-    "section4Content": "In no event shall AYVO or its suppliers be liable for any damages arising out of the use or inability to use the materials on AYVO.",
+    "section4Content": "In no event shall Ayro or its suppliers be liable for any damages arising out of the use or inability to use the materials on Ayro.",
     "section5Title": "5. Modifications",
-    "section5Content": "AYVO may revise these terms of service at any time without notice. By using this app, you are agreeing to be bound by the current version of these terms."
+    "section5Content": "Ayro may revise these terms of service at any time without notice. By using this app, you are agreeing to be bound by the current version of these terms."
   },
   "privacy": {
     "title": "Privacy Policy",

@@ -423,7 +423,7 @@ export default function SettingsPage() {
                 </div>
                 
                 <a 
-                  href="mailto:support@ayvo-app.com"
+                  href="mailto:support@ayro.app"
                   className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
                 >
                   <div className="flex items-center gap-2 sm:gap-3">

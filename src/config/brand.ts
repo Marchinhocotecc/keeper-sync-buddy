@@ -1,18 +1,18 @@
 /**
- * AYVO Brand Configuration
+ * Ayro Brand Configuration
  * "Intelligent productivity for ambitious minds"
  * 
- * This file contains all brand-related constants for the AYVO app.
+ * This file contains all brand-related constants for the Ayro app.
  * Use these values for consistent branding across the application.
  */
 
-export const APP_NAME = "AYVO";
+export const APP_NAME = "Ayro";
 export const APP_TAGLINE = "Il tuo assistente produttivo e intelligente";
 export const APP_TAGLINE_EN = "Intelligent productivity for ambitious minds";
-export const SUPPORT_EMAIL = "support@ayvo.app";
+export const SUPPORT_EMAIL = "support@ayro.app";
 
 /**
- * AYVO Brand Colors
+ * Ayro Brand Colors
  * These are provided for reference - in components, always use
  * Tailwind CSS classes with semantic tokens (bg-primary, text-foreground, etc.)
  */
@@ -59,7 +59,7 @@ export const BRAND_COLORS = {
 } as const;
 
 /**
- * AYVO Design Tokens
+ * Ayro Design Tokens
  */
 export const DESIGN_TOKENS = {
   // Border radius - clean, modern

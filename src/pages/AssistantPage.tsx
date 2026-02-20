@@ -40,7 +40,7 @@ export default function AssistantPage() {
             >
               <Card className="app-card max-w-2xl mx-auto overflow-hidden">
                 <CardContent className="pt-10 sm:pt-12 pb-10 sm:pb-12 text-center px-4 sm:px-6">
-                  {/* AYVO Avatar */}
+                  {/* Ayro Avatar */}
                   <motion.div 
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -48,7 +48,7 @@ export default function AssistantPage() {
                     className="relative w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-6"
                   >
                     <div className="absolute inset-0 rounded-xl bg-primary/20 animate-pulse-glow" />
-                    <div className="relative w-full h-full rounded-xl bg-primary flex items-center justify-center shadow-ayvo">
+                    <div className="relative w-full h-full rounded-xl bg-primary flex items-center justify-center shadow-ayro">
                       <Zap className="h-8 w-8 sm:h-10 sm:w-10 text-primary-foreground" />
                     </div>
                   </motion.div>
@@ -59,7 +59,7 @@ export default function AssistantPage() {
                     transition={{ delay: 0.2 }}
                     className="text-xl sm:text-2xl font-semibold mb-2 text-foreground tracking-tight"
                   >
-                    Hey! I'm AYVO
+                    Hey! I'm Ayro
                   </motion.h2>
                   
                   <motion.p 

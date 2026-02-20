@@ -121,12 +121,12 @@ export default function AuthPage() {
       <Card className="w-full max-w-md rounded-xl border-border bg-card">
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 rounded-xl bg-primary flex items-center justify-center shadow-ayvo">
+            <div className="w-14 h-14 rounded-xl bg-primary flex items-center justify-center shadow-ayro">
               <Zap className="h-7 w-7 text-primary-foreground" />
             </div>
           </div>
           <CardTitle className="text-2xl font-semibold text-foreground tracking-tight">
-            AYVO
+            Ayro
           </CardTitle>
           <CardDescription className="text-muted-foreground text-sm">
             Intelligent productivity for ambitious minds

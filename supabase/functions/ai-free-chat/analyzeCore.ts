@@ -48,7 +48,7 @@ const FALLBACK_MODELS = [
 // ============================================================================
 
 function buildAnalyzePrompt(currentDate: string, dayOfWeek: string): string {
-  return `You are AYVO Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.
+  return `You are Ayro Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.
 
 TODAY: ${currentDate} (${dayOfWeek})
 
@@ -191,8 +191,8 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://ayvo.app",
-          "X-Title": "AYVO-AnalyzeCore"
+          "HTTP-Referer": "https://ayro.app",
+          "X-Title": "Ayro-AnalyzeCore"
         },
         body: JSON.stringify({
           model,

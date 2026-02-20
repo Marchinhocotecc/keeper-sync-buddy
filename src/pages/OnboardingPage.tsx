@@ -17,7 +17,7 @@ const slides: Slide[] = [
   {
     icon: <CheckCircle2 className="h-12 w-12 text-success" />,
     title: 'Gestisci i tuoi Task',
-    description: 'Organizza le tue attività con priorità intelligenti. AYVO ti aiuta a restare concentrato.',
+    description: 'Organizza le tue attività con priorità intelligenti. Ayro ti aiuta a restare concentrato.',
     example: '"Aggiungi comprare il latte"'
   },
   {
@@ -28,7 +28,7 @@ const slides: Slide[] = [
   },
   {
     icon: <MessageSquare className="h-12 w-12 text-primary" />,
-    title: 'Parla con AYVO',
+    title: 'Parla con Ayro',
     description: 'Il tuo assistente personale comprende il linguaggio naturale. Chiedi e ottieni.',
     example: '"Cosa ho in agenda domani?"'
   }
@@ -90,7 +90,7 @@ export default function OnboardingPage() {
           >
             {/* Icon */}
             <div className="mb-6 flex justify-center">
-              <div className="w-24 h-24 rounded-2xl bg-card border border-border flex items-center justify-center shadow-ayvo">
+              <div className="w-24 h-24 rounded-2xl bg-card border border-border flex items-center justify-center shadow-ayro">
                 {slide.icon}
               </div>
             </div>

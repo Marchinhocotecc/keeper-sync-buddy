@@ -65,8 +65,8 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        // AYVO specific colors
-        ayvo: {
+        // Ayro specific colors
+        ayro: {
           primary: "#4C4EFF",
           "primary-hover": "#5B5FFF",
           slate: "#1B1D2A",
@@ -93,10 +93,10 @@ export default {
         "3xl": "1.25rem",
       },
       boxShadow: {
-        ayvo: "0 2px 8px rgba(76, 78, 255, 0.25)",
-        "ayvo-card": "0 4px 16px rgba(0, 0, 0, 0.08)",
-        "ayvo-nav": "0 1px 3px rgba(0, 0, 0, 0.05)",
-        "ayvo-glow": "0 0 12px rgba(76, 78, 255, 0.15)",
+        ayro: "0 2px 8px rgba(76, 78, 255, 0.25)",
+        "ayro-card": "0 4px 16px rgba(0, 0, 0, 0.08)",
+        "ayro-nav": "0 1px 3px rgba(0, 0, 0, 0.05)",
+        "ayro-glow": "0 0 12px rgba(76, 78, 255, 0.15)",
       },
       keyframes: {
         "accordion-down": {

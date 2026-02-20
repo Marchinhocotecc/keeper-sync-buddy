@@ -1,5 +1,5 @@
 /**
- * AYVO - Shared Constants for AI Assistant
+ * Ayro - Shared Constants for AI Assistant
  * 
  * RULE: Conciso, neutro, umano, niente emoji
  * Tono: calmo, competente, affidabile
@@ -18,7 +18,7 @@ export const CONFIRM_NO_INTENT_RESPONSE = 'Ok. Dimmi cosa fare.';
 export const NEGATIVE_FEEDBACK_RESPONSE = 'Scusa. Come posso aiutarti?';
 
 // Welcome message
-export const WELCOME_MESSAGE = 'Ciao. Sono AYVO. Come posso aiutarti?';
+export const WELCOME_MESSAGE = 'Ciao. Sono Ayro. Come posso aiutarti?';
 
 // Error messages
 export const ERROR_MESSAGES = {
