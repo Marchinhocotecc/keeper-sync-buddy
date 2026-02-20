@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { isNativePlatform } from '@/lib/capacitorStorage';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,11 +59,16 @@ export default function AuthPage() {
     setLoading(true);
 
     try {
+      // On native APK use custom URL scheme; on web use origin
+      const redirectTo = isNativePlatform()
+        ? 'io.ayro.app://auth-callback'
+        : `${window.location.origin}/`;
+
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: redirectTo,
           data: {
             terms_accepted: true,
             terms_accepted_at: new Date().toISOString(),
