@@ -1,165 +1,191 @@
 
+# Piano Completo: Ayro Native APK con Capacitor
 
-# AYVO 7-Layer Cognitive Architecture - Clean Implementation
+## Obiettivo
 
-## Current State
+Trasformare Ayro (attualmente PWA/web) in un'app nativa Android (APK) installabile su qualsiasi dispositivo Android, usando Capacitor come bridge tra React e il sistema operativo nativo.
 
-The edge function `ai-free-chat` has ~860 lines in `index.ts` where all layers are mixed together. `analyzeCore.ts` exists as Layer 1 but the prompt needs hardening. There's no Layer 0 (input normalization), and Layers 2-6 are tangled in the main handler. `llm.ts` is a legacy duplicate that creates confusion.
-
-## Architecture Overview
-
-```text
-USER MESSAGE
-     |
-     v
-+---------------------------+
-| LAYER 0: NORMALIZE        |  <-- NEW file: normalizer.ts
-| - Clean text              |      Pure code, no LLM
-| - Resolve relative dates  |
-| - Extract time hints      |
-+---------------------------+
-     |
-     v
-+---------------------------+
-| LAYER 1: ANALYZE (LLM)   |  <-- EXISTING: analyzeCore.ts
-| - Segment multi-intent    |      Hardened prompt
-| - Extract atomic items    |      max_tokens: 2500
-| - JSON output only        |
-+---------------------------+
-     |
-     v
-+---------------------------+
-| LAYER 2: VALIDATE         |  <-- Move from index.ts to validator.ts
-| - Check missing fields    |      Pure code, no LLM
-| - Flag incomplete items   |
-+---------------------------+
-     |
-     v
-+---------------------------+
-| LAYER 3: CONFIRM          |  <-- Move from index.ts to confirmer.ts
-| - Build confirmation msg  |      Template-based (no LLM)
-| - Set pending actions     |
-+---------------------------+
-     |
-     v
-+---------------------------+
-| LAYER 4: STATE MERGE      |  <-- EXISTING: state.ts
-| - Safe merge, no overwrite|      Already correct
-| - Anti-loop protection    |
-+---------------------------+
-     |
-     v
-+---------------------------+
-| LAYER 5: EXECUTE          |  <-- EXISTING: executor.ts
-| - CRUD operations         |      Already correct
-| - Zero LLM               |
-+---------------------------+
-     |
-     v
-+---------------------------+
-| LAYER 6: RESPOND          |  <-- NEW: responder.ts
-| - Natural language reply  |      Template-based for now
-| - Language-aware          |
-+---------------------------+
-```
-
-## What Changes
-
-### Phase 1: Harden Layer 1 (analyzeCore.ts) -- PRIORITY
-
-This is the one thing that must work perfectly before anything else.
-
-**Changes to `analyzeCore.ts`:**
-
-1. Replace the system prompt with the hardened version:
-   - Explicit negative examples ("DO NOT concatenate titles")
-   - Explicit positive examples with expected output for 5+ test phrases
-   - Stricter JSON schema enforcement
-   - Remove ambiguous instructions
-   - Add: "If a phrase implies a future action, it MUST produce an item. If it doesn't, the system is broken."
-
-2. The hardened prompt will include these test cases IN the prompt:
-   - "sabato spesa, domani lavoro alle 10 e dopodomani vado a sciare e spendo 50" -> 4 items
-   - "domani lavoro, venerdi ho padel e sabato ho il dottore" -> 3 items (events)
-   - "ciao" -> 0 items
-   - "ricordami di comprare il latte" -> 1 item (task)
-
-3. Keep fallback models as-is (already fixed: deepseek-r1-0528, deepseek-chat-v3-0324, gemini-2.0-flash)
-
-### Phase 2: Add Layer 0 (normalizer.ts) -- NEW FILE
-
-Create `supabase/functions/ai-free-chat/normalizer.ts`:
-
-- `normalizeInput(rawMessage: string)` returns `{ normalizedText, timeHints, amountHints, isGreeting }`
-- Detects greetings BEFORE calling the LLM (saves API calls)
-- Normalizes comma decimals ("5,5" -> "5.5")
-- Extracts temporal hints for the LLM context
-- Does NOT interpret -- just cleans and hints
-
-### Phase 3: Refactor index.ts -- SIMPLIFY
-
-Reduce `index.ts` from 860 lines to ~200 lines. The main handler becomes:
+## Architettura Risultante
 
 ```text
-1. Auth check
-2. UI Actions (bypass)
-3. Cancel detection
-4. Layer 0: normalize(message)
-5. If greeting -> respond immediately (no LLM)
-6. If pending action -> handle confirmation/slot-fill
-7. Layer 1: analyze(normalizedMessage)
-8. Layer 2: validate(analyzedItems)
-9. Layer 3: confirm(validatedItems) -> set pending
-10. Layer 6: respond(confirmation)
+PRIMA (attuale)
+  Browser Web
+      |
+   React App (Vite)
+      |
+   Supabase
+
+DOPO (APK)
+  Android WebView (Capacitor)
+      |
+   React App (Vite build)
+      |
+   Capacitor Bridge (accesso API native)
+      |
+   Supabase (invariato)
 ```
 
-Move extracted code to:
-- `validator.ts` -- validateAnalyzedItem, buildMissingFieldQuestion
-- `confirmer.ts` -- analyzedItemToAction, buildConfirmation, setPendingActions
-- `responder.ts` -- buildReply, getTranslatedReply, handleQueryIntent
+## Problemi Critici Identificati
 
-### Phase 4: Remove legacy llm.ts dependency
+### 1. Auth Storage - localStorage
+**File:** `src/integrations/supabase/client.ts`
 
-The `llm.ts` module (`buildSystemPrompt` + `callOpenRouterAI`) is only used in ONE place: cancel-with-continuation fallback (line 404). Replace that with a simpler fallback to the deterministic router or analyzeCore. Then `llm.ts` becomes dead code and can be removed.
+```typescript
+// PROBLEMA ATTUALE
+auth: {
+  storage: localStorage,  // crash/perdita sessione in background Android
+}
 
-## What Does NOT Change
+// SOLUZIONE
+// Usare @capacitor/preferences per storage nativo persistente
+```
 
-- `state.ts` (Layer 4) -- already correct
-- `executor.ts` (Layer 5) -- already correct
-- `parser.ts` -- utility functions, stays as-is
-- `types.ts` -- stays as-is
-- No UI changes
-- No new features
-- No premium logic
-- No schema changes
+Il `localStorage` WebView Android può essere svuotato dal sistema quando l'app va in background. L'utente si ritrova sloggato ogni volta.
 
-## Files Modified/Created
+### 2. Deep Link email di conferma
+**File:** `src/pages/AuthPage.tsx`
 
-| File | Action |
-|------|--------|
-| `analyzeCore.ts` | MODIFY -- hardened prompt with examples |
-| `normalizer.ts` | CREATE -- Layer 0 input normalization |
-| `validator.ts` | CREATE -- Layer 2 validation (extracted from index.ts) |
-| `confirmer.ts` | CREATE -- Layer 3 confirmation (extracted from index.ts) |
-| `responder.ts` | CREATE -- Layer 6 response (extracted from index.ts) |
-| `index.ts` | MODIFY -- simplified to ~200 lines orchestrator |
-| `llm.ts` | MODIFY -- remove dependency, mark for removal |
+```typescript
+// PROBLEMA ATTUALE
+emailRedirectTo: `${window.location.origin}/`
+// In APK: window.location.origin = "" o URL non valido
 
-## Execution Order
+// SOLUZIONE
+emailRedirectTo: `io.ayro.app://auth-callback`
+// URL scheme nativo che Capacitor intercetta
+```
 
-1. First: harden `analyzeCore.ts` prompt and test with edge function logs
-2. Then: create Layer 0 (`normalizer.ts`)
-3. Then: extract Layers 2, 3, 6 into separate files
-4. Then: simplify `index.ts`
-5. Last: remove `llm.ts` dependency
+Senza deep link configurato, il link di conferma email apre il browser esterno e non rientra nell'app.
 
-## Success Criteria
+### 3. Notifiche - Web Notifications API
+**File:** `src/services/notificationService.ts`
 
-The phrase "sabato spesa, domani lavoro alle 10 e dopodomani vado a sciare e spendo 50" must produce exactly 4 items:
-1. task: "Spesa" (date: saturday)
-2. event: "Lavoro" (date: tomorrow, time: 10:00)
-3. event: "Sciare" (date: day after tomorrow)
-4. expense: amount 50, category "sci"
+```typescript
+// PROBLEMA ATTUALE
+if (!('Notification' in window)) return false; // sempre false in WebView
+new Notification(title, { body })              // non funziona in APK
 
-No "How can I help you?" responses for actionable messages. No undefined values. No state loss.
+// SOLUZIONE
+// Rilevamento piattaforma + fallback graceful
+// Notifiche attive solo se browser (PWA)
+// APK: disabilitare silenziosamente senza crash
+```
 
+In Android WebView, l'API `Notification` non esiste. Il servizio attuale non crasha ma diventa completamente non funzionale senza feedback.
+
+### 4. window.focus()
+**File:** `src/services/notificationService.ts` (riga 129)
+
+```typescript
+// PROBLEMA ATTUALE
+notification.onclick = () => {
+  window.focus(); // no-op in WebView, warning a runtime
+  notification.close();
+};
+
+// SOLUZIONE: rimuovere window.focus()
+```
+
+## File da Modificare
+
+| File | Modifica |
+|------|----------|
+| `package.json` | Aggiungere `@capacitor/core`, `@capacitor/android` come dipendenze |
+| `capacitor.config.ts` | Nuovo file di configurazione Capacitor |
+| `src/integrations/supabase/client.ts` | Sostituire `localStorage` con storage compatibile |
+| `src/pages/AuthPage.tsx` | Fix `emailRedirectTo` per deep link nativo |
+| `src/services/notificationService.ts` | Guard per WebView + rimuovere `window.focus()` |
+| `vite.config.ts` | Nessuna modifica (già compatibile) |
+
+## Passi di Implementazione
+
+### Step 1 - Dipendenze Capacitor
+Aggiungere al `package.json`:
+- `@capacitor/core` (runtime Capacitor nel browser/WebView)
+- `@capacitor/android` (solo per build nativa, dev dependency)
+- `@capacitor/cli` (strumenti CLI, dev dependency)
+- `@capacitor/preferences` (storage nativo sicuro, sostituisce localStorage)
+
+### Step 2 - capacitor.config.ts
+Creare il file di configurazione con:
+- `appId: "io.ayro.app"` (bundle ID univoco Android)
+- `appName: "Ayro"`
+- `webDir: "dist"` (output di `vite build`)
+- `server.url` con live reload (per sviluppo)
+- `android.allowMixedContent: true`
+
+### Step 3 - Fix Auth Storage
+In `src/integrations/supabase/client.ts`:
+
+Creare un adapter custom che usa `@capacitor/preferences` in ambiente nativo e `localStorage` in browser. Il client Supabase accetta qualsiasi oggetto con interfaccia `{ getItem, setItem, removeItem }`.
+
+```typescript
+// Adapter compatibile con entrambi gli ambienti
+const storage = isNative() ? capacitorStorage : localStorage;
+export const supabase = createClient(URL, KEY, { auth: { storage } });
+```
+
+### Step 4 - Fix Deep Link Auth
+In `src/pages/AuthPage.tsx`:
+
+```typescript
+const getRedirectUrl = () => {
+  // In APK usa custom URL scheme
+  if (isNativePlatform()) return 'io.ayro.app://auth-callback';
+  // In browser usa origin normale
+  return `${window.location.origin}/`;
+};
+```
+
+Configurare anche `AndroidManifest.xml` con intent-filter per intercettare `io.ayro.app://` (fatto tramite `capacitor.config.ts`).
+
+### Step 5 - Fix Notification Service
+In `src/services/notificationService.ts`:
+
+- Aggiungere check `isNativePlatform()` all'inizio di `initNotificationService`
+- In ambiente nativo: restituire `false` senza errori (nessun crash)
+- Rimuovere `window.focus()` dalla callback `onclick`
+- Lasciare tutto il resto invariato (scheduling Supabase funziona uguale)
+
+## Cosa NON cambia
+
+- Tutta la logica business (task, eventi, spese, assistente)
+- Supabase URL, chiavi, schema database
+- Edge functions
+- UI e stile (Tailwind, shadcn/ui)
+- React Router (funziona con `BrowserRouter` in Capacitor)
+
+## Istruzioni Post-Deploy (manuali - non automatizzabili)
+
+Dopo che il codice sarà aggiornato, per generare l'APK dovrai:
+
+1. **Esportare su GitHub** tramite il tasto "Export to Github" in Lovable
+2. **Git clone** sul tuo computer
+3. Eseguire:
+   ```bash
+   npm install
+   npx cap add android
+   npx cap sync
+   npm run build
+   npx cap sync
+   npx cap run android
+   ```
+4. Serve **Android Studio** installato sul tuo PC
+5. L'APK debug sarà generabile direttamente da Android Studio (Build > Build APK)
+
+**Costo:** Nessuno (strumenti open source). Google Play Store richiede $25 una tantum solo se vuoi pubblicarlo.
+
+## Nota sul sistema di notifiche
+
+Le notifiche native Android richiederebbero `@capacitor/push-notifications` + un server FCM (Firebase Cloud Messaging). Questo va oltre lo scope attuale.
+
+Il piano corrente: le notifiche vengono disabilitate silenziosamente sull'APK (nessun crash). L'architettura Supabase `scheduled_notifications` rimane intatta e potrà essere connessa a notifiche native in un secondo momento.
+
+## Risultato Finale
+
+L'APK di Ayro sarà:
+- Installabile su Android senza Play Store (sideload)
+- Sessione auth persistente anche dopo background
+- Deep link email funzionante
+- Nessun crash da API web non supportate
+- Pronto per pubblicazione Play Store
