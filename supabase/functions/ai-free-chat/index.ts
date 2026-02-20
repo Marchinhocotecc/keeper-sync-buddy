@@ -50,7 +50,7 @@ function createResponse(partial: Partial<AIResponse>): AIResponse {
 }
 
 function json(data: AIResponse): Response {
-  console.log(`[AYVO] → intent=${data.intent}, mode=${data.mode}, action=${data.action.type}`);
+  console.log(`[Ayro] → intent=${data.intent}, mode=${data.mode}, action=${data.action.type}`);
   return new Response(JSON.stringify(data), {
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
   });
@@ -95,7 +95,7 @@ serve(async (req) => {
     }
 
     const message = userMessage.trim();
-    console.log(`[AYVO] User=${userId}, Msg="${message.substring(0, 100)}"`);
+    console.log(`[Ayro] User=${userId}, Msg="${message.substring(0, 100)}"`);
 
     // === LAYER 0: NORMALIZE ===
     const input = normalizeInput(message);
@@ -129,12 +129,11 @@ serve(async (req) => {
 
     // --- CANCEL ---
     if (input.isCancel) {
-      console.log(`[AYVO] Cancel detected, continuation: ${input.cancelContinuation}`);
+      console.log(`[Ayro] Cancel detected, continuation: ${input.cancelContinuation}`);
       await clearAssistantState(supabase, userId);
       await setPendingAction(supabase, userId, null);
 
       if (input.cancelContinuation) {
-        // Process the continuation as a new message (recursive-light: just run router + analyze)
         const contRouter = deterministicRouter(input.cancelContinuation, { active_intent: 'NONE' });
         if (contRouter.matched) {
           return json(createResponse({
@@ -147,8 +146,6 @@ serve(async (req) => {
             suggestions: contRouter.suggestions
           }));
         }
-        // Fall through to analyze the continuation below
-        // (we'll reprocess by letting it hit the analyze phase with the continuation text)
       } else {
         return json(createResponse({ intent: "CANCEL", reply: t(userLang.code, "cancelled") }));
       }
@@ -158,7 +155,7 @@ serve(async (req) => {
     const pendingAction = await getPendingAction(supabase, userId);
 
     if (pendingAction) {
-      console.log(`[AYVO] Pending: ${pendingAction.type}`);
+      console.log(`[Ayro] Pending: ${pendingAction.type}`);
 
       if (pendingAction.type.startsWith("CONFIRM_") && input.isConfirm) {
         const actionTypeStr = pendingAction.type.replace("CONFIRM_", "");
@@ -272,7 +269,7 @@ serve(async (req) => {
     if (state.active_intent && state.active_intent !== 'NONE') {
       const slotResult = handleSlotFilling(message, state);
       if (slotResult && slotResult.matched) {
-        console.log(`[AYVO] Slot filled: ${slotResult.intent}`);
+        console.log(`[Ayro] Slot filled: ${slotResult.intent}`);
         if (slotResult.action && slotResult.action.type !== 'NONE') {
           await setPendingAction(supabase, userId, {
             type: `CONFIRM_${slotResult.action.type}`,
@@ -326,9 +323,9 @@ serve(async (req) => {
     // === LAYER 1: ANALYZE (LLM) ===
     // ================================================================
     const textToAnalyze = input.isCancel && input.cancelContinuation ? input.cancelContinuation : input.normalizedText;
-    console.log("[AYVO] === L1: ANALYZE ===");
+    console.log("[Ayro] === L1: ANALYZE ===");
     const analysis: AnalyzeResult = await analyzeMessage(textToAnalyze);
-    console.log("[AYVO] Analyze result:", JSON.stringify(analysis, null, 2));
+    console.log("[Ayro] Analyze result:", JSON.stringify(analysis, null, 2));
 
     // If no items, fallback to deterministic router
     if (!analysis.items || analysis.items.length === 0) {
@@ -418,7 +415,7 @@ serve(async (req) => {
     // ================================================================
     // === LAYER 2: VALIDATE ===
     // ================================================================
-    console.log("[AYVO] === L2: VALIDATE ===");
+    console.log("[Ayro] === L2: VALIDATE ===");
     const validated = validateItems(actionableItems);
     const validItems = validated.filter(v => v.valid);
     const invalidItems = validated.filter(v => !v.valid);
@@ -453,7 +450,7 @@ serve(async (req) => {
     // ================================================================
     // === LAYER 3: CONFIRM ===
     // ================================================================
-    console.log("[AYVO] === L3: CONFIRM ===");
+    console.log("[Ayro] === L3: CONFIRM ===");
     const actionsToConfirm = validItems
       .map(v => itemToAction(v.item))
       .filter((a): a is NonNullable<typeof a> => a !== null);
@@ -468,7 +465,7 @@ serve(async (req) => {
     // ================================================================
     // === LAYER 6: RESPOND (with pending action set) ===
     // ================================================================
-    console.log("[AYVO] === L6: RESPOND ===");
+    console.log("[Ayro] === L6: RESPOND ===");
 
     if (actionsToConfirm.length === 1) {
       const single = actionsToConfirm[0];
@@ -512,7 +509,7 @@ serve(async (req) => {
     }));
 
   } catch (error) {
-    console.error("[AYVO] Error:", error);
+    console.error("[Ayro] Error:", error);
     return new Response(
       JSON.stringify(createResponse({
         intent: "ERROR", reply: "Si è verificato un problema. Riprova.",

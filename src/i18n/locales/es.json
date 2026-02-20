@@ -11,7 +11,7 @@
     "logout": "Cerrar sesión"
   },
   "home": {
-    "title": "AYVO",
+    "title": "Ayro",
     "subtitle": "Productividad inteligente para mentes ambiciosas",
     "dailyActivities": "Actividades Diarias",
     "todayActivities": "Actividades de Hoy",
@@ -99,7 +99,7 @@
     "errorLoading": "Ups, error al cargar"
   },
   "assistant": {
-    "title": "Asistente AYVO",
+    "title": "Asistente Ayro",
     "subtitle": "Estoy aquí para ayudarte",
     "placeholder": "Escribe aquí...",
     "send": "Enviar",
@@ -112,7 +112,7 @@
     "language": "Idioma",
     "languageDesc": "Elige tu idioma preferido",
     "theme": "Tema",
-    "themeDesc": "Personaliza la apariencia de AYVO",
+    "themeDesc": "Personaliza la apariencia de Ayro",
     "light": "Claro",
     "dark": "Oscuro",
     "system": "Sistema",
@@ -124,7 +124,7 @@
     "contactDesc": "¿Necesitas ayuda?",
     "contactEmail": "Envíanos un correo a:",
     "about": "Acerca de",
-    "aboutDesc": "AYVO - Productividad inteligente para mentes ambiciosas"
+    "aboutDesc": "Ayro - Productividad inteligente para mentes ambiciosas"
   },
   "auth": {
     "signIn": "Iniciar Sesión",
@@ -134,22 +134,22 @@
     "noAccount": "¿No tienes una cuenta?",
     "haveAccount": "¿Ya tienes una cuenta?",
     "signInGoogle": "Iniciar sesión con Google",
-    "welcome": "Bienvenido a AYVO",
+    "welcome": "Bienvenido a Ayro",
     "welcomeBack": "¡Bienvenido de nuevo!"
   },
   "terms": {
     "title": "Términos y Condiciones",
     "lastUpdated": "Última actualización",
     "section1Title": "1. Aceptación de Términos",
-    "section1Content": "Al acceder y usar AYVO, aceptas y consientes estar sujeto a los términos y disposiciones de este acuerdo.",
+    "section1Content": "Al acceder y usar Ayro, aceptas y consientes estar sujeto a los términos y disposiciones de este acuerdo.",
     "section2Title": "2. Licencia de Uso",
-    "section2Content": "Se concede permiso para usar temporalmente AYVO para uso personal y no comercial.",
+    "section2Content": "Se concede permiso para usar temporalmente Ayro para uso personal y no comercial.",
     "section3Title": "3. Descargo de Responsabilidad",
-    "section3Content": "Los materiales en AYVO se proporcionan 'tal cual'. AYVO no ofrece garantías, expresas o implícitas.",
+    "section3Content": "Los materiales en Ayro se proporcionan 'tal cual'. Ayro no ofrece garantías, expresas o implícitas.",
     "section4Title": "4. Limitaciones",
-    "section4Content": "En ningún caso AYVO o sus proveedores serán responsables de cualquier daño derivado del uso o la imposibilidad de usar los materiales en AYVO.",
+    "section4Content": "En ningún caso Ayro o sus proveedores serán responsables de cualquier daño derivado del uso o la imposibilidad de usar los materiales en Ayro.",
     "section5Title": "5. Modificaciones",
-    "section5Content": "AYVO puede revisar estos términos de servicio en cualquier momento sin previo aviso. Al usar esta aplicación, aceptas estar sujeto a la versión actual de estos términos."
+    "section5Content": "Ayro puede revisar estos términos de servicio en cualquier momento sin previo aviso. Al usar esta aplicación, aceptas estar sujeto a la versión actual de estos términos."
   },
   "privacy": {
     "title": "Política de Privacidad",

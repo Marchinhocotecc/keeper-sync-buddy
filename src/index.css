@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 /* 
- * AYVO Design System
+ * Ayro Design System
  * "Intelligent productivity for ambitious minds"
  * 
  * Premium Dark-Mode-First Palette
- * AYVO Primary: #4C4EFF (main accent)
- * AYVO Background Light: #ECECF8
- * AYVO Background Dark: #1B1D2A
- * AYVO Accent: #C6FFE9 (mint green)
- * AYVO Neutral: #FDF7EE (warm cream)
+ * Ayro Primary: #4C4EFF (main accent)
+ * Ayro Background Light: #ECECF8
+ * Ayro Background Dark: #1B1D2A
+ * Ayro Accent: #C6FFE9 (mint green)
+ * Ayro Neutral: #FDF7EE (warm cream)
  */
 
 @layer base {
   :root {
-    /* AYVO Light Mode - Clean Professional */
+    /* Ayro Light Mode - Clean Professional */
     
     /* Background - Light mode (#ECECF8) */
     --background: 240 33% 95%;
@@ -29,11 +29,11 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 20% 15%;
 
-    /* AYVO Primary (#4C4EFF) */
+    /* Ayro Primary (#4C4EFF) */
     --primary: 239 100% 65%;
     --primary-foreground: 0 0% 100%;
 
-    /* AYVO Primary Hover */
+    /* Ayro Primary Hover */
     --primary-hover: 239 100% 70%;
 
     /* Secondary */
@@ -48,7 +48,7 @@
     --accent: 157 100% 89%;
     --accent-foreground: 240 20% 15%;
 
-    /* Error - AYVO Coral (#FF6B6B) */
+    /* Error - Coral (#FF6B6B) */
     --destructive: 0 100% 71%;
     --destructive-foreground: 0 0% 100%;
 
@@ -57,32 +57,32 @@
     --input: 240 33% 94%;
     --ring: 239 100% 65%;
 
-    /* Success - AYVO Mint (#4BE3C6) */
+    /* Success - Mint (#4BE3C6) */
     --success: 168 72% 59%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning - AYVO Amber (#FFB457) */
+    /* Warning - Amber (#FFB457) */
     --warning: 32 100% 67%;
     --warning-foreground: 240 20% 15%;
 
     /* Radius */
     --radius: 0.75rem;
     
-    /* AYVO shadows */
+    /* Shadows */
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
     --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
     --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
     
-    /* Button shadows with AYVO primary tint */
+    /* Button shadows with primary tint */
     --shadow-button: 0 2px 8px rgba(76, 78, 255, 0.25);
     --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.05);
     
-    /* AYVO glow accent */
-    --ayvo-glow: rgba(76, 78, 255, 0.15);
+    /* Glow accent */
+    --ayro-glow: rgba(76, 78, 255, 0.15);
     
-    /* AYVO gradients */
+    /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(239 100% 65%), hsl(239 100% 70%));
     --gradient-hero: linear-gradient(135deg, hsl(239 100% 65%) 0%, hsl(239 100% 75%) 100%);
     --gradient-glow: radial-gradient(circle at 50% 50%, rgba(76, 78, 255, 0.12), transparent 70%);
@@ -103,9 +103,9 @@
   }
 
   .dark {
-    /* AYVO Dark Mode - Premium Default (#1B1D2A) */
+    /* Ayro Dark Mode - Premium Default (#1B1D2A) */
     
-    /* AYVO Dark Background */
+    /* Dark Background */
     --background: 235 22% 14%;
     --foreground: 240 25% 97%;
 
@@ -116,7 +116,7 @@
     --popover: 235 20% 18%;
     --popover-foreground: 240 25% 97%;
 
-    /* AYVO Primary (#4C4EFF) */
+    /* Ayro Primary (#4C4EFF) */
     --primary: 239 100% 65%;
     --primary-foreground: 0 0% 100%;
 
@@ -134,7 +134,7 @@
     --accent: 157 100% 89%;
     --accent-foreground: 235 22% 14%;
 
-    /* Error - AYVO Coral */
+    /* Error - Coral */
     --destructive: 0 100% 71%;
     --destructive-foreground: 0 0% 100%;
 
@@ -143,11 +143,11 @@
     --input: 235 20% 20%;
     --ring: 239 100% 65%;
     
-    /* Success - AYVO Mint */
+    /* Success - Mint */
     --success: 168 72% 55%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning - AYVO Amber */
+    /* Warning - Amber */
     --warning: 32 100% 62%;
     --warning-foreground: 235 22% 14%;
     
@@ -161,7 +161,7 @@
     --shadow-button: 0 2px 12px rgba(76, 78, 255, 0.35);
     --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.4);
     
-    --ayvo-glow: rgba(76, 78, 255, 0.25);
+    --ayro-glow: rgba(76, 78, 255, 0.25);
     
     --gradient-hero: linear-gradient(135deg, hsl(239 100% 55%) 0%, hsl(239 100% 65%) 100%);
     --gradient-glow: radial-gradient(circle at 50% 50%, rgba(76, 78, 255, 0.2), transparent 70%);
@@ -213,23 +213,23 @@
     scrollbar-width: none;
   }
   
-  /* AYVO glow effect for active elements */
-  .ayvo-glow {
-    box-shadow: 0 0 20px var(--ayvo-glow);
+  /* Glow effect for active elements */
+  .ayro-glow {
+    box-shadow: 0 0 20px var(--ayro-glow);
   }
   
-  /* AYVO button shadow */
-  .shadow-ayvo {
+  /* Button shadow */
+  .shadow-ayro {
     box-shadow: var(--shadow-button);
   }
   
-  /* AYVO card shadow */
-  .shadow-ayvo-card {
+  /* Card shadow */
+  .shadow-ayro-card {
     box-shadow: var(--shadow-md);
   }
   
-  /* AYVO nav shadow */
-  .shadow-ayvo-nav {
+  /* Nav shadow */
+  .shadow-ayro-nav {
     box-shadow: var(--shadow-nav);
   }
   
@@ -279,7 +279,7 @@
   @apply text-xs sm:text-[14px] text-muted-foreground;
 }
 
-/* AYVO Card styles - radius 12px, clean shadow */
+/* Card styles - radius 12px, clean shadow */
 .app-card {
   @apply bg-card border-border rounded-xl;
   box-shadow: var(--shadow-sm);
@@ -297,19 +297,19 @@
   @apply text-xl sm:text-2xl font-semibold;
 }
 
-/* AYVO Button - clean, professional */
-.ayvo-button {
+/* Button - clean, professional */
+.ayro-button {
   @apply relative overflow-hidden rounded-lg font-medium;
   box-shadow: var(--shadow-button);
   transition: var(--transition-smooth);
 }
 
-.ayvo-button:hover {
+.ayro-button:hover {
   box-shadow: 0 4px 16px rgba(76, 78, 255, 0.4);
   transform: translateY(-1px);
 }
 
-/* AYVO Active nav/tab glow */
-.ayvo-active {
-  box-shadow: 0 0 12px var(--ayvo-glow);
+/* Active nav/tab glow */
+.ayro-active {
+  box-shadow: 0 0 12px var(--ayro-glow);
 }
