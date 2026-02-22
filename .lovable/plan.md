@@ -1,42 +1,51 @@
 
 
-# Fix Modelli AI: GPT-OSS + DeepSeek R1 Fallback
+# Internazionalizzazione Completa: da 3 a 22+ Lingue
 
-## Azione utente richiesta (PRIMA del deploy)
+## Situazione Attuale
+- 3 lingue supportate: Italiano (it), English (en), Espanol (es)
+- 3 file JSON di traduzione in `src/i18n/locales/`
+- Selettore lingua in SettingsPage con 3 opzioni
+- AI assistant (responder.ts) supporta solo it/en/es
 
-Vai su **https://openrouter.ai/settings/privacy** e abilita "Allow free model providers to use my data". Senza questo, GPT-OSS-120B:free restituisce 404.
+## Lingue da Aggiungere (19 nuove)
 
-La chiave `sk-or-v1-...` che hai fornito e' una chiave OpenRouter (non specifica per GPT-OSS). Se e' diversa da quella gia' salvata come `OPENROUTER_API_KEY`, la aggiorneremo. Se e' la stessa, non serve cambiarla.
+| Codice | Lingua | Codice | Lingua |
+|--------|--------|--------|--------|
+| ru | Russo | pl | Polacco |
+| fr | Francese | sv | Svedese |
+| de | Tedesco | no | Norvegese |
+| nl | Olandese | da | Danese |
+| hr | Croato | lt | Lituano |
+| sq | Albanese | lv | Lettone |
+| ro | Romeno | et | Estone |
+| zh | Cinese | pt | Portoghese |
+| ja | Giapponese | ko | Coreano |
+| hi | Hindi | | |
 
-## Modifica codice
+## Modifiche Necessarie
 
-**File:** `supabase/functions/ai-free-chat/analyzeCore.ts`
+### 1. Creare 19 file di traduzione
+Per ogni nuova lingua, creare `src/i18n/locales/{codice}.json` con la stessa struttura di `en.json` (~168 righe), tradotto nella lingua corretta.
 
-```text
-PRIMA:
-  "openai/gpt-oss-120b:free",
-  "google/gemini-2.0-flash-exp:free",
-  "deepseek/deepseek-chat-v3-0324:free",
+### 2. Aggiornare `src/i18n/config.ts`
+- Importare tutti i 22 file JSON
+- Registrarli nell'oggetto `resources` di i18next
 
-DOPO:
-  "openai/gpt-oss-120b:free",
-  "deepseek/deepseek-r1-0528:free",
-```
+### 3. Aggiornare `src/pages/SettingsPage.tsx`
+- Espandere il `<Select>` delle lingue da 3 a 22 opzioni con bandiera emoji e nome nella lingua nativa
 
-- Gemini Flash Exp: rimosso (ritirato, 404)
-- DeepSeek Chat v3: rimosso (ritirato, 404)
-- DeepSeek R1 0528: unico modello DeepSeek free ancora disponibile su OpenRouter
+### 4. Aggiornare `supabase/functions/ai-free-chat/responder.ts`
+- Aggiungere le traduzioni per le risposte dell'assistente AI (greetings, translated replies, default suggestions) per tutte le 22 lingue
+- Aggiornare i formatters per usare la locale corretta
 
-## Nota su DeepSeek R1 come fallback
+### 5. Deploy Edge Function
+- Re-deploy `ai-free-chat` per attivare le nuove risposte multilingue
 
-R1 genera tag `<think>...</think>` nelle risposte. Il codice li gestisce gia':
-```
-cleanContent = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-```
-
-Quindi funziona come fallback senza problemi.
-
-## Deploy
-
-Deploy automatico della Edge Function `ai-free-chat` dopo la modifica.
+## Note Tecniche
+- Ogni file JSON contiene circa 90 chiavi di traduzione
+- Le traduzioni saranno accurate e nella lingua nativa (non traduzioni automatiche approssimative)
+- Il sistema i18next gestisce gia' il fallback su `en` se una chiave manca
+- L'AI assistant usera' la lingua dell'utente (dalle settings) per le risposte deterministiche del router
+- Nessuna modifica al database necessaria (il campo `language` in settings e' gia' un testo libero)
 
