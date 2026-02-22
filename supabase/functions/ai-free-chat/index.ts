@@ -21,7 +21,8 @@ import { validateItems, buildMissingFieldQuestion } from "./validator.ts";
 import { itemToAction, buildSingleConfirmation, buildMultiConfirmation, buildMultiConfirmMessage } from "./confirmer.ts";
 import { 
   getAssistantState, updateAssistantState, clearAssistantState,
-  getPendingAction, setPendingAction, fetchUserContext, loadPreferredLanguage 
+  getPendingAction, setPendingAction, fetchUserContext, loadPreferredLanguage,
+  checkRateLimit, logAIRequest, getCachedAnalysis, setCachedAnalysis
 } from "./state.ts";
 import { executeAction } from "./executor.ts";
 import { randomGreeting, t, defaultSuggestions, formatTaskList, formatEventList, formatBudget } from "./responder.ts";
@@ -320,11 +321,38 @@ serve(async (req) => {
     }
 
     // ================================================================
-    // === LAYER 1: ANALYZE (LLM) ===
+    // === RATE LIMIT CHECK ===
+    // ================================================================
+    const rateLimit = await checkRateLimit(supabase, userId);
+    if (!rateLimit.allowed) {
+      console.log(`[Ayro] Rate limit exceeded for user ${userId}`);
+      return json(createResponse({
+        intent: "ERROR",
+        reply: `Hai raggiunto il limite giornaliero di ${rateLimit.limit} messaggi AI. Riprova domani! 🕐`,
+        suggestions: ["Mostra task", "Mostra eventi", "Mostra spese"]
+      }));
+    }
+
+    // ================================================================
+    // === CACHE CHECK ===
     // ================================================================
     const textToAnalyze = input.isCancel && input.cancelContinuation ? input.cancelContinuation : input.normalizedText;
-    console.log("[Ayro] === L1: ANALYZE ===");
-    const analysis: AnalyzeResult = await analyzeMessage(textToAnalyze);
+    const cachedResult = await getCachedAnalysis(supabase, textToAnalyze);
+
+    let analysis: AnalyzeResult;
+    if (cachedResult) {
+      console.log("[Ayro] === L1: CACHE HIT ===");
+      analysis = cachedResult as AnalyzeResult;
+    } else {
+      // === LAYER 1: ANALYZE (LLM) ===
+      await logAIRequest(supabase, userId);
+      console.log("[Ayro] === L1: ANALYZE ===");
+      analysis = await analyzeMessage(textToAnalyze);
+      // Cache the result (fire-and-forget)
+      if (analysis.items && analysis.items.length > 0) {
+        setCachedAnalysis(supabase, userId, textToAnalyze, analysis);
+      }
+    }
     console.log("[Ayro] Analyze result:", JSON.stringify(analysis, null, 2));
 
     // If no items, fallback to deterministic router
