@@ -94,6 +94,100 @@ export async function clearAssistantState(supabase: any, userId: string): Promis
 }
 
 // ============================================================================
+// RATE LIMITING
+// ============================================================================
+
+const FREE_DAILY_LIMIT = 10;
+const PREMIUM_DAILY_LIMIT = 200;
+
+export async function checkRateLimit(
+  supabase: any,
+  userId: string,
+  isPremium: boolean = false
+): Promise<{ allowed: boolean; remaining: number; limit: number }> {
+  const limit = isPremium ? PREMIUM_DAILY_LIMIT : FREE_DAILY_LIMIT;
+
+  const { count, error } = await supabase
+    .from("ai_requests")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+  if (error) {
+    console.error("[STATE] Rate limit check error:", error);
+    // Fail open: allow the request if we can't check
+    return { allowed: true, remaining: limit, limit };
+  }
+
+  const used = count || 0;
+  const remaining = Math.max(0, limit - used);
+  console.log(`[STATE] Rate limit: ${used}/${limit} used, ${remaining} remaining`);
+
+  return { allowed: used < limit, remaining, limit };
+}
+
+export async function logAIRequest(supabase: any, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("ai_requests")
+    .insert({ user_id: userId, endpoint: "ai-free-chat" });
+
+  if (error) {
+    console.error("[STATE] Failed to log AI request:", error);
+  }
+}
+
+// ============================================================================
+// CACHE
+// ============================================================================
+
+const CACHE_TTL_HOURS = 24;
+
+async function hashMessage(message: string): Promise<string> {
+  const normalized = message.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
+  const encoder = new TextEncoder();
+  const data = encoder.encode(normalized);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function getCachedAnalysis(supabase: any, message: string): Promise<any | null> {
+  try {
+    const hash = await hashMessage(message);
+    const cutoff = new Date(Date.now() - CACHE_TTL_HOURS * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from("ai_cache")
+      .select("result")
+      .eq("prompt_hash", hash)
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data?.result) return null;
+
+    console.log("[STATE] Cache HIT for:", message.substring(0, 50));
+    return data.result;
+  } catch (e) {
+    console.error("[STATE] Cache read error:", e);
+    return null;
+  }
+}
+
+export async function setCachedAnalysis(supabase: any, userId: string, message: string, result: any): Promise<void> {
+  try {
+    const hash = await hashMessage(message);
+    await supabase
+      .from("ai_cache")
+      .insert({ user_id: userId, prompt_hash: hash, result });
+    console.log("[STATE] Cache SET for:", message.substring(0, 50));
+  } catch (e) {
+    console.error("[STATE] Cache write error:", e);
+  }
+}
+
+// ============================================================================
 // USER CONTEXT
 // ============================================================================
 
