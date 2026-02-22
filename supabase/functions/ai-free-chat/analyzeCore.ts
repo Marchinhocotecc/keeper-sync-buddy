@@ -39,8 +39,7 @@ export interface AnalyzeResult {
 
 const FALLBACK_MODELS = [
   "openai/gpt-oss-120b:free",
-  "google/gemini-2.0-flash-exp:free",
-  "deepseek/deepseek-chat-v3-0324:free",
+  "deepseek/deepseek-r1-0528:free",
 ];
 
 // ============================================================================
