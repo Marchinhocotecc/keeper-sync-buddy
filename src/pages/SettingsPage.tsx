@@ -315,10 +315,29 @@ export default function SettingsPage() {
                   <SelectTrigger className="h-10 sm:h-11 mt-2 text-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-64">
                     <SelectItem value="it">🇮🇹 Italiano</SelectItem>
                     <SelectItem value="en">🇬🇧 English</SelectItem>
                     <SelectItem value="es">🇪🇸 Español</SelectItem>
+                    <SelectItem value="fr">🇫🇷 Français</SelectItem>
+                    <SelectItem value="de">🇩🇪 Deutsch</SelectItem>
+                    <SelectItem value="pt">🇵🇹 Português</SelectItem>
+                    <SelectItem value="ru">🇷🇺 Русский</SelectItem>
+                    <SelectItem value="zh">🇨🇳 中文</SelectItem>
+                    <SelectItem value="ja">🇯🇵 日本語</SelectItem>
+                    <SelectItem value="ko">🇰🇷 한국어</SelectItem>
+                    <SelectItem value="hi">🇮🇳 हिन्दी</SelectItem>
+                    <SelectItem value="nl">🇳🇱 Nederlands</SelectItem>
+                    <SelectItem value="pl">🇵🇱 Polski</SelectItem>
+                    <SelectItem value="sv">🇸🇪 Svenska</SelectItem>
+                    <SelectItem value="no">🇳🇴 Norsk</SelectItem>
+                    <SelectItem value="da">🇩🇰 Dansk</SelectItem>
+                    <SelectItem value="ro">🇷🇴 Română</SelectItem>
+                    <SelectItem value="hr">🇭🇷 Hrvatski</SelectItem>
+                    <SelectItem value="sq">🇦🇱 Shqip</SelectItem>
+                    <SelectItem value="lt">🇱🇹 Lietuvių</SelectItem>
+                    <SelectItem value="lv">🇱🇻 Latviešu</SelectItem>
+                    <SelectItem value="et">🇪🇪 Eesti</SelectItem>
                   </SelectContent>
                 </Select>
               </CardContent>
