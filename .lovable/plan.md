@@ -1,191 +1,116 @@
 
-# Piano Completo: Ayro Native APK con Capacitor
 
-## Obiettivo
+# Piano: Rate Limiting per Utente + Caching Intelligente
 
-Trasformare Ayro (attualmente PWA/web) in un'app nativa Android (APK) installabile su qualsiasi dispositivo Android, usando Capacitor come bridge tra React e il sistema operativo nativo.
+## 1. Rate Limiting (Edge Function)
 
-## Architettura Risultante
+### Dove agisce
+Il rate limiter viene inserito nella Edge Function `ai-free-chat/index.ts`, subito dopo l'autenticazione e **prima** di qualsiasi chiamata LLM (Layer 1). Questo blocca la richiesta prima che raggiunga OpenRouter.
 
-```text
-PRIMA (attuale)
-  Browser Web
-      |
-   React App (Vite)
-      |
-   Supabase
+### Logica
+- Conta le righe in `ai_requests` per lo `user_id` nelle ultime 24 ore
+- FREE: max 10 messaggi AI/giorno (solo le chiamate che arrivano al Layer 1 - Analyze contano; greeting, cancel, confirm, query NON contano)
+- PREMIUM: 200/giorno (soft cap, per ora tutti sono FREE)
+- Se il limite e' superato, restituisce un messaggio chiaro senza chiamare OpenRouter
 
-DOPO (APK)
-  Android WebView (Capacitor)
-      |
-   React App (Vite build)
-      |
-   Capacitor Bridge (accesso API native)
-      |
-   Supabase (invariato)
-```
+### Implementazione
+- Nuova funzione `checkRateLimit(supabase, userId)` in `state.ts`
+- Query: `SELECT count(*) FROM ai_requests WHERE user_id = $1 AND created_at > now() - interval '24 hours'`
+- Inserimento in `ai_requests` avviene solo quando si chiama effettivamente l'LLM (riga ~327 di index.ts, prima di `analyzeMessage`)
+- Il check avviene nella stessa posizione, prima del Layer 1
 
-## Problemi Critici Identificati
+### Cosa cambia nei file
+**`supabase/functions/ai-free-chat/state.ts`**: aggiunta funzione `checkRateLimit` e `logAIRequest`
 
-### 1. Auth Storage - localStorage
-**File:** `src/integrations/supabase/client.ts`
+**`supabase/functions/ai-free-chat/index.ts`**: 
+- Prima del commento `=== LAYER 1: ANALYZE ===` (riga ~322), inserire:
+  1. `checkRateLimit()` - se superato, ritorna errore
+  2. `logAIRequest()` - se passato, registra la richiesta
+- Greeting, cancel, confirm, slot-filling, query NON passano per il rate limiter (sono gia' gestiti prima del Layer 1)
 
-```typescript
-// PROBLEMA ATTUALE
-auth: {
-  storage: localStorage,  // crash/perdita sessione in background Android
-}
+---
 
-// SOLUZIONE
-// Usare @capacitor/preferences per storage nativo persistente
-```
+## 2. Caching Intelligente (Edge Function)
 
-Il `localStorage` WebView Android può essere svuotato dal sistema quando l'app va in background. L'utente si ritrova sloggato ogni volta.
+### Dove agisce
+Il cache si inserisce tra il rate limit check e la chiamata LLM (Layer 1). Usa la tabella `ai_cache` gia' esistente.
 
-### 2. Deep Link email di conferma
-**File:** `src/pages/AuthPage.tsx`
+### Logica
+- Hash SHA-256 del messaggio normalizzato (lowercase, trim, senza punteggiatura extra)
+- Prima di chiamare `analyzeMessage()`, cerca in `ai_cache` un risultato con lo stesso hash creato nelle ultime 24 ore
+- Se trovato: restituisce il risultato cached senza chiamare OpenRouter e senza consumare rate limit
+- Se non trovato: chiama LLM, salva il risultato in `ai_cache`
 
-```typescript
-// PROBLEMA ATTUALE
-emailRedirectTo: `${window.location.origin}/`
-// In APK: window.location.origin = "" o URL non valido
+### Cosa viene cachato
+- Messaggi identici o quasi identici tra utenti diversi (es. "mostra i miei task" ha sempre la stessa analisi strutturale)
+- Il cache e' globale (non per utente) perche' l'analisi LLM e' indipendente dall'utente - estrae solo intent/struttura
+- TTL: 24 ore (i risultati vecchi vengono ignorati)
 
-// SOLUZIONE
-emailRedirectTo: `io.ayro.app://auth-callback`
-// URL scheme nativo che Capacitor intercetta
-```
+### Cosa NON viene cachato
+- Query che dipendono dal contesto utente (i dati utente sono caricati DOPO l'analisi)
+- Greeting e cancel (gia' gestiti senza LLM)
+- Risposte con errori
 
-Senza deep link configurato, il link di conferma email apre il browser esterno e non rientra nell'app.
+### Policy RLS mancante
+La tabella `ai_cache` non ha policy INSERT. Serve aggiungere una policy per permettere l'inserimento dalla Edge Function (che usa service_role_key, quindi bypassa RLS). Nessuna migrazione necessaria: il service role key bypassa RLS.
 
-### 3. Notifiche - Web Notifications API
-**File:** `src/services/notificationService.ts`
+### Implementazione
+**`supabase/functions/ai-free-chat/state.ts`**: aggiunta funzioni `getCachedAnalysis` e `setCachedAnalysis`
 
-```typescript
-// PROBLEMA ATTUALE
-if (!('Notification' in window)) return false; // sempre false in WebView
-new Notification(title, { body })              // non funziona in APK
+**`supabase/functions/ai-free-chat/index.ts`**:
+- Prima di `analyzeMessage()`, check cache
+- Dopo `analyzeMessage()` con successo, salva in cache
+- Se cache hit: skip rate limit increment (non ha consumato OpenRouter)
 
-// SOLUZIONE
-// Rilevamento piattaforma + fallback graceful
-// Notifiche attive solo se browser (PWA)
-// APK: disabilitare silenziosamente senza crash
-```
+---
 
-In Android WebView, l'API `Notification` non esiste. Il servizio attuale non crasha ma diventa completamente non funzionale senza feedback.
-
-### 4. window.focus()
-**File:** `src/services/notificationService.ts` (riga 129)
-
-```typescript
-// PROBLEMA ATTUALE
-notification.onclick = () => {
-  window.focus(); // no-op in WebView, warning a runtime
-  notification.close();
-};
-
-// SOLUZIONE: rimuovere window.focus()
-```
-
-## File da Modificare
+## Schema dei file modificati
 
 | File | Modifica |
 |------|----------|
-| `package.json` | Aggiungere `@capacitor/core`, `@capacitor/android` come dipendenze |
-| `capacitor.config.ts` | Nuovo file di configurazione Capacitor |
-| `src/integrations/supabase/client.ts` | Sostituire `localStorage` con storage compatibile |
-| `src/pages/AuthPage.tsx` | Fix `emailRedirectTo` per deep link nativo |
-| `src/services/notificationService.ts` | Guard per WebView + rimuovere `window.focus()` |
-| `vite.config.ts` | Nessuna modifica (già compatibile) |
+| `supabase/functions/ai-free-chat/state.ts` | +4 funzioni: `checkRateLimit`, `logAIRequest`, `getCachedAnalysis`, `setCachedAnalysis` |
+| `supabase/functions/ai-free-chat/index.ts` | +~25 righe prima del Layer 1: rate limit check, cache check, cache save, request log |
 
-## Passi di Implementazione
+Nessuna migrazione database necessaria (tabelle `ai_requests` e `ai_cache` esistono gia').
 
-### Step 1 - Dipendenze Capacitor
-Aggiungere al `package.json`:
-- `@capacitor/core` (runtime Capacitor nel browser/WebView)
-- `@capacitor/android` (solo per build nativa, dev dependency)
-- `@capacitor/cli` (strumenti CLI, dev dependency)
-- `@capacitor/preferences` (storage nativo sicuro, sostituisce localStorage)
+---
 
-### Step 2 - capacitor.config.ts
-Creare il file di configurazione con:
-- `appId: "io.ayro.app"` (bundle ID univoco Android)
-- `appName: "Ayro"`
-- `webDir: "dist"` (output di `vite build`)
-- `server.url` con live reload (per sviluppo)
-- `android.allowMixedContent: true`
+## Flusso risultante
 
-### Step 3 - Fix Auth Storage
-In `src/integrations/supabase/client.ts`:
-
-Creare un adapter custom che usa `@capacitor/preferences` in ambiente nativo e `localStorage` in browser. Il client Supabase accetta qualsiasi oggetto con interfaccia `{ getItem, setItem, removeItem }`.
-
-```typescript
-// Adapter compatibile con entrambi gli ambienti
-const storage = isNative() ? capacitorStorage : localStorage;
-export const supabase = createClient(URL, KEY, { auth: { storage } });
+```text
+Messaggio utente
+    |
+[Auth]
+    |
+[Layer 0: Normalize]
+    |
+[Greeting/Cancel/Confirm/Query?] --> risposta diretta (no LLM, no rate limit)
+    |
+[Rate Limit Check] --> superato? --> "Hai raggiunto il limite giornaliero"
+    |
+[Cache Check] --> hit? --> usa risultato cached (no LLM call)
+    |
+[Log AI Request] (conta nel rate limit)
+    |
+[Layer 1: Analyze (LLM)]
+    |
+[Cache Save] (salva risultato per richieste future)
+    |
+[Layer 2-6: Validate, Confirm, Execute, Respond]
 ```
 
-### Step 4 - Fix Deep Link Auth
-In `src/pages/AuthPage.tsx`:
+---
 
-```typescript
-const getRedirectUrl = () => {
-  // In APK usa custom URL scheme
-  if (isNativePlatform()) return 'io.ayro.app://auth-callback';
-  // In browser usa origin normale
-  return `${window.location.origin}/`;
-};
+## Dettaglio tecnico: costanti
+
+```text
+FREE_DAILY_LIMIT = 10
+PREMIUM_DAILY_LIMIT = 200
+CACHE_TTL_HOURS = 24
 ```
 
-Configurare anche `AndroidManifest.xml` con intent-filter per intercettare `io.ayro.app://` (fatto tramite `capacitor.config.ts`).
+Il limite di 10 messaggi AI/giorno per FREE e' calibrato per:
+- 1000 utenti attivi = max 10.000 chiamate OpenRouter/giorno
+- Con cache ~30% hit rate = ~7.000 chiamate effettive
+- Ampiamente sotto i limiti dei modelli free (~20 req/min)
 
-### Step 5 - Fix Notification Service
-In `src/services/notificationService.ts`:
-
-- Aggiungere check `isNativePlatform()` all'inizio di `initNotificationService`
-- In ambiente nativo: restituire `false` senza errori (nessun crash)
-- Rimuovere `window.focus()` dalla callback `onclick`
-- Lasciare tutto il resto invariato (scheduling Supabase funziona uguale)
-
-## Cosa NON cambia
-
-- Tutta la logica business (task, eventi, spese, assistente)
-- Supabase URL, chiavi, schema database
-- Edge functions
-- UI e stile (Tailwind, shadcn/ui)
-- React Router (funziona con `BrowserRouter` in Capacitor)
-
-## Istruzioni Post-Deploy (manuali - non automatizzabili)
-
-Dopo che il codice sarà aggiornato, per generare l'APK dovrai:
-
-1. **Esportare su GitHub** tramite il tasto "Export to Github" in Lovable
-2. **Git clone** sul tuo computer
-3. Eseguire:
-   ```bash
-   npm install
-   npx cap add android
-   npx cap sync
-   npm run build
-   npx cap sync
-   npx cap run android
-   ```
-4. Serve **Android Studio** installato sul tuo PC
-5. L'APK debug sarà generabile direttamente da Android Studio (Build > Build APK)
-
-**Costo:** Nessuno (strumenti open source). Google Play Store richiede $25 una tantum solo se vuoi pubblicarlo.
-
-## Nota sul sistema di notifiche
-
-Le notifiche native Android richiederebbero `@capacitor/push-notifications` + un server FCM (Firebase Cloud Messaging). Questo va oltre lo scope attuale.
-
-Il piano corrente: le notifiche vengono disabilitate silenziosamente sull'APK (nessun crash). L'architettura Supabase `scheduled_notifications` rimane intatta e potrà essere connessa a notifiche native in un secondo momento.
-
-## Risultato Finale
-
-L'APK di Ayro sarà:
-- Installabile su Android senza Play Store (sideload)
-- Sessione auth persistente anche dopo background
-- Deep link email funzionante
-- Nessun crash da API web non supportate
-- Pronto per pubblicazione Play Store
