@@ -3,10 +3,12 @@ import { Button } from '@/components/ui/button';
 import { TaskCard } from '@/components/TaskCard';
 import { AddTaskForm } from '@/components/AddTaskForm';
 import { WellnessCard } from '@/components/WellnessCard';
+import { FinancialInsightCard } from '@/components/FinancialInsightCard';
 import { Plus, AlertCircle, CheckCircle2, Clock, Flag, TrendingUp, Wallet } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useHomeData } from '@/hooks/useHomeData';
+import { useFinancialInsights } from '@/hooks/useFinancialInsights';
 import { useExpenses } from '@/hooks/useExpenses';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +22,7 @@ export default function HomePage() {
   const { tasks, addTask, toggleTask, deleteTask } = useTasks(userId);
   const { addEvent, updateEvent, deleteEvent } = useCalendarEvents(userId);
   const { expenses } = useExpenses(userId);
+  const { insight } = useFinancialInsights(userId);
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Quick stats
@@ -245,6 +248,13 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Financial Insight Card */}
+        {insight && userId && (
+          <div className="mb-6 animate-fade-in">
+            <FinancialInsightCard insight={insight} userId={userId} />
+          </div>
+        )}
 
         <div className="grid gap-5 sm:gap-6 lg:grid-cols-3">
           {/* Tasks Section */}

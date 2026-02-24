@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FinancialInsightCard } from '@/components/FinancialInsightCard';
+import { useFinancialInsights } from '@/hooks/useFinancialInsights';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +19,16 @@ import { getMonthlyBudget, upsertMonthlyBudget } from '@/services/budgetService'
 
 // Ayro Palette colors for charts
 const COLORS = ['#4C4EFF', '#5B8CFF', '#76A4FF', '#4BE3C6', '#FFB457', '#FF6B6B', '#CFE1FF'];
+
+function FinancialInsightSection({ userId }: { userId: string }) {
+  const { insight } = useFinancialInsights(userId);
+  if (!insight) return null;
+  return (
+    <div className="mb-6 animate-fade-in">
+      <FinancialInsightCard insight={insight} userId={userId} />
+    </div>
+  );
+}
 
 export default function ExpensesPage() {
   const { t } = useTranslation();
@@ -222,6 +234,9 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Financial Insight Card */}
+        <FinancialInsightSection userId={userId} />
 
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
           <Card className="app-card">

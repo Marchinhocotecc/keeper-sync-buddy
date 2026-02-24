@@ -94,6 +94,28 @@ export async function clearAssistantState(supabase: any, userId: string): Promis
 }
 
 // ============================================================================
+// FINANCIAL PROFILE HELPERS
+// ============================================================================
+
+export async function loadFinancialProfile(supabase: any, userId: string): Promise<any> {
+  const state = await getAssistantState(supabase, userId);
+  return state.intent_payload?.financialProfile || null;
+}
+
+export async function saveFinancialProfile(supabase: any, userId: string, profile: any): Promise<void> {
+  const current = await getAssistantState(supabase, userId);
+  const currentPayload = current.intent_payload || {};
+  
+  await supabase
+    .from("assistant_state")
+    .upsert({
+      user_id: userId,
+      intent_payload: { ...currentPayload, financialProfile: profile },
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id" });
+}
+
+// ============================================================================
 // RATE LIMITING
 // ============================================================================
 
