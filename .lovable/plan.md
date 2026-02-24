@@ -1,51 +1,119 @@
 
 
-# Internazionalizzazione Completa: da 3 a 22+ Lingue
+# Ayro: Motore Decisionale Adattivo - Piano di Implementazione
 
-## Situazione Attuale
-- 3 lingue supportate: Italiano (it), English (en), Espanol (es)
-- 3 file JSON di traduzione in `src/i18n/locales/`
-- Selettore lingua in SettingsPage con 3 opzioni
-- AI assistant (responder.ts) supporta solo it/en/es
+## Panoramica
 
-## Lingue da Aggiungere (19 nuove)
+Implementazione completa dell'architettura a 7 layer (Layer 0-6) per trasformare Ayro da tracker reattivo a motore decisionale adattivo con identita finanziaria.
 
-| Codice | Lingua | Codice | Lingua |
-|--------|--------|--------|--------|
-| ru | Russo | pl | Polacco |
-| fr | Francese | sv | Svedese |
-| de | Tedesco | no | Norvegese |
-| nl | Olandese | da | Danese |
-| hr | Croato | lt | Lituano |
-| sq | Albanese | lv | Lettone |
-| ro | Romeno | et | Estone |
-| zh | Cinese | pt | Portoghese |
-| ja | Giapponese | ko | Coreano |
-| hi | Hindi | | |
+**Nessuna migrazione database necessaria** -- tutto salvato in `assistant_state.intent_payload` (JSONB).
 
-## Modifiche Necessarie
+---
 
-### 1. Creare 19 file di traduzione
-Per ogni nuova lingua, creare `src/i18n/locales/{codice}.json` con la stessa struttura di `en.json` (~168 righe), tradotto nella lingua corretta.
+## Dettagli Tecnici
 
-### 2. Aggiornare `src/i18n/config.ts`
-- Importare tutti i 22 file JSON
-- Registrarli nell'oggetto `resources` di i18next
+### Nuovi File (8)
 
-### 3. Aggiornare `src/pages/SettingsPage.tsx`
-- Espandere il `<Select>` delle lingue da 3 a 22 opzioni con bandiera emoji e nome nella lingua nativa
+| # | File | Layer | Descrizione |
+|---|------|-------|-------------|
+| 1 | `src/services/financialState.ts` | 0 | Stato persistente: load/save `financialProfile` da `assistant_state.intent_payload` |
+| 2 | `src/services/financialSignals.ts` | 1 | Funzione pura `generateFinancialSignals(userId)`: burnRate, proiezione, impulseCount, weeklyTrend, categoryBreakdown |
+| 3 | `src/services/riskEngine.ts` | 2 | `evaluateRisk(signals, profile)` con soglie adattive per behavioralType + `classifyBehavior()` |
+| 4 | `src/services/quarterlyProjection.ts` | 5 | `generateProjection(signals, profile)` -- scenari deterministici a 3 mesi |
+| 5 | `src/services/actionTracker.ts` | 4 | Tracking azioni (shown/clicked/completed/ignored), calcolo `suggestionAcceptanceRate` |
+| 6 | `supabase/functions/ai-free-chat/financialAdvisor.ts` | 3 | Modulo LLM strategico: riceve signals+risk+profile, produce FinancialAdvice validato con Zod |
+| 7 | `src/hooks/useFinancialInsights.ts` | 6 | Hook React orchestratore: chiama L0-L5, gestisce regole trigger (max 1/giorno, anti-assuefazione) |
+| 8 | `src/components/FinancialInsightCard.tsx` | 6 | Card UI proattiva con indicatore rischio, summary AI, bottoni azione tracciati |
 
-### 4. Aggiornare `supabase/functions/ai-free-chat/responder.ts`
-- Aggiungere le traduzioni per le risposte dell'assistente AI (greetings, translated replies, default suggestions) per tutte le 22 lingue
-- Aggiornare i formatters per usare la locale corretta
+### File Modificati (4)
 
-### 5. Deploy Edge Function
-- Re-deploy `ai-free-chat` per attivare le nuove risposte multilingue
+| File | Modifica |
+|------|----------|
+| `src/pages/HomePage.tsx` | Importare e mostrare `FinancialInsightCard` sopra i task |
+| `src/pages/ExpensesPage.tsx` | Mostrare `FinancialInsightCard` dopo le summary cards |
+| `supabase/functions/ai-free-chat/index.ts` | Aggiungere gestione intent `FINANCIAL_ADVICE` che invoca `financialAdvisor.ts` |
+| `supabase/functions/ai-free-chat/state.ts` | Aggiungere helpers `loadFinancialProfile()` e `saveFinancialProfile()` |
 
-## Note Tecniche
-- Ogni file JSON contiene circa 90 chiavi di traduzione
-- Le traduzioni saranno accurate e nella lingua nativa (non traduzioni automatiche approssimative)
-- Il sistema i18next gestisce gia' il fallback su `en` se una chiave manca
-- L'AI assistant usera' la lingua dell'utente (dalle settings) per le risposte deterministiche del router
-- Nessuna modifica al database necessaria (il campo `language` in settings e' gia' un testo libero)
+### Architettura dei Dati
+
+Tutto salvato in `assistant_state.intent_payload`:
+
+```text
+intent_payload: {
+  // ...campi esistenti (pendingAction, preferences, ecc.)
+  
+  financialProfile: {
+    rollingBurnRate7d: number
+    volatilityScore: number
+    consistencyScore: number
+    behavioralType: "cautious" | "balanced" | "impulsive" | "growth_oriented"
+    lastRiskLevel: "safe" | "warning" | "critical"
+    riskTrend: "improving" | "stable" | "worsening"
+    suggestionAcceptanceRate: number
+    lastInsightShownAt: string       // ISO date
+    ignoredConsecutive: number        // contatore warning ignorati
+    monthlySnapshots: [{month, year, totalSpent, budget, burnRate}]
+  },
+  
+  actionHistory: [{
+    id: string
+    type: "create_task" | "adjust_budget" | "set_limit"
+    title: string
+    shownAt: string
+    clickedAt?: string
+    completedAt?: string
+    ignored: boolean
+  }]
+}
+```
+
+### Flusso Runtime
+
+```text
+HomePage/ExpensesPage monta
+  → useFinancialInsights(userId)
+    → loadFinancialProfile()              [Layer 0]
+    → generateFinancialSignals(userId)    [Layer 1]
+    → evaluateRisk(signals, profile)      [Layer 2]
+    → classifyBehavior(signals, profile)  [Layer 2.5]
+    → if shouldShowInsight:
+        → generateProjection(signals, profile)  [Layer 5]
+        → call edge function FINANCIAL_ADVICE   [Layer 3]
+          → LLM interpreta con profilo
+          → Zod valida output
+          → fallback deterministico se invalido
+        → trackActionShown()              [Layer 4]
+        → render FinancialInsightCard     [Layer 6]
+```
+
+### Regole Trigger (Layer 6)
+
+- Max 1 insight al giorno (`lastInsightShownAt`)
+- Escalation solo se `riskTrend === "worsening"`
+- Dopo 3 warning ignorati consecutivi: pausa 3 giorni
+- Prima apertura del mese: sempre mostra riepilogo
+- Anti-assuefazione: non ripetere suggerimenti gia ignorati
+
+### Soglie Adattive (Layer 2)
+
+```text
+cautious (consistencyScore > 0.8):    warn@70%, critical@85%
+balanced (0.5 < score < 0.8):         warn@75%, critical@90%
+impulsive (score < 0.5):              warn solo se trend peggiora, critical se proiezione < -10% budget
+growth_oriented:                       soglie rilassate, focus trimestrale
+```
+
+### Sequenza di Implementazione
+
+1. `financialState.ts` + helpers in `state.ts` (Layer 0)
+2. `financialSignals.ts` (Layer 1)
+3. `riskEngine.ts` con `classifyBehavior` (Layer 2)
+4. `quarterlyProjection.ts` (Layer 5)
+5. `actionTracker.ts` (Layer 4)
+6. `financialAdvisor.ts` edge function (Layer 3)
+7. Aggiornare `ai-free-chat/index.ts`
+8. `useFinancialInsights.ts` (Layer 6 - hook)
+9. `FinancialInsightCard.tsx` (Layer 6 - UI)
+10. Integrare in HomePage + ExpensesPage
+11. Deploy edge function
 
