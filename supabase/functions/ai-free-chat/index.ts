@@ -15,6 +15,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 
 import { AIResponse, AIAction, AIIntent, CORS_HEADERS, PREMIUM_ONLY_ACTIONS } from "./types.ts";
+import { getFinancialAdvice } from "./financialAdvisor.ts";
 import { normalizeInput } from "./normalizer.ts";
 import { analyzeMessage, AnalyzeResult } from "./analyzeCore.ts";
 import { validateItems, buildMissingFieldQuestion } from "./validator.ts";
@@ -97,6 +98,24 @@ serve(async (req) => {
 
     const message = userMessage.trim();
     console.log(`[Ayro] User=${userId}, Msg="${message.substring(0, 100)}"`);
+
+    // === FINANCIAL ADVICE INTENT (bypass normal pipeline) ===
+    if (message === "__FINANCIAL_ADVICE__" && body.financialContext) {
+      console.log("[Ayro] === FINANCIAL_ADVICE intent ===");
+      const userLang = await loadPreferredLanguage(supabase, userId, locale);
+      const ctx = body.financialContext;
+      const advice = await getFinancialAdvice({
+        signals: ctx.signals,
+        risk: ctx.risk,
+        profile: ctx.profile,
+        projection: ctx.projection,
+        ignoredSuggestions: ctx.ignoredSuggestions || [],
+        language: userLang.name || "italiano",
+      });
+      return new Response(JSON.stringify({ financialAdvice: advice }), {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
 
     // === LAYER 0: NORMALIZE ===
     const input = normalizeInput(message);
