@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Calendar, Wallet, MessageSquare, ChevronRight, Zap } from 'lucide-react';
+import { CheckCircle2, Calendar, Wallet, MessageSquare, ChevronRight } from 'lucide-react';
+import ayroLogo from '@/assets/ayro-logo.png';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -71,9 +72,7 @@ export default function OnboardingPage() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8 flex items-center gap-2"
       >
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-          <Zap className="h-5 w-5 text-primary" />
-        </div>
+        <img src={ayroLogo} alt="Ayro" className="w-10 h-10 rounded-xl" />
         <span className="text-xl font-bold text-foreground">{APP_NAME}</span>
       </motion.div>
 
