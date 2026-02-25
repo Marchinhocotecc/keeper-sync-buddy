@@ -16,6 +16,7 @@ interface FinancialAction {
   title: string;
   reason: string;
   priority: "low" | "medium" | "high";
+  actionId?: string;
 }
 
 export interface FinancialInsight {
@@ -71,6 +72,26 @@ export function useFinancialInsights(userId: string | undefined) {
       const ignoredConsecutive = countConsecutiveIgnored(history);
       const ignoredSuggestions = getIgnoredSuggestions(history);
 
+      // Calculate consistencyScore from monthlySnapshots
+      const snapshots = profile.monthlySnapshots || [];
+      let consistencyScore = 0.5; // default
+      if (snapshots.length > 0) {
+        const scores = snapshots.map(s => {
+          const br = s.budget > 0 ? s.totalSpent / s.budget : 0;
+          return Math.max(0, Math.min(1, 1 - Math.abs(br - 1)));
+        });
+        consistencyScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+      }
+
+      // Calculate volatilityScore from daily spending std deviation
+      const dailyAmounts = Object.values(signals.dailySpending || {}) as number[];
+      let volatilityScore = 0;
+      if (dailyAmounts.length > 1) {
+        const mean = dailyAmounts.reduce((a, b) => a + b, 0) / dailyAmounts.length;
+        const variance = dailyAmounts.reduce((s, v) => s + (v - mean) ** 2, 0) / dailyAmounts.length;
+        volatilityScore = signals.budget > 0 ? Math.min(1, Math.sqrt(variance) / signals.budget) : 0;
+      }
+
       // Update profile
       profile = {
         ...profile,
@@ -80,6 +101,8 @@ export function useFinancialInsights(userId: string | undefined) {
         riskTrend: newRiskTrend,
         suggestionAcceptanceRate: acceptanceRate,
         ignoredConsecutive,
+        consistencyScore,
+        volatilityScore,
       };
 
       // Check if we should show insight
@@ -161,9 +184,11 @@ export function useFinancialInsights(userId: string | undefined) {
         };
       }
 
-      // Track actions shown (Layer 4)
+      // Track actions shown (Layer 4) and collect actionIds
+      const actionsWithIds = [];
       for (const action of advice.actions || []) {
-        await trackActionShown(userId, { type: action.type, title: action.title });
+        const actionId = await trackActionShown(userId, { type: action.type, title: action.title });
+        actionsWithIds.push({ ...action, actionId });
       }
 
       // Update lastInsightShownAt
@@ -174,7 +199,7 @@ export function useFinancialInsights(userId: string | undefined) {
         summary: advice.summary,
         riskLevel: advice.riskLevel,
         insights: advice.insights || [],
-        actions: advice.actions || [],
+        actions: actionsWithIds,
         quarterlyProjection: advice.quarterlyProjection,
         signals,
         projection,

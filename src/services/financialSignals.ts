@@ -23,6 +23,7 @@ export interface FinancialSignals {
   weeklyTrend: number[];
   totalSpent: number;
   budget: number;
+  dailySpending: Record<string, number>;
 }
 
 export async function generateFinancialSignals(userId: string): Promise<FinancialSignals | null> {
@@ -126,6 +127,7 @@ export async function generateFinancialSignals(userId: string): Promise<Financia
       weeklyTrend,
       totalSpent,
       budget,
+      dailySpending,
     };
   } catch (err) {
     console.error("[FinancialSignals] Error:", err);

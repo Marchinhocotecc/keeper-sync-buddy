@@ -61,8 +61,10 @@ export function FinancialInsightCard({ insight, userId, onActionClick, onDismiss
     onDismiss?.();
   };
 
-  const handleActionClick = async (action: { type: string; title: string }) => {
-    // Track click (we don't have actionId here, but the title is tracked)
+  const handleActionClick = async (action: { type: string; title: string; actionId?: string }) => {
+    if (action.actionId) {
+      await trackActionClicked(userId, action.actionId);
+    }
     onActionClick?.(action);
   };
 
