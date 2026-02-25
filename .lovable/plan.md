@@ -1,119 +1,66 @@
 
 
-# Ayro: Motore Decisionale Adattivo - Piano di Implementazione
+# Audit Coerenza: Risultati Checklist 7 Punti
 
-## Panoramica
+## Risultati
 
-Implementazione completa dell'architettura a 7 layer (Layer 0-6) per trasformare Ayro da tracker reattivo a motore decisionale adattivo con identita finanziaria.
-
-**Nessuna migrazione database necessaria** -- tutto salvato in `assistant_state.intent_payload` (JSONB).
+| # | Check | Stato | Dettaglio |
+|---|-------|-------|-----------|
+| 1 | No spese → no crash | **PASS** | `financialSignals.ts:61` — `if (budget === 0 && expenses.length === 0) return null`. Hook gestisce null correttamente (line 47-51: setta insight a null). Se ci sono spese ma no budget, burnRate=0, nessun crash. |
+| 2 | No budget → insight neutro | **PASS** | Budget=0 → burnRate=0, soglie mai raggiunte → riskLevel resta "safe". Risk engine line 70-71 salta il check `projectedEndBalance < 0` quando `budget === 0`. Nessun errore, nessun insight mostrato. |
+| 3 | burnRate 0.0 → safe | **PASS** | burnRate=0 non supera nessuna soglia adattiva (min 0.70 per cautious). riskLevel resta "safe". |
+| 4 | projectedEndBalance negativo → critical | **PASS** | `riskEngine.ts:67-69` — `if (projectedEndBalance < 0 && budget > 0) → riskLevel = "critical"`. Flag "negative_projection" aggiunto. |
+| 5 | impulseCount >= 3 → warning soft | **PASS** | `financialSignals.ts:110` — `impulseFlag = impulseCount >= 3`. `riskEngine.ts:80-82` — per profili non-impulsive: `if (impulseFlag && riskLevel === "safe") → warning + flag "impulse_spending"`. Per profili "impulsive" usa soglia diversa (proiezione < -10% budget) per evitare assuefazione. |
+| 6 | LLM max 3 azioni | **PASS** | `financialAdvisor.ts:71` — `raw.actions.slice(0, 3)`. Insights: `slice(0, 3)` (line 68). Prompt system dice "massimo 3 azioni CONCRETE". Doppia protezione (prompt + validazione). |
+| 7 | Zod blocca output invalido | **PASS** | `validateAdvice()` (lines 61-90) controlla: summary string, riskLevel valido, insights array, actions array con type/title/reason/priority. Se fallisce → `buildDeterministicFallback()` (line 218-220). |
 
 ---
 
-## Dettagli Tecnici
+## Problemi Trovati (Fuori Checklist ma Critici)
 
-### Nuovi File (8)
+### BUG 1: Feedback Loop Non Collegato (Layer 4 rotto)
 
-| # | File | Layer | Descrizione |
-|---|------|-------|-------------|
-| 1 | `src/services/financialState.ts` | 0 | Stato persistente: load/save `financialProfile` da `assistant_state.intent_payload` |
-| 2 | `src/services/financialSignals.ts` | 1 | Funzione pura `generateFinancialSignals(userId)`: burnRate, proiezione, impulseCount, weeklyTrend, categoryBreakdown |
-| 3 | `src/services/riskEngine.ts` | 2 | `evaluateRisk(signals, profile)` con soglie adattive per behavioralType + `classifyBehavior()` |
-| 4 | `src/services/quarterlyProjection.ts` | 5 | `generateProjection(signals, profile)` -- scenari deterministici a 3 mesi |
-| 5 | `src/services/actionTracker.ts` | 4 | Tracking azioni (shown/clicked/completed/ignored), calcolo `suggestionAcceptanceRate` |
-| 6 | `supabase/functions/ai-free-chat/financialAdvisor.ts` | 3 | Modulo LLM strategico: riceve signals+risk+profile, produce FinancialAdvice validato con Zod |
-| 7 | `src/hooks/useFinancialInsights.ts` | 6 | Hook React orchestratore: chiama L0-L5, gestisce regole trigger (max 1/giorno, anti-assuefazione) |
-| 8 | `src/components/FinancialInsightCard.tsx` | 6 | Card UI proattiva con indicatore rischio, summary AI, bottoni azione tracciati |
+**File:** `src/components/FinancialInsightCard.tsx`
 
-### File Modificati (4)
+Il componente importa `trackActionClicked` (line 13) ma **non lo usa mai**. `handleActionClick` (line 64-67) chiama solo `onActionClick?.()` senza tracciare il click.
 
-| File | Modifica |
-|------|----------|
-| `src/pages/HomePage.tsx` | Importare e mostrare `FinancialInsightCard` sopra i task |
-| `src/pages/ExpensesPage.tsx` | Mostrare `FinancialInsightCard` dopo le summary cards |
-| `supabase/functions/ai-free-chat/index.ts` | Aggiungere gestione intent `FINANCIAL_ADVICE` che invoca `financialAdvisor.ts` |
-| `supabase/functions/ai-free-chat/state.ts` | Aggiungere helpers `loadFinancialProfile()` e `saveFinancialProfile()` |
+Inoltre, il hook `useFinancialInsights.ts` chiama `trackActionShown()` (line 165-167) che restituisce un `actionId`, ma questo ID **non viene passato** al componente `FinancialInsightCard`. Senza l'ID, il card non puo' tracciare i click.
 
-### Architettura dei Dati
+**Conseguenza:** `suggestionAcceptanceRate` non si aggiorna mai. Il profilo comportamentale non evolve basandosi sulle azioni dell'utente.
 
-Tutto salvato in `assistant_state.intent_payload`:
+**Fix necessario:**
+1. `useFinancialInsights` deve raccogliere gli `actionId` restituiti da `trackActionShown` e includerli negli oggetti `action` passati al componente
+2. `FinancialInsightCard` deve chiamare `trackActionClicked(userId, actionId)` quando l'utente clicca un bottone azione
 
-```text
-intent_payload: {
-  // ...campi esistenti (pendingAction, preferences, ecc.)
-  
-  financialProfile: {
-    rollingBurnRate7d: number
-    volatilityScore: number
-    consistencyScore: number
-    behavioralType: "cautious" | "balanced" | "impulsive" | "growth_oriented"
-    lastRiskLevel: "safe" | "warning" | "critical"
-    riskTrend: "improving" | "stable" | "worsening"
-    suggestionAcceptanceRate: number
-    lastInsightShownAt: string       // ISO date
-    ignoredConsecutive: number        // contatore warning ignorati
-    monthlySnapshots: [{month, year, totalSpent, budget, burnRate}]
-  },
-  
-  actionHistory: [{
-    id: string
-    type: "create_task" | "adjust_budget" | "set_limit"
-    title: string
-    shownAt: string
-    clickedAt?: string
-    completedAt?: string
-    ignored: boolean
-  }]
-}
-```
+### BUG 2: `consistencyScore` Mai Aggiornato
 
-### Flusso Runtime
+Il `consistencyScore` nel profilo ha un valore default di 0.5 (`financialState.ts:33`) e **non viene mai ricalcolato**. Nessuna funzione aggiorna questo campo basandosi sui dati reali.
 
-```text
-HomePage/ExpensesPage monta
-  → useFinancialInsights(userId)
-    → loadFinancialProfile()              [Layer 0]
-    → generateFinancialSignals(userId)    [Layer 1]
-    → evaluateRisk(signals, profile)      [Layer 2]
-    → classifyBehavior(signals, profile)  [Layer 2.5]
-    → if shouldShowInsight:
-        → generateProjection(signals, profile)  [Layer 5]
-        → call edge function FINANCIAL_ADVICE   [Layer 3]
-          → LLM interpreta con profilo
-          → Zod valida output
-          → fallback deterministico se invalido
-        → trackActionShown()              [Layer 4]
-        → render FinancialInsightCard     [Layer 6]
-```
+**Conseguenza:** La classificazione comportamentale (`classifyBehavior`) usa `consistencyScore > 0.8` e `< 0.3` come soglie, ma il valore resta sempre 0.5 → l'utente sara' sempre classificato "balanced" a meno che non abbia impulseCount >= 4.
 
-### Regole Trigger (Layer 6)
+**Fix necessario:** Calcolare `consistencyScore` in `useFinancialInsights` basandosi su quanto l'utente rispetta il budget (es. media degli ultimi 3 mesi di `burnRate <= 1.0`).
 
-- Max 1 insight al giorno (`lastInsightShownAt`)
-- Escalation solo se `riskTrend === "worsening"`
-- Dopo 3 warning ignorati consecutivi: pausa 3 giorni
-- Prima apertura del mese: sempre mostra riepilogo
-- Anti-assuefazione: non ripetere suggerimenti gia ignorati
+### BUG 3: `volatilityScore` Mai Calcolato
 
-### Soglie Adattive (Layer 2)
+Stesso problema di `consistencyScore` — dichiarato nel profilo ma mai aggiornato. Non e' usato attivamente nelle soglie attuali, quindi impatto minore, ma e' dead code.
 
-```text
-cautious (consistencyScore > 0.8):    warn@70%, critical@85%
-balanced (0.5 < score < 0.8):         warn@75%, critical@90%
-impulsive (score < 0.5):              warn solo se trend peggiora, critical se proiezione < -10% budget
-growth_oriented:                       soglie rilassate, focus trimestrale
-```
+---
 
-### Sequenza di Implementazione
+## Piano di Correzione
 
-1. `financialState.ts` + helpers in `state.ts` (Layer 0)
-2. `financialSignals.ts` (Layer 1)
-3. `riskEngine.ts` con `classifyBehavior` (Layer 2)
-4. `quarterlyProjection.ts` (Layer 5)
-5. `actionTracker.ts` (Layer 4)
-6. `financialAdvisor.ts` edge function (Layer 3)
-7. Aggiornare `ai-free-chat/index.ts`
-8. `useFinancialInsights.ts` (Layer 6 - hook)
-9. `FinancialInsightCard.tsx` (Layer 6 - UI)
-10. Integrare in HomePage + ExpensesPage
-11. Deploy edge function
+### Modifiche (3 file)
+
+1. **`src/hooks/useFinancialInsights.ts`**
+   - Raccogliere gli `actionId` da `trackActionShown()` e includerli nel risultato insight
+   - Calcolare `consistencyScore` dai `monthlySnapshots` (media di `min(1, 1 - abs(burnRate - 1))` per ogni mese)
+   - Calcolare `volatilityScore` dalla deviazione standard delle spese giornaliere
+
+2. **`src/components/FinancialInsightCard.tsx`**
+   - Aggiungere `actionId` all'interfaccia delle azioni
+   - Chiamare `trackActionClicked(userId, actionId)` nel `handleActionClick`
+
+3. **`src/hooks/useFinancialInsights.ts` (tipo FinancialInsight)**
+   - Estendere il tipo `FinancialAction` locale con campo `actionId: string`
+
+Nessuna modifica all'edge function o al database.
 
