@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Home, Calendar, DollarSign, MessageSquare, Settings, LogOut, Zap } from 'lucide-react';
+import { Home, Calendar, DollarSign, MessageSquare, Settings, LogOut } from 'lucide-react';
+import ayroLogo from '@/assets/ayro-logo.png';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,9 +40,7 @@ export function Navigation() {
       <div className="container mx-auto px-4 sm:px-6 max-w-screen-xl h-full">
         <div className="flex items-center justify-between h-full">
           <Link to="/" className="flex items-center gap-2 shrink-0 group">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-ayro group-hover:shadow-[0_4px_16px_rgba(91,140,255,0.4)] transition-shadow">
-              <Zap className="h-4 w-4 text-primary-foreground" />
-            </div>
+            <img src={ayroLogo} alt="Ayro" className="w-8 h-8 rounded-lg shadow-ayro group-hover:shadow-[0_4px_16px_rgba(91,140,255,0.4)] transition-shadow" />
             <h1 className="text-base sm:text-lg font-semibold text-foreground tracking-tight hidden sm:block">
               Ayro
             </h1>
