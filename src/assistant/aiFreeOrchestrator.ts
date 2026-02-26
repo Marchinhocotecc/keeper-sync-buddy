@@ -193,11 +193,18 @@ function mapActionToData(action: any): AIFreeData {
 async function callAIFree(userMessage: string, userId: string): Promise<AIFreeOutput> {
   console.log('[AIFree] Calling ai-free-chat edge function');
   
+  // Get current language from i18n
+  let currentLocale = 'en';
+  try {
+    const { default: i18n } = await import('@/i18n/config');
+    currentLocale = i18n.language || 'en';
+  } catch { /* fallback */ }
+  
   try {
     const { data, error } = await supabase.functions.invoke('ai-free-chat', {
       body: {
         userMessage,
-        locale: 'it'
+        locale: currentLocale
       }
     });
     

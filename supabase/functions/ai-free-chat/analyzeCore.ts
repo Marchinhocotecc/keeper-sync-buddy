@@ -46,8 +46,9 @@ const FALLBACK_MODELS = [
 // HARDENED SYSTEM PROMPT
 // ============================================================================
 
-function buildAnalyzePrompt(currentDate: string, dayOfWeek: string): string {
-  return `You are Ayro Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.
+function buildAnalyzePrompt(currentDate: string, dayOfWeek: string, userLang?: string): string {
+  const langInstruction = userLang ? `\nIMPORTANT: The user's preferred language is "${userLang}". Detect and respect the language of the user's message. Keep all text fields (title, description) in the user's message language.` : '';
+  return `You are Ayvro Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.${langInstruction}
 
 TODAY: ${currentDate} (${dayOfWeek})
 
@@ -153,7 +154,7 @@ function getDayOfWeek(dateStr: string): string {
 // ANALYZE FUNCTION
 // ============================================================================
 
-export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult> {
+export async function analyzeMessage(userMessage: string, userLang?: string): Promise<AnalyzeResult> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   
   const fallbackResult: AnalyzeResult = {
@@ -174,7 +175,7 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
   
   const currentDate = new Date().toISOString().split('T')[0];
   const dayOfWeek = getDayOfWeek(currentDate);
-  const systemPrompt = buildAnalyzePrompt(currentDate, dayOfWeek);
+  const systemPrompt = buildAnalyzePrompt(currentDate, dayOfWeek, userLang);
   
   console.log(`[ANALYZE-CORE] Processing: "${userMessage.substring(0, 100)}", today=${currentDate} (${dayOfWeek})`);
   
@@ -190,8 +191,8 @@ export async function analyzeMessage(userMessage: string): Promise<AnalyzeResult
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://ayro.app",
-          "X-Title": "Ayro-AnalyzeCore"
+          "HTTP-Referer": "https://ayvro.app",
+          "X-Title": "Ayvro-AnalyzeCore"
         },
         body: JSON.stringify({
           model,
