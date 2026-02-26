@@ -1,13 +1,13 @@
 {
-  "name": "Ayro",
-  "short_name": "Ayro",
-  "description": "Intelligent productivity for ambitious minds",
+  "name": "Ayvro",
+  "short_name": "Ayvro",
+  "description": "Decision Engine for Your Money",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1B1D2A",
-  "theme_color": "#4C4EFF",
+  "background_color": "#0F3D3E",
+  "theme_color": "#0F3D3E",
   "orientation": "portrait-primary",
-  "categories": ["productivity", "lifestyle", "utilities"],
+  "categories": ["finance", "productivity", "utilities"],
   "icons": [
     {
       "src": "/icon-192.png",

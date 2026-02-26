@@ -1,11 +1,11 @@
 /**
- * Ayro - Shared Constants for AI Assistant
+ * Ayvro - Shared Constants for AI Assistant
  * 
  * RULE: Conciso, neutro, umano, niente emoji
- * Tono: calmo, competente, affidabile
+ * Tono: calmo, razionale, non paternalistico
  */
 
-// Safe fallback message - returned when unclear
+// Safe fallback message
 export const SAFE_FALLBACK_MESSAGE = 'Dimmi.';
 
 // Cancel response
@@ -18,7 +18,7 @@ export const CONFIRM_NO_INTENT_RESPONSE = 'Ok. Dimmi cosa fare.';
 export const NEGATIVE_FEEDBACK_RESPONSE = 'Scusa. Come posso aiutarti?';
 
 // Welcome message
-export const WELCOME_MESSAGE = 'Ciao. Sono Ayro. Come posso aiutarti?';
+export const WELCOME_MESSAGE = 'Ciao. Sono Ayvro. Come posso aiutarti?';
 
 // Error messages
 export const ERROR_MESSAGES = {

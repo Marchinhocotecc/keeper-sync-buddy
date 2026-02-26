@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'io.ayro.app',
-  appName: 'Ayro',
+  appId: 'com.ayvro.app',
+  appName: 'Ayvro',
   webDir: 'dist',
   android: {
     allowMixedContent: false,
