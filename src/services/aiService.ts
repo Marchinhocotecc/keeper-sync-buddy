@@ -27,7 +27,7 @@ export async function callExternalAI(
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
       const { data, error } = await supabase.functions.invoke('ai-free-chat', {
-        body: { userMessage: prompt, userId, locale: 'it' },
+        body: { userMessage: prompt, userId },
       });
 
       clearTimeout(timeoutId);

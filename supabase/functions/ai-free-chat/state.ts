@@ -242,7 +242,24 @@ const LANGUAGE_NAMES: Record<string, string> = {
   en: "English",
   es: "español",
   fr: "français",
-  de: "Deutsch"
+  de: "Deutsch",
+  pt: "português",
+  ru: "русский",
+  zh: "中文",
+  ja: "日本語",
+  ko: "한국어",
+  hi: "हिन्दी",
+  nl: "Nederlands",
+  pl: "polski",
+  sv: "svenska",
+  no: "norsk",
+  da: "dansk",
+  ro: "română",
+  hr: "hrvatski",
+  sq: "shqip",
+  lt: "lietuvių",
+  lv: "latviešu",
+  et: "eesti",
 };
 
 /**

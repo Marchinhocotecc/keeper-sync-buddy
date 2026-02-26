@@ -366,7 +366,7 @@ serve(async (req) => {
       // === LAYER 1: ANALYZE (LLM) ===
       await logAIRequest(supabase, userId);
       console.log("[Ayro] === L1: ANALYZE ===");
-      analysis = await analyzeMessage(textToAnalyze);
+      analysis = await analyzeMessage(textToAnalyze, userLang.code);
       // Cache the result (fire-and-forget)
       if (analysis.items && analysis.items.length > 0) {
         setCachedAnalysis(supabase, userId, textToAnalyze, analysis);

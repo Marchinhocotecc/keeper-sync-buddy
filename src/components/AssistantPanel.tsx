@@ -17,7 +17,6 @@ interface Message {
   suggestions?: string[];
 }
 
-// Format timestamp
 const formatTime = (date: Date): string => {
   return date.toLocaleTimeString('en-US', { 
     hour: '2-digit', 
@@ -27,7 +26,7 @@ const formatTime = (date: Date): string => {
 };
 
 export default function AssistantPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -42,7 +41,6 @@ export default function AssistantPanel() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isRequestingRef = useRef(false);
 
-  // Autoscroll to bottom when messages change
   useEffect(() => {
     if (scrollRef.current) {
       setTimeout(() => {
@@ -51,7 +49,6 @@ export default function AssistantPanel() {
     }
   }, [messages, isLoading]);
 
-  // Load user session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
@@ -64,39 +61,33 @@ export default function AssistantPanel() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Set default suggestions on mount
   useEffect(() => {
     if (userId && messages.length === 0) {
       setSuggestions([
-        { text: "What should I focus on today?", priority: "high" },
-        { text: "Show tasks", priority: "medium" },
-        { text: "Show events", priority: "medium" },
-        { text: "Show expenses", priority: "low" },
+        { text: t('assistant.suggestion_focus'), priority: "high" },
+        { text: t('assistant.suggestion_tasks'), priority: "medium" },
+        { text: t('assistant.suggestion_events'), priority: "medium" },
+        { text: t('assistant.suggestion_expenses'), priority: "low" },
       ]);
     }
-  }, [userId, messages.length]);
+  }, [userId, messages.length, i18n.language]);
 
-  /**
-   * UI_ACTION_MAP: Maps UI button labels to structured action payloads.
-   * These bypass AI parsing and execute deterministically.
-   */
   const UI_ACTION_MAP: Record<string, string> = {
-    // Show actions
+    [t('assistant.suggestion_tasks')]: "__UI_ACTION__:SHOW_TASKS",
+    [t('assistant.suggestion_events')]: "__UI_ACTION__:SHOW_EVENTS",
+    [t('assistant.suggestion_expenses')]: "__UI_ACTION__:SHOW_EXPENSES",
     "Mostra task": "__UI_ACTION__:SHOW_TASKS",
     "Mostra eventi": "__UI_ACTION__:SHOW_EVENTS",
     "Mostra spese": "__UI_ACTION__:SHOW_EXPENSES",
     "Show tasks": "__UI_ACTION__:SHOW_TASKS",
     "Show events": "__UI_ACTION__:SHOW_EVENTS",
     "Show expenses": "__UI_ACTION__:SHOW_EXPENSES",
-    // Create actions
     "Aggiungi task": "__UI_ACTION__:ADD_TASK",
     "Aggiungi evento": "__UI_ACTION__:CREATE_EVENT",
     "Add task": "__UI_ACTION__:ADD_TASK",
     "Add event": "__UI_ACTION__:CREATE_EVENT",
-    // Delete all actions
     "Elimina tutti": "__UI_ACTION__:DELETE_ALL",
     "Delete all": "__UI_ACTION__:DELETE_ALL",
-    // Complete all actions
     "Completa tutte": "__UI_ACTION__:COMPLETE_ALL_TASKS",
     "Complete all": "__UI_ACTION__:COMPLETE_ALL_TASKS",
   };
@@ -105,10 +96,8 @@ export default function AssistantPanel() {
     if (!userId) return;
     
     try {
-      // Clear local state
       setMessages([]);
       
-      // Clear server-side assistant state
       await supabase
         .from('assistant_state')
         .upsert({
@@ -122,13 +111,13 @@ export default function AssistantPanel() {
         }, { onConflict: 'user_id' });
       
       toast({
-        title: "History cleared",
-        description: "Assistant memory has been reset.",
+        title: t('assistant.history_cleared'),
+        description: t('assistant.history_cleared_desc'),
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Could not clear history.",
+        title: t('assistant.error'),
+        description: t('assistant.error_clear'),
         variant: "destructive",
       });
     }
@@ -138,20 +127,15 @@ export default function AssistantPanel() {
     const rawText = messageText || input.trim();
     if (!rawText || isLoading || !userId) return;
     
-    // Map UI quick action labels to structured payloads (bypass AI)
     const textToSend = UI_ACTION_MAP[rawText] || rawText;
 
-    // Prevent parallel requests
-    if (isRequestingRef.current) {
-      return;
-    }
+    if (isRequestingRef.current) return;
 
-    // Prevent spam
     const now = Date.now();
     if (now - lastCallRef.current < 1000) {
       toast({
-        title: "Wait",
-        description: "Please wait before sending another message",
+        title: t('assistant.wait'),
+        description: t('assistant.wait_desc'),
         variant: "default",
       });
       return;
@@ -159,7 +143,6 @@ export default function AssistantPanel() {
     lastCallRef.current = now;
     isRequestingRef.current = true;
 
-    // Show user the original label (not the technical payload)
     const userMessage: Message = { 
       role: "user", 
       content: rawText,
@@ -171,45 +154,35 @@ export default function AssistantPanel() {
     setSuggestions([]);
 
     try {
-      // Call Edge Function directly
-      console.log("[AssistantPanel] Calling ai-free-chat edge function");
-      
       const { data, error } = await supabase.functions.invoke("ai-free-chat", {
         body: {
           userMessage: textToSend,
           userId,
-          locale: "it"
+          locale: i18n.language
         }
       });
       
-      // Handle edge function invocation error
       if (error) {
-        console.error("[AssistantPanel] Edge function invocation error:", error);
+        console.error("[AssistantPanel] Edge function error:", error);
         
         const fallbackMessage: Message = {
           role: "assistant",
-          content: "Connection issue. Want to try again?",
+          content: t('assistant.connection_issue'),
           timestamp: new Date(),
-          suggestions: ["Retry", "Show tasks", "Show events", "Add task"]
+          suggestions: [t('assistant.retry'), t('assistant.suggestion_tasks'), t('assistant.suggestion_events')]
         };
         setMessages((prev) => [...prev, fallbackMessage]);
         setSuggestions([
-          { text: "Retry", priority: "high" },
-          { text: "Show tasks", priority: "medium" },
-          { text: "Show events", priority: "medium" },
+          { text: t('assistant.retry'), priority: "high" },
+          { text: t('assistant.suggestion_tasks'), priority: "medium" },
+          { text: t('assistant.suggestion_events'), priority: "medium" },
         ]);
         return;
       }
       
-      console.log("[AssistantPanel] AI response:", data);
-      
-      if (data.intent === "ERROR") {
-        console.warn("[AssistantPanel] AI returned error intent:", data.error);
-      }
-      
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.reply || "How can I help?",
+        content: data.reply || t('assistant.how_can_i_help'),
         timestamp: new Date(),
         suggestions: data.suggestions
       };
@@ -224,56 +197,43 @@ export default function AssistantPanel() {
       
       const fallbackMessage: Message = {
         role: "assistant",
-        content: "Something went wrong. Try rephrasing or use the quick actions below.",
+        content: t('assistant.something_wrong'),
         timestamp: new Date(),
-        suggestions: ["Show tasks", "Show events", "Add task"]
+        suggestions: [t('assistant.suggestion_tasks'), t('assistant.suggestion_events'), t('assistant.quick_new_task')]
       };
       setMessages((prev) => [...prev, fallbackMessage]);
       setSuggestions([
-        { text: "Show tasks", priority: "high" },
-        { text: "Show events", priority: "medium" },
-        { text: "Add task", priority: "medium" },
+        { text: t('assistant.suggestion_tasks'), priority: "high" },
+        { text: t('assistant.suggestion_events'), priority: "medium" },
+        { text: t('assistant.quick_new_task'), priority: "medium" },
       ]);
     } finally {
       setIsLoading(false);
       isRequestingRef.current = false;
     }
-  }, [input, isLoading, userId, toast]);
+  }, [input, isLoading, userId, toast, t, i18n.language]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && !isLoading) {
       e.preventDefault();
-      
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      
-      debounceTimerRef.current = setTimeout(() => {
-        sendMessage();
-      }, 200);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => sendMessage(), 200);
     }
   }, [isLoading, sendMessage]);
 
   useEffect(() => {
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
   }, []);
 
   const messageVariants = {
     hidden: { opacity: 0, y: 8 },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      transition: { duration: 0.2, ease: "easeOut" as const }
-    }
+    visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" as const } }
   };
 
   return (
     <Card className="flex flex-col h-[calc(100vh-12rem)] bg-card border-border rounded-xl">
-      {/* Header with clear button */}
       {messages.length > 0 && (
         <div className="flex justify-end px-4 pt-3 border-b border-border pb-3">
           <Button
@@ -283,15 +243,12 @@ export default function AssistantPanel() {
             className="text-muted-foreground hover:text-destructive h-7 px-2 rounded-md"
           >
             <Trash2 className="h-3.5 w-3.5 mr-1" />
-            <span className="text-xs">Clear</span>
+            <span className="text-xs">{t('assistant.clear')}</span>
           </Button>
         </div>
       )}
       
-      <div 
-        ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 sm:p-5"
-      >
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-5">
         <div className="space-y-4">
           <AnimatePresence mode="popLayout">
             {messages.length === 0 && !isLoading && (
@@ -305,16 +262,16 @@ export default function AssistantPanel() {
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
                   <Zap className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="text-base font-medium mb-1.5 text-foreground">Your Assistant</h3>
+                <h3 className="text-base font-medium mb-1.5 text-foreground">{t('assistant.welcome_title')}</h3>
                 <p className="text-muted-foreground mb-6 max-w-sm mx-auto text-sm">
-                  I'm here to help you manage tasks, events, and expenses. Ask away.
+                  {t('assistant.welcome_subtitle')}
                 </p>
                 
                 {suggestions.length > 0 && (
                   <div className="mt-6 space-y-2">
                     <div className="flex items-center justify-center gap-1.5 mb-3">
                       <Lightbulb className="h-3.5 w-3.5 text-primary" />
-                      <span className="text-xs font-medium text-muted-foreground">Try asking</span>
+                      <span className="text-xs font-medium text-muted-foreground">{t('assistant.try_asking')}</span>
                     </div>
                     {suggestions.map((sug, idx) => (
                       <motion.button
@@ -344,23 +301,17 @@ export default function AssistantPanel() {
                 animate="visible"
                 className="space-y-1"
               >
-                <div
-                  className={`flex gap-2 ${
-                    msg.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
+                <div className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   {msg.role === "assistant" && (
                     <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
                       <Zap className="h-3.5 w-3.5 text-primary-foreground" />
                     </div>
                   )}
-                  <div
-                    className={`max-w-[80%] rounded-xl px-3 py-2.5 ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted border border-border"
-                    }`}
-                  >
+                  <div className={`max-w-[80%] rounded-xl px-3 py-2.5 ${
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted border border-border"
+                  }`}>
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                   </div>
                   {msg.role === "user" && (
@@ -373,7 +324,6 @@ export default function AssistantPanel() {
                   {formatTime(msg.timestamp)}
                 </div>
                 
-                {/* Inline suggestions after assistant message */}
                 {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && (
                   <div className="pl-10 mt-2 flex flex-wrap gap-1.5">
                     {msg.suggestions.map((sug, sugIdx) => (
@@ -395,11 +345,7 @@ export default function AssistantPanel() {
           </AnimatePresence>
 
           {isLoading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex gap-2 justify-start"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2 justify-start">
               <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
                 <Zap className="h-3.5 w-3.5 text-primary-foreground" />
               </div>
@@ -417,40 +363,20 @@ export default function AssistantPanel() {
         </div>
       </div>
       
-      {/* Quick action buttons */}
       {messages.length > 0 && (
         <div className="px-4 py-2 border-t border-border flex flex-wrap gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => sendMessage("Show tasks")}
-            disabled={isLoading}
-            className="text-xs h-7 rounded-md"
-          >
-            📋 Tasks
+          <Button variant="outline" size="sm" onClick={() => sendMessage(t('assistant.suggestion_tasks'))} disabled={isLoading} className="text-xs h-7 rounded-md">
+            📋 {t('assistant.quick_tasks')}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => sendMessage("Show events")}
-            disabled={isLoading}
-            className="text-xs h-7 rounded-md"
-          >
-            📅 Events
+          <Button variant="outline" size="sm" onClick={() => sendMessage(t('assistant.suggestion_events'))} disabled={isLoading} className="text-xs h-7 rounded-md">
+            📅 {t('assistant.quick_events')}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => sendMessage("Add task")}
-            disabled={isLoading}
-            className="text-xs h-7 rounded-md"
-          >
-            ➕ New task
+          <Button variant="outline" size="sm" onClick={() => sendMessage(t('assistant.quick_new_task'))} disabled={isLoading} className="text-xs h-7 rounded-md">
+            ➕ {t('assistant.quick_add_task')}
           </Button>
         </div>
       )}
 
-      {/* Input area */}
       <div className="p-3 border-t border-border">
         <div className="flex gap-2">
           <Input

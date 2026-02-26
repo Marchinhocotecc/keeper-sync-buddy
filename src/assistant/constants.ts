@@ -1,36 +1,37 @@
 /**
  * Ayvro - Shared Constants for AI Assistant
  * 
- * RULE: Conciso, neutro, umano, niente emoji
- * Tono: calmo, razionale, non paternalistico
+ * NOTE: These are fallback constants only.
+ * The actual UI strings come from i18n translations.
+ * The edge function responses come from responder.ts.
  */
 
 // Safe fallback message
-export const SAFE_FALLBACK_MESSAGE = 'Dimmi.';
+export const SAFE_FALLBACK_MESSAGE = 'Tell me.';
 
 // Cancel response
-export const CANCEL_RESPONSE = 'Ok, annullato.';
+export const CANCEL_RESPONSE = 'Ok, cancelled.';
 
 // Confirm with no intent response
-export const CONFIRM_NO_INTENT_RESPONSE = 'Ok. Dimmi cosa fare.';
+export const CONFIRM_NO_INTENT_RESPONSE = 'Ok. Tell me what to do.';
 
 // Negative feedback response
-export const NEGATIVE_FEEDBACK_RESPONSE = 'Scusa. Come posso aiutarti?';
+export const NEGATIVE_FEEDBACK_RESPONSE = 'Sorry. How can I help?';
 
 // Welcome message
-export const WELCOME_MESSAGE = 'Ciao. Sono Ayvro. Come posso aiutarti?';
+export const WELCOME_MESSAGE = 'Hi. I\'m Ayvro. How can I help?';
 
 // Error messages
 export const ERROR_MESSAGES = {
-  generic: 'Qualcosa non ha funzionato. Riprova.',
-  timeout: 'Ci ho messo troppo. Puoi ripetere?',
-  network: 'Problema di connessione. Riprova tra poco.',
+  generic: 'Something went wrong. Try again.',
+  timeout: 'Took too long. Can you repeat?',
+  network: 'Connection issue. Try again shortly.',
 };
 
 // Success messages
 export const SUCCESS_MESSAGES = {
-  taskCreated: 'Fatto. Task aggiunto.',
-  eventCreated: 'Fatto. Evento creato.',
-  expenseRecorded: 'Fatto. Spesa registrata.',
-  taskCompleted: 'Fatto.',
+  taskCreated: 'Done. Task added.',
+  eventCreated: 'Done. Event created.',
+  expenseRecorded: 'Done. Expense recorded.',
+  taskCompleted: 'Done.',
 };

@@ -334,6 +334,7 @@ export type Database = {
           notify_wellbeing: boolean | null
           notify_wellbeing_time: string | null
           theme: string | null
+          updated_at: string | null
           user_id: string | null
         }
         Insert: {
@@ -350,6 +351,7 @@ export type Database = {
           notify_wellbeing?: boolean | null
           notify_wellbeing_time?: string | null
           theme?: string | null
+          updated_at?: string | null
           user_id?: string | null
         }
         Update: {
@@ -366,6 +368,7 @@ export type Database = {
           notify_wellbeing?: boolean | null
           notify_wellbeing_time?: string | null
           theme?: string | null
+          updated_at?: string | null
           user_id?: string | null
         }
         Relationships: [
