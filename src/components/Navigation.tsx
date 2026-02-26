@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Home, Calendar, DollarSign, MessageSquare, Settings, LogOut } from 'lucide-react';
-import ayroLogo from '@/assets/ayro-logo.png';
+import ayvroLogo from '@/assets/ayvro-logo.png';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,11 +19,7 @@ export function Navigation() {
       await supabase.auth.signOut();
       navigate('/auth');
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: 'Something went wrong. Try again.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Something went wrong. Try again.', variant: 'destructive' });
     }
   };
 
@@ -40,9 +36,9 @@ export function Navigation() {
       <div className="container mx-auto px-4 sm:px-6 max-w-screen-xl h-full">
         <div className="flex items-center justify-between h-full">
           <Link to="/" className="flex items-center gap-2 shrink-0 group">
-            <img src={ayroLogo} alt="Ayro" className="w-8 h-8 rounded-lg shadow-ayro group-hover:shadow-[0_4px_16px_rgba(91,140,255,0.4)] transition-shadow" />
+            <img src={ayvroLogo} alt="Ayvro" className="w-8 h-8 rounded-lg shadow-ayvro group-hover:shadow-[0_4px_16px_rgba(15,61,62,0.3)] transition-shadow" />
             <h1 className="text-base sm:text-lg font-semibold text-foreground tracking-tight hidden sm:block">
-              Ayro
+              Ayvro
             </h1>
           </Link>
           
@@ -51,28 +47,16 @@ export function Navigation() {
               const Icon = link.icon;
               const isActive = location.pathname === link.to;
               return (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  className={cn(
-                    'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-all shrink-0',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
+                <Link key={link.to} to={link.to} className={cn(
+                  'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-all shrink-0',
+                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}>
                   <Icon className={cn("h-4 w-4", isActive ? "text-primary-foreground" : "")} />
                   <span className="hidden sm:inline text-[13px]">{link.label}</span>
                 </Link>
               );
             })}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              className="ml-1 h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 rounded-lg"
-              title={t('nav.logout')}
-            >
+            <Button variant="ghost" size="icon" onClick={handleLogout} className="ml-1 h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 rounded-lg" title={t('nav.logout')}>
               <LogOut className="h-4 w-4" />
             </Button>
           </div>

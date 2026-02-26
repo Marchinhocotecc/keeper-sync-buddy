@@ -65,23 +65,19 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        // Ayro specific colors
-        ayro: {
-          primary: "#4C4EFF",
-          "primary-hover": "#5B5FFF",
-          slate: "#1B1D2A",
-          graphite: "#252838",
-          "tint-gray": "#3A414D",
-          neon: "#4C4EFF",
-          accent: "#C6FFE9",
-          neutral: "#FDF7EE",
-          mint: "#4BE3C6",
-          amber: "#FFB457",
-          coral: "#FF6B6B",
-          "text-primary": "#F4F7FA",
-          "text-secondary": "#AEB4C2",
-          "text-muted": "#6D7480",
-          glow: "rgba(76, 78, 255, 0.15)",
+        // Ayvro specific colors
+        ayvro: {
+          primary: "#0F3D3E",
+          "primary-hover": "#145A5B",
+          "primary-light": "#1E6F70",
+          bg: "#F8FAF9",
+          surface: "#FFFFFF",
+          success: "#2E7D32",
+          warning: "#E6A23C",
+          critical: "#D64545",
+          "text-primary": "#1C1C1C",
+          "text-secondary": "#6B7280",
+          glow: "rgba(15, 61, 62, 0.12)",
         },
       },
       borderRadius: {
@@ -93,27 +89,24 @@ export default {
         "3xl": "1.25rem",
       },
       boxShadow: {
-        ayro: "0 2px 8px rgba(76, 78, 255, 0.25)",
+        ayvro: "0 2px 8px rgba(15, 61, 62, 0.2)",
+        "ayvro-card": "0 4px 16px rgba(0, 0, 0, 0.08)",
+        "ayvro-nav": "0 1px 3px rgba(0, 0, 0, 0.05)",
+        "ayvro-glow": "0 0 12px rgba(15, 61, 62, 0.12)",
+        // Legacy aliases
+        ayro: "0 2px 8px rgba(15, 61, 62, 0.2)",
         "ayro-card": "0 4px 16px rgba(0, 0, 0, 0.08)",
         "ayro-nav": "0 1px 3px rgba(0, 0, 0, 0.05)",
-        "ayro-glow": "0 0 12px rgba(76, 78, 255, 0.15)",
+        "ayro-glow": "0 0 12px rgba(15, 61, 62, 0.12)",
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
         "fade-in": {
           from: { opacity: "0", transform: "translateY(6px)" },
