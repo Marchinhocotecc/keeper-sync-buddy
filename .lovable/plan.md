@@ -1,68 +1,60 @@
 
 
-# Fix Assistente + Traduzioni
+# Rebranding Audit: cosa manca
 
-## Problemi Identificati
+Il rebranding precedente ha coperto la maggior parte dei file, ma restano **residui concreti** da correggere:
 
-### P1: Settings crash — colonna `updated_at` mancante
-La tabella `settings` non ha la colonna `updated_at`, ma `settingsService.ts` (riga 121) e `AssistantPanel.tsx` (riga 122) la scrivono, causando errore PGRST204 ad ogni cambio lingua/tema.
+## Residui "Ayro" da eliminare
 
-### P2: Locale hardcoded `"it"` nel client
-- `AssistantPanel.tsx` riga 182: `locale: "it"` — sempre italiano indipendentemente dalla lingua dell'utente
-- `aiFreeOrchestrator.ts` riga 200: `locale: 'it'` — idem
+### 1. README.md — tutto il file è ancora "Ayro"
+- Nome, tagline, colore primario (#4C4EFF), sfondo (#1F242C) tutti vecchi
 
-### P3: Stringhe hardcoded in inglese nell'AssistantPanel
-- Welcome text (righe 308-310): "Your Assistant", "I'm here to help you..."
-- Default suggestions (righe 72-76): "What should I focus on today?", "Show tasks", etc.
-- Fallback messages (righe 192, 229): "Connection issue", "Something went wrong"
-- Quick action buttons (righe 429-449): "📋 Tasks", "📅 Events", "➕ New task"
-- Clear button (riga 286): "Clear"
+### 2. ExpensesPage.tsx — palette grafici ancora blu
+- `COLORS = ['#4C4EFF', '#5B8CFF', '#76A4FF', ...]` — blu Ayro, va sostituita con tonalità teal coerenti
 
-### P4: Stringhe hardcoded in italiano nell'aiFreeOrchestrator (client-side)
-- Messaggi di conferma/cancellazione/errore tutti in italiano (righe 290, 305, 319, etc.)
-- Suggerimenti "Sì"/"No" hardcoded
+### 3. TermsAndConditionsPage.tsx — 2 riferimenti "Ayro"
+- "Ayro è un'applicazione..." (riga 42)
+- "support@ayro.app" (riga 99)
 
-### P5: L'LLM (analyzeCore) non riceve istruzione sulla lingua di risposta
-Il system prompt di `analyzeCore.ts` dice "Detect the user's language. Keep all text fields in that language" — ma è solo per il parsing. Le risposte template del responder usano `userLang` correttamente, ma la lingua viene dalla tabella `settings` che ha il bug `updated_at`.
+### 4. AcceptTermsPage.tsx — 2 riferimenti "Ayro"
+- "Benvenuto in Ayro!" (riga 39)
+- "Per continuare a usare Ayro" (riga 71)
+- Classe CSS `ayro-button` (riga 113)
 
-### P6: `LANGUAGE_NAMES` incompleto nella edge function
-`state.ts` riga 240: solo 5 lingue mappate (it, en, es, fr, de). Mancano le altre 17.
+### 5. Edge function index.ts — 15+ console.log con `[Ayro]`
+- Tutti i log dicono `[Ayro]` invece di `[Ayvro]`
 
----
+### 6. tailwind.config.ts — shadow legacy aliases "ayro"
+- `ayro`, `ayro-card`, `ayro-nav`, `ayro-glow` — da rimuovere o rinominare
 
-## Piano di Implementazione
+### 7. index.css — classi legacy `.ayro-*`
+- `.ayro-glow`, `.shadow-ayro`, `.shadow-ayro-card`, `.shadow-ayro-nav`, `.ayro-button`, `.ayro-active`
 
-### Task 1: Aggiungere colonna `updated_at` alla tabella `settings`
-- Migrazione SQL: `ALTER TABLE settings ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now()`
-- Questo risolve immediatamente il crash al cambio lingua
+### 8. Componenti UI con classi `ayro-*`
+- `card.tsx`: `shadow-ayro-card`
+- `tabs.tsx`: `ayro-glow`
+- `select.tsx`: `shadow-ayro-card`
+- `dialog.tsx`: `shadow-ayro-card`
+- `popover.tsx`: probabile `shadow-ayro-card`
+- `TaskCard.tsx`: `shadow-ayro`
+- `AcceptTermsPage.tsx`: `ayro-button`
 
-### Task 2: Passare la lingua corretta dal client alla edge function
-- **`AssistantPanel.tsx`**: leggere `i18n.language` e passarlo come `locale` nella chiamata a `ai-free-chat`
-- **`aiFreeOrchestrator.ts`**: leggere `i18n.language` e passarlo come `locale`
+## Piano di implementazione
 
-### Task 3: Internazionalizzare l'AssistantPanel
-- Aggiungere chiavi i18n mancanti per: welcome title/subtitle, suggestions, fallback messages, quick action labels, clear button
-- Aggiornare tutti i 22 file di traduzione con le nuove chiavi
-- Sostituire tutte le stringhe hardcoded con `t('assistant.xxx')`
+### Task 1: Aggiornare README.md
+Riscrivere con branding Ayvro, palette teal, tagline corretta.
 
-### Task 4: Internazionalizzare l'aiFreeOrchestrator (client-side)
-- Importare `i18n` e usare `t()` per i messaggi di conferma/cancellazione/errore
-- Oppure: delegare completamente alla edge function (che già gestisce le lingue via `responder.ts`)
+### Task 2: Sostituire palette grafici in ExpensesPage.tsx
+Usare tonalità teal: `#0F3D3E`, `#145A5B`, `#1E6F70`, `#2E7D32`, `#E6A23C`, `#D64545`, `#6B7280`.
 
-### Task 5: Completare `LANGUAGE_NAMES` nella edge function
-- Aggiungere tutte le 22 lingue supportate alla mappa in `state.ts`
+### Task 3: Fix TermsAndConditionsPage.tsx e AcceptTermsPage.tsx
+Sostituire "Ayro" → "Ayvro" e "support@ayro.app" → "support@ayvro.app".
 
-### Task 6: Istruire l'LLM a rispondere nella lingua dell'utente
-- Passare `userLang` al prompt di `analyzeCore.ts` come parametro
-- Aggiungere al system prompt: "Respond in {language}" per le risposte conversazionali
-- Oppure: dato che `analyzeCore` produce solo JSON strutturato e le risposte vengono dal `responder.ts`, assicurarsi che il `responder` copra tutti i casi
+### Task 4: Fix console.log nella edge function
+Sostituire tutti i `[Ayro]` con `[Ayvro]`.
 
-### Riepilogo file da modificare
-1. **Migrazione SQL** — aggiungere `updated_at` a `settings`
-2. **`src/services/settingsService.ts`** — nessuna modifica (già scrive `updated_at`, ora la colonna esisterà)
-3. **`src/components/AssistantPanel.tsx`** — passare `i18n.language` come locale, internazionalizzare tutte le stringhe
-4. **`src/assistant/aiFreeOrchestrator.ts`** — usare i18n per le risposte client-side
-5. **`supabase/functions/ai-free-chat/state.ts`** — completare `LANGUAGE_NAMES`
-6. **`src/i18n/locales/*.json`** (22 file) — aggiungere chiavi assistant mancanti
-7. **`supabase/functions/ai-free-chat/index.ts`** — assicurarsi che `userLang` venga passato a tutte le risposte
+### Task 5: Cleanup CSS/Tailwind legacy aliases
+- In `tailwind.config.ts`: rimuovere le shadow `ayro-*` legacy
+- In `index.css`: rimuovere le classi `.ayro-*` legacy
+- Nei componenti UI: sostituire `ayro-card` → `ayvro-card`, `ayro-glow` → `ayvro-glow`, `ayro-button` → `ayvro-button`, `shadow-ayro` → `shadow-ayvro` (o usare direttamente le nuove classi `ayvro-*` già definite)
 
