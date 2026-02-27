@@ -8,7 +8,7 @@ import { loadFinancialProfile, saveFinancialProfile, updateMonthlySnapshot, type
 import { generateFinancialSignals, type FinancialSignals } from "@/services/financialSignals";
 import { evaluateRisk, classifyBehavior, computeRiskTrend, type RiskResult } from "@/services/riskEngine";
 import { generateProjection, type QuarterlyProjection } from "@/services/quarterlyProjection";
-import { trackActionShown, calculateAcceptanceRate, getIgnoredSuggestions, countConsecutiveIgnored, type ActionEvent } from "@/services/actionTracker";
+import { trackActionShown, calculateAcceptanceRate, getIgnoredSuggestions, countConsecutiveIgnored, getActiveStrategy, type ActionEvent } from "@/services/actionTracker";
 import { supabase } from "@/integrations/supabase/client";
 
 interface FinancialAction {
@@ -153,6 +153,7 @@ export function useFinancialInsights(userId: string | undefined) {
                 trend: projection.trend,
               },
               ignoredSuggestions,
+              activeStrategy: await getActiveStrategy(userId),
             },
           },
         });

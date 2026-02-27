@@ -82,10 +82,16 @@ When the user asks about finances, spending, budget, or affordability:
     "actions": [{"type": "create_task|adjust_budget|review_category", "title": "short title", "description": "what to do"}]
   }
 - Max 3 actions. Be rational, clear, non-judgmental.
-- Intent type: ${financialContext.userIntentType || 'analysis'}`;
+- Intent type: ${financialContext.userIntentType || 'analysis'}
+${financialContext.activeStrategy ? `\nSTRATEGY MEMORY:\nThe user has an active strategy: "${financialContext.activeStrategy.suggestion}"\nIf they are spending in "${financialContext.activeStrategy.category}" despite this strategy, briefly mention it.` : ''}`;
   }
 
   return `You are Ayvro Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.${langInstruction}${financialBlock}
+
+RESPONSE STYLE (when financial_response is used):
+- Maximum 2-3 sentences in summary. No preambles. No "dipende da".
+- Always end with a concrete action. Give specific numbers when data is available.
+- Be direct, rational, non-judgmental.
 
 TODAY: ${currentDate} (${dayOfWeek})
 
