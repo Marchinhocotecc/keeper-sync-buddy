@@ -221,11 +221,6 @@
     box-shadow: var(--shadow-nav);
   }
   
-  /* Legacy aliases */
-  .ayro-glow { box-shadow: 0 0 20px var(--ayvro-glow); }
-  .shadow-ayro { box-shadow: var(--shadow-button); }
-  .shadow-ayro-card { box-shadow: var(--shadow-md); }
-  .shadow-ayro-nav { box-shadow: var(--shadow-nav); }
   
   /* Hover scale effect - subtle */
   .hover-scale {
@@ -303,12 +298,7 @@
   transform: translateY(-1px);
 }
 
-/* Legacy alias */
-.ayro-button { @apply relative overflow-hidden rounded-lg font-medium; box-shadow: var(--shadow-button); transition: var(--transition-smooth); }
-.ayro-button:hover { box-shadow: 0 4px 16px rgba(15, 61, 62, 0.3); transform: translateY(-1px); }
-
 /* Active nav/tab glow */
 .ayvro-active {
   box-shadow: 0 0 12px var(--ayvro-glow);
 }
-.ayro-active { box-shadow: 0 0 12px var(--ayvro-glow); }

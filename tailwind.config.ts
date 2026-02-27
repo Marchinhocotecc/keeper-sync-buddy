@@ -93,11 +93,6 @@ export default {
         "ayvro-card": "0 4px 16px rgba(0, 0, 0, 0.08)",
         "ayvro-nav": "0 1px 3px rgba(0, 0, 0, 0.05)",
         "ayvro-glow": "0 0 12px rgba(15, 61, 62, 0.12)",
-        // Legacy aliases
-        ayro: "0 2px 8px rgba(15, 61, 62, 0.2)",
-        "ayro-card": "0 4px 16px rgba(0, 0, 0, 0.08)",
-        "ayro-nav": "0 1px 3px rgba(0, 0, 0, 0.05)",
-        "ayro-glow": "0 0 12px rgba(15, 61, 62, 0.12)",
       },
       keyframes: {
         "accordion-down": {

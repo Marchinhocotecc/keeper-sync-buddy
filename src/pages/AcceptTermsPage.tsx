@@ -36,7 +36,7 @@ export default function AcceptTermsPage() {
       if (error) throw error;
 
       toast({
-        title: 'Benvenuto in Ayro!',
+        title: 'Benvenuto in Ayvro!',
         description: 'Sono felice di averti qui.',
       });
 
@@ -68,7 +68,7 @@ export default function AcceptTermsPage() {
           </div>
           <CardTitle className="text-2xl font-bold">Quasi ci siamo! 🎉</CardTitle>
           <CardDescription>
-            Per continuare a usare Ayro, accetta i nostri Termini e Condizioni.
+            Per continuare a usare Ayvro, accetta i nostri Termini e Condizioni.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -77,7 +77,7 @@ export default function AcceptTermsPage() {
               <ScrollText className="h-5 w-5 text-primary mt-0.5" />
               <div className="text-sm text-muted-foreground">
                 <p className="mb-2 font-medium text-foreground">
-                  Utilizzando Ayro, accetti di:
+                  Utilizzando Ayvro, accetti di:
                 </p>
                 <ul className="list-disc list-inside space-y-1">
                   <li>Rispettare le regole di utilizzo del servizio</li>
@@ -110,7 +110,7 @@ export default function AcceptTermsPage() {
           <div className="space-y-3">
             <Button
               onClick={handleAcceptTerms}
-              className="w-full rounded-xl ayro-button"
+              className="w-full rounded-xl ayvro-button"
               disabled={!accepted || loading}
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

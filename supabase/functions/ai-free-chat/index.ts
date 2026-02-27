@@ -52,7 +52,7 @@ function createResponse(partial: Partial<AIResponse>): AIResponse {
 }
 
 function json(data: AIResponse): Response {
-  console.log(`[Ayro] → intent=${data.intent}, mode=${data.mode}, action=${data.action.type}`);
+  console.log(`[Ayvro] → intent=${data.intent}, mode=${data.mode}, action=${data.action.type}`);
   return new Response(JSON.stringify(data), {
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
   });
@@ -99,11 +99,11 @@ serve(async (req) => {
     const userId = user.id;
 
     const message = userMessage.trim();
-    console.log(`[Ayro] User=${userId}, Msg="${message.substring(0, 100)}"`);
+    console.log(`[Ayvro] User=${userId}, Msg="${message.substring(0, 100)}"`);
 
     // === FINANCIAL ADVICE INTENT (bypass normal pipeline) ===
     if (message === "__FINANCIAL_ADVICE__" && body.financialContext) {
-      console.log("[Ayro] === FINANCIAL_ADVICE intent ===");
+      console.log("[Ayvro] === FINANCIAL_ADVICE intent ===");
       const userLang = await loadPreferredLanguage(supabase, userId, locale);
       const ctx = body.financialContext;
       const advice = await getFinancialAdvice({
@@ -151,7 +151,7 @@ serve(async (req) => {
 
     // --- CANCEL ---
     if (input.isCancel) {
-      console.log(`[Ayro] Cancel detected, continuation: ${input.cancelContinuation}`);
+      console.log(`[Ayvro] Cancel detected, continuation: ${input.cancelContinuation}`);
       await clearAssistantState(supabase, userId);
       await setPendingAction(supabase, userId, null);
 
@@ -177,7 +177,7 @@ serve(async (req) => {
     const pendingAction = await getPendingAction(supabase, userId);
 
     if (pendingAction) {
-      console.log(`[Ayro] Pending: ${pendingAction.type}`);
+      console.log(`[Ayvro] Pending: ${pendingAction.type}`);
 
       if (pendingAction.type.startsWith("CONFIRM_") && input.isConfirm) {
         const actionTypeStr = pendingAction.type.replace("CONFIRM_", "");
@@ -291,7 +291,7 @@ serve(async (req) => {
     if (state.active_intent && state.active_intent !== 'NONE') {
       const slotResult = handleSlotFilling(message, state);
       if (slotResult && slotResult.matched) {
-        console.log(`[Ayro] Slot filled: ${slotResult.intent}`);
+        console.log(`[Ayvro] Slot filled: ${slotResult.intent}`);
         if (slotResult.action && slotResult.action.type !== 'NONE') {
           await setPendingAction(supabase, userId, {
             type: `CONFIRM_${slotResult.action.type}`,
@@ -346,7 +346,7 @@ serve(async (req) => {
     // ================================================================
     const rateLimit = await checkRateLimit(supabase, userId);
     if (!rateLimit.allowed) {
-      console.log(`[Ayro] Rate limit exceeded for user ${userId}`);
+      console.log(`[Ayvro] Rate limit exceeded for user ${userId}`);
       return json(createResponse({
         intent: "ERROR",
         reply: `Hai raggiunto il limite giornaliero di ${rateLimit.limit} messaggi AI. Riprova domani! 🕐`,
@@ -362,19 +362,19 @@ serve(async (req) => {
 
     let analysis: AnalyzeResult;
     if (cachedResult) {
-      console.log("[Ayro] === L1: CACHE HIT ===");
+      console.log("[Ayvro] === L1: CACHE HIT ===");
       analysis = cachedResult as AnalyzeResult;
     } else {
       // === LAYER 1: ANALYZE (LLM) ===
       await logAIRequest(supabase, userId);
-      console.log("[Ayro] === L1: ANALYZE ===");
+      console.log("[Ayvro] === L1: ANALYZE ===");
       analysis = await analyzeMessage(textToAnalyze, userLang.code);
       // Cache the result (fire-and-forget)
       if (analysis.items && analysis.items.length > 0) {
         setCachedAnalysis(supabase, userId, textToAnalyze, analysis);
       }
     }
-    console.log("[Ayro] Analyze result:", JSON.stringify(analysis, null, 2));
+    console.log("[Ayvro] Analyze result:", JSON.stringify(analysis, null, 2));
 
     // If no items, fallback to deterministic router
     if (!analysis.items || analysis.items.length === 0) {
@@ -464,7 +464,7 @@ serve(async (req) => {
     // ================================================================
     // === LAYER 2: VALIDATE ===
     // ================================================================
-    console.log("[Ayro] === L2: VALIDATE ===");
+    console.log("[Ayvro] === L2: VALIDATE ===");
     const validated = validateItems(actionableItems);
     const validItems = validated.filter(v => v.valid);
     const invalidItems = validated.filter(v => !v.valid);
@@ -499,7 +499,7 @@ serve(async (req) => {
     // ================================================================
     // === LAYER 3: CONFIRM ===
     // ================================================================
-    console.log("[Ayro] === L3: CONFIRM ===");
+    console.log("[Ayvro] === L3: CONFIRM ===");
     const actionsToConfirm = validItems
       .map(v => itemToAction(v.item))
       .filter((a): a is NonNullable<typeof a> => a !== null);
@@ -514,7 +514,7 @@ serve(async (req) => {
     // ================================================================
     // === LAYER 6: RESPOND (with pending action set) ===
     // ================================================================
-    console.log("[Ayro] === L6: RESPOND ===");
+    console.log("[Ayvro] === L6: RESPOND ===");
 
     if (actionsToConfirm.length === 1) {
       const single = actionsToConfirm[0];
@@ -558,7 +558,7 @@ serve(async (req) => {
     }));
 
   } catch (error) {
-    console.error("[Ayro] Error:", error);
+    console.error("[Ayvro] Error:", error);
     return new Response(
       JSON.stringify(createResponse({
         intent: "ERROR", reply: "Si è verificato un problema. Riprova.",

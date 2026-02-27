@@ -1,14 +1,14 @@
-# Ayro - Intelligent Productivity
+# Ayvro - Decision Engine for Your Money
 
-A premium, dark-mode-first productivity app for ambitious minds.
+A modern, minimal financial decision assistant for thoughtful spenders.
 
 ## Brand Identity
 
-- **Name**: Ayro
-- **Tagline**: Intelligent productivity for ambitious minds
-- **Primary Color**: #4C4EFF
-- **Background**: #1F242C (Slate)
-- **Style**: Premium, minimal, professional, unisex
+- **Name**: Ayvro
+- **Tagline**: Decision Engine for Your Money
+- **Primary Color**: #0F3D3E (Teal Petroleum)
+- **Background**: #F8FAF9
+- **Style**: Modern, minimal, professional, decisive
 
 ## Tech Stack
 
@@ -18,6 +18,7 @@ A premium, dark-mode-first productivity app for ambitious minds.
 - shadcn/ui
 - Supabase (Auth, Database, Edge Functions)
 - Framer Motion
+- Capacitor (Android)
 
 ## Features
 
@@ -26,8 +27,8 @@ A premium, dark-mode-first productivity app for ambitious minds.
 - Expense tracking and budgets
 - AI conversational assistant
 - Wellness monitoring
-- Dark mode first design
-- Multi-language (IT, EN, ES)
+- Light mode first design
+- Multi-language (22 languages)
 
 ## Development
 
@@ -44,4 +45,4 @@ npm run build
 
 ## License
 
-Proprietary - Ayro Team
+Proprietary - Ayvro Team
