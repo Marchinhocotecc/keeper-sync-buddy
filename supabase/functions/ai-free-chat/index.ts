@@ -85,16 +85,18 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const authHeader = req.headers.get("Authorization");
-    let userId: string | null = null;
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      userId = user?.id || null;
-    }
-    userId = userId || body.userId || null;
-    if (!userId) {
+    if (!authHeader) {
       return json(createResponse({ intent: "ERROR", reply: "Autenticazione richiesta." }));
     }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return json(createResponse({ intent: "ERROR", reply: "Token non valido." }));
+    }
+
+    const userId = user.id;
 
     const message = userMessage.trim();
     console.log(`[Ayro] User=${userId}, Msg="${message.substring(0, 100)}"`);
