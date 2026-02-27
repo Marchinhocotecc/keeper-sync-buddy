@@ -1,60 +1,142 @@
 
 
-# Rebranding Audit: cosa manca
+# Piano: Intelligence Engine Completo per Ayvro
 
-Il rebranding precedente ha coperto la maggior parte dei file, ma restano **residui concreti** da correggere:
+## Stato attuale
 
-## Residui "Ayro" da eliminare
+**Cosa esiste gia:**
+- L0-L6 pipeline (signals, risk, profile, projection, advisor, insight card)
+- Chat via edge function `ai-free-chat` con intent classification
+- `FinancialInsightCard` proattiva nella Home
+- `financialState.ts` con `monthlySnapshots` persistenti
 
-### 1. README.md — tutto il file è ancora "Ayro"
-- Nome, tagline, colore primario (#4C4EFF), sfondo (#1F242C) tutti vecchi
+**Cosa manca:**
 
-### 2. ExpensesPage.tsx — palette grafici ancora blu
-- `COLORS = ['#4C4EFF', '#5B8CFF', '#76A4FF', ...]` — blu Ayro, va sostituita con tonalità teal coerenti
+## Task 1: Chat finanziaria consapevole — inviare signals + context
 
-### 3. TermsAndConditionsPage.tsx — 2 riferimenti "Ayro"
-- "Ayro è un'applicazione..." (riga 42)
-- "support@ayro.app" (riga 99)
+Il frontend (`AssistantPanel.tsx`) attualmente invia solo `{ userMessage, userId, locale }`. La chat non ha accesso ai segnali finanziari.
 
-### 4. AcceptTermsPage.tsx — 2 riferimenti "Ayro"
-- "Benvenuto in Ayro!" (riga 39)
-- "Per continuare a usare Ayro" (riga 71)
-- Classe CSS `ayro-button` (riga 113)
+### Modifiche:
+- **`AssistantPanel.tsx`**: prima di ogni messaggio, calcolare `financialSignals` e `riskResult` usando le funzioni esistenti, e inviarli nel body:
+  ```
+  { userMessage, locale, financialContext: { signals, risk, timeframe, userIntentType } }
+  ```
+- **`aiFreeOrchestrator.ts`**: stessa cosa quando chiama la edge function
+- **`ai-free-chat/index.ts`**: nel percorso normale (non `__FINANCIAL_ADVICE__`), leggere `financialContext` dal body e passarlo ad `analyzeCore` come contesto aggiuntivo
+- **`ai-free-chat/analyzeCore.ts`**: aggiungere i segnali finanziari al system prompt cosi l'LLM puo interpretarli senza ricalcolarli
 
-### 5. Edge function index.ts — 15+ console.log con `[Ayro]`
-- Tutti i log dicono `[Ayro]` invece di `[Ayvro]`
+### Output strutturato:
+- La edge function deve restituire `{ summary, reasoning, actions[] }` per i messaggi finanziari
+- `AssistantPanel.tsx` deve renderizzare il nuovo formato (reasoning collassabile, action buttons cliccabili)
 
-### 6. tailwind.config.ts — shadow legacy aliases "ayro"
-- `ayro`, `ayro-card`, `ayro-nav`, `ayro-glow` — da rimuovere o rinominare
+## Task 2: Tabelle persistenza summary
 
-### 7. index.css — classi legacy `.ayro-*`
-- `.ayro-glow`, `.shadow-ayro`, `.shadow-ayro-card`, `.shadow-ayro-nav`, `.ayro-button`, `.ayro-active`
+Migrazione SQL per creare:
 
-### 8. Componenti UI con classi `ayro-*`
-- `card.tsx`: `shadow-ayro-card`
-- `tabs.tsx`: `ayro-glow`
-- `select.tsx`: `shadow-ayro-card`
-- `dialog.tsx`: `shadow-ayro-card`
-- `popover.tsx`: probabile `shadow-ayro-card`
-- `TaskCard.tsx`: `shadow-ayro`
-- `AcceptTermsPage.tsx`: `ayro-button`
+```text
+weekly_summaries
+├── id (uuid, PK)
+├── user_id (uuid, NOT NULL)
+├── week_start (date)
+├── week_end (date)
+├── summary_json (jsonb)
+├── created_at (timestamptz)
+UNIQUE(user_id, week_start)
 
-## Piano di implementazione
+monthly_summaries
+├── id (uuid, PK)
+├── user_id (uuid, NOT NULL)
+├── month (integer)
+├── year (integer)
+├── summary_json (jsonb)
+├── created_at (timestamptz)
+UNIQUE(user_id, month, year)
+```
 
-### Task 1: Aggiornare README.md
-Riscrivere con branding Ayvro, palette teal, tagline corretta.
+RLS: `auth.uid() = user_id` per SELECT, INSERT, UPDATE, DELETE.
 
-### Task 2: Sostituire palette grafici in ExpensesPage.tsx
-Usare tonalità teal: `#0F3D3E`, `#145A5B`, `#1E6F70`, `#2E7D32`, `#E6A23C`, `#D64545`, `#6B7280`.
+## Task 3: Weekly Summary Engine
 
-### Task 3: Fix TermsAndConditionsPage.tsx e AcceptTermsPage.tsx
-Sostituire "Ayro" → "Ayvro" e "support@ayro.app" → "support@ayvro.app".
+- **`src/services/weeklySummaryService.ts`**: servizio deterministico che:
+  - Calcola spesa ultimi 7 giorni vs 7 giorni precedenti
+  - Identifica categoria dominante
+  - Identifica giorni piu critici (top 2 per spesa)
+  - Genera 1 suggerimento prioritario concreto (non generico)
+  - Salva in `weekly_summaries`
+  - Struttura: `{ totalSpent, previousWeekSpent, variance, dominantCategory, criticalDays, strategicAction }`
 
-### Task 4: Fix console.log nella edge function
-Sostituire tutti i `[Ayro]` con `[Ayvro]`.
+- **`src/hooks/useWeeklySummary.ts`**: hook che controlla se esiste summary per settimana corrente, altrimenti lo genera
 
-### Task 5: Cleanup CSS/Tailwind legacy aliases
-- In `tailwind.config.ts`: rimuovere le shadow `ayro-*` legacy
-- In `index.css`: rimuovere le classi `.ayro-*` legacy
-- Nei componenti UI: sostituire `ayro-card` → `ayvro-card`, `ayro-glow` → `ayvro-glow`, `ayro-button` → `ayvro-button`, `shadow-ayro` → `shadow-ayvro` (o usare direttamente le nuove classi `ayvro-*` già definite)
+- **`src/components/WeeklySummaryCard.tsx`**: card minimalista (palette Ayvro, max 3 blocchi info)
+
+## Task 4: Monthly Summary Engine
+
+- **`src/services/monthlySummaryService.ts`**: servizio deterministico che:
+  - Calcola budget rispettato si/no
+  - Identifica picco di spesa (giorno + importo)
+  - Calcola variazione vs mese precedente (%)
+  - Genera 1 azione strategica concreta e specifica (es. "Riduci ristoranti del 15%")
+  - Salva in `monthly_summaries`
+
+- **`src/hooks/useMonthlySummary.ts`**: hook che controlla se esiste summary per mese precedente completato
+
+- **`src/components/MonthlySummaryCard.tsx`**: card con max 4 blocchi informativi
+
+## Task 5: Memory contestuale dell'assistente
+
+La chat deve avere accesso a:
+- Ultimo weekly summary generato
+- Ultimo monthly summary
+- Ultimo riskLevel
+- Ultima azione proposta
+
+### Implementazione:
+- Quando la chat invia `financialContext`, includere anche `lastWeeklySummary` e `lastMonthlySummary` (letti dalle tabelle)
+- L'edge function li include nel prompt come contesto storico
+- Questo rende la chat "stateful advisor" invece di "stateless"
+
+## Task 6: Priorita di insight nella Home
+
+Definire gerarchia per evitare "home rumorosa":
+
+```text
+1. Critical risk      → sempre visibile
+2. Monthly summary    → visibile primo accesso del mese
+3. Weekly summary     → visibile primo accesso della settimana
+4. Soft warnings      → solo se nessun altro insight attivo
+```
+
+### Implementazione:
+- **`src/hooks/useHomeInsights.ts`**: orchestratore che decide quale insight mostrare, massimo 2 contemporanei
+- **`HomePage.tsx`**: usa `useHomeInsights` invece di mostrare tutto
+
+## Task 7: Event-driven trigger
+
+Il flusso attuale e `UI → Hook → Calcolo`. Il flusso target e:
+`Expense recorded → Signals recalculated → Risk evaluated → Insight updated`
+
+### Implementazione pratica (senza infrastruttura event bus):
+- In `ActionEngine.ts`, dopo `recordExpense` con successo, invalidare la query React Query dei financial insights
+- Usare `queryClient.invalidateQueries` per triggerare il ricalcolo
+- Stesso pattern per `createTask` e `deleteAllExpenses`
+
+## Riepilogo file da creare/modificare
+
+### Nuovi file:
+1. `src/services/weeklySummaryService.ts`
+2. `src/services/monthlySummaryService.ts`
+3. `src/hooks/useWeeklySummary.ts`
+4. `src/hooks/useMonthlySummary.ts`
+5. `src/hooks/useHomeInsights.ts`
+6. `src/components/WeeklySummaryCard.tsx`
+7. `src/components/MonthlySummaryCard.tsx`
+
+### File da modificare:
+8. `src/components/AssistantPanel.tsx` — inviare financialContext + renderizzare output strutturato
+9. `src/assistant/aiFreeOrchestrator.ts` — inviare financialContext
+10. `supabase/functions/ai-free-chat/index.ts` — ricevere e usare financialContext nel percorso chat normale
+11. `supabase/functions/ai-free-chat/analyzeCore.ts` — includere segnali nel prompt
+12. `src/pages/HomePage.tsx` — usare useHomeInsights con priorita
+13. `src/engine/ActionEngine.ts` — trigger invalidazione dopo write actions
+14. Migrazione SQL — tabelle weekly/monthly_summaries con RLS
 
