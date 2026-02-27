@@ -5,16 +5,34 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, Zap, User, Lightbulb, Trash2, ArrowUp } from "lucide-react";
+import { Send, Zap, User, Lightbulb, Trash2, ArrowUp, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
+import { generateFinancialSignals } from "@/services/financialSignals";
+import { loadFinancialProfile } from "@/services/financialState";
+import { evaluateRisk } from "@/services/riskEngine";
+import { getLatestWeeklySummary } from "@/services/weeklySummaryService";
+import { getLatestMonthlySummary } from "@/services/monthlySummaryService";
+
+interface FinancialAction {
+  type: string;
+  title: string;
+  description: string;
+}
+
+interface StructuredResponse {
+  summary: string;
+  reasoning: string;
+  actions: FinancialAction[];
+}
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
   suggestions?: string[];
+  structured?: StructuredResponse;
 }
 
 const formatTime = (date: Date): string => {
@@ -24,6 +42,62 @@ const formatTime = (date: Date): string => {
     hour12: false
   });
 };
+
+function detectIntentType(message: string): string {
+  const lower = message.toLowerCase();
+  if (/posso permettermi|posso spendere|quanto posso/.test(lower)) return "spending_check";
+  if (/come sto|sto andando|situazione/.test(lower)) return "performance_check";
+  if (/pianifica|prossim|futuro|obiettivo/.test(lower)) return "planning";
+  return "analysis";
+}
+
+function StructuredResponseView({ structured }: { structured: StructuredResponse }) {
+  const [showReasoning, setShowReasoning] = useState(false);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm whitespace-pre-wrap leading-relaxed">{structured.summary}</p>
+      
+      {structured.reasoning && (
+        <div>
+          <button
+            onClick={() => setShowReasoning(!showReasoning)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showReasoning ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            Ragionamento
+          </button>
+          {showReasoning && (
+            <p className="text-xs text-muted-foreground mt-1 pl-4 border-l-2 border-border">
+              {structured.reasoning}
+            </p>
+          )}
+        </div>
+      )}
+
+      {structured.actions && structured.actions.length > 0 && (
+        <div className="space-y-1.5 pt-1">
+          {structured.actions.slice(0, 3).map((action, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-2 bg-primary/5 border border-primary/10 rounded-lg p-2"
+            >
+              <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
+                {action.type === "create_task" ? "📝" : action.type === "adjust_budget" ? "💰" : "🔍"}
+              </Badge>
+              <div>
+                <p className="text-xs font-medium text-foreground">{action.title}</p>
+                {action.description && (
+                  <p className="text-[10px] text-muted-foreground">{action.description}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AssistantPanel() {
   const { t, i18n } = useTranslation();
@@ -123,6 +197,41 @@ export default function AssistantPanel() {
     }
   };
 
+  const buildFinancialContext = async (userMessage: string) => {
+    if (!userId) return undefined;
+    try {
+      const [signals, profile, lastWeekly, lastMonthly] = await Promise.all([
+        generateFinancialSignals(userId),
+        loadFinancialProfile(userId),
+        getLatestWeeklySummary(userId),
+        getLatestMonthlySummary(userId),
+      ]);
+      if (!signals) return undefined;
+
+      const risk = evaluateRisk(signals, profile);
+      return {
+        signals: {
+          burnRate: signals.burnRate,
+          projectedEndBalance: signals.projectedEndBalance,
+          dailySafeLimit: signals.dailySafeLimit,
+          daysRemaining: signals.daysRemaining,
+          topCategory: signals.topCategory,
+          impulseCount: signals.impulseCount,
+          totalSpent: signals.totalSpent,
+          budget: signals.budget,
+          timeProgress: signals.timeProgress,
+        },
+        risk: { riskLevel: risk.riskLevel, flags: risk.flags },
+        timeframe: "month" as const,
+        userIntentType: detectIntentType(userMessage),
+        lastWeeklySummary: lastWeekly,
+        lastMonthlySummary: lastMonthly,
+      };
+    } catch {
+      return undefined;
+    }
+  };
+
   const sendMessage = useCallback(async (messageText?: string) => {
     const rawText = messageText || input.trim();
     if (!rawText || isLoading || !userId) return;
@@ -154,11 +263,15 @@ export default function AssistantPanel() {
     setSuggestions([]);
 
     try {
+      // Build financial context in parallel with nothing blocking
+      const financialContext = await buildFinancialContext(rawText);
+
       const { data, error } = await supabase.functions.invoke("ai-free-chat", {
         body: {
           userMessage: textToSend,
           userId,
-          locale: i18n.language
+          locale: i18n.language,
+          financialContext,
         }
       });
       
@@ -180,11 +293,15 @@ export default function AssistantPanel() {
         return;
       }
       
+      // Check for structured financial response
+      const structured = data.structured as StructuredResponse | undefined;
+
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.reply || t('assistant.how_can_i_help'),
+        content: structured ? structured.summary : (data.reply || t('assistant.how_can_i_help')),
         timestamp: new Date(),
-        suggestions: data.suggestions
+        suggestions: data.suggestions,
+        structured,
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
@@ -312,7 +429,11 @@ export default function AssistantPanel() {
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted border border-border"
                   }`}>
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    {msg.role === "assistant" && msg.structured ? (
+                      <StructuredResponseView structured={msg.structured} />
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    )}
                   </div>
                   {msg.role === "user" && (
                     <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0">

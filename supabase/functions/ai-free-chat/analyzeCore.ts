@@ -31,6 +31,11 @@ export interface AnalyzeResult {
   language: string;
   items: AnalyzedItem[];
   uncertainties: string[];
+  financial_response?: {
+    summary: string;
+    reasoning: string;
+    actions: Array<{ type: string; title: string; description: string }>;
+  };
 }
 
 // ============================================================================
@@ -46,9 +51,41 @@ const FALLBACK_MODELS = [
 // HARDENED SYSTEM PROMPT
 // ============================================================================
 
-function buildAnalyzePrompt(currentDate: string, dayOfWeek: string, userLang?: string): string {
+function buildAnalyzePrompt(currentDate: string, dayOfWeek: string, userLang?: string, financialContext?: any): string {
   const langInstruction = userLang ? `\nIMPORTANT: The user's preferred language is "${userLang}". Detect and respect the language of the user's message. Keep all text fields (title, description) in the user's message language.` : '';
-  return `You are Ayvro Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.${langInstruction}
+  
+  let financialBlock = '';
+  if (financialContext?.signals) {
+    const s = financialContext.signals;
+    const r = financialContext.risk;
+    financialBlock = `
+
+FINANCIAL CONTEXT (pre-calculated, DO NOT recalculate):
+- Budget: €${s.budget || 0}, Spent: €${Math.round(s.totalSpent || 0)}
+- Burn rate: ${Math.round((s.burnRate || 0) * 100)}%
+- Daily safe limit: €${Math.round(s.dailySafeLimit || 0)}
+- Days remaining: ${s.daysRemaining || 0}
+- Projected end balance: €${Math.round(s.projectedEndBalance || 0)}
+- Top category: ${s.topCategory || 'N/A'}
+- Impulse days: ${s.impulseCount || 0}
+- Risk level: ${r?.riskLevel || 'unknown'} (flags: ${(r?.flags || []).join(', ') || 'none'})
+- Time progress: ${Math.round((s.timeProgress || 0) * 100)}%
+${financialContext.lastWeeklySummary ? `- Last weekly: spent €${Math.round(financialContext.lastWeeklySummary.totalSpent)}, variance ${Math.round(financialContext.lastWeeklySummary.variance)}%` : ''}
+${financialContext.lastMonthlySummary ? `- Last monthly: budget ${financialContext.lastMonthlySummary.budgetRespected ? 'respected' : 'exceeded'}, action: "${financialContext.lastMonthlySummary.strategicAction}"` : ''}
+
+When the user asks about finances, spending, budget, or affordability:
+- Use ONLY these pre-calculated values. Never invent numbers.
+- Respond with a SPECIAL financial response format by adding a "financial_response" field to your JSON output:
+  "financial_response": {
+    "summary": "concise answer (1-2 sentences)",
+    "reasoning": "brief explanation of your logic",
+    "actions": [{"type": "create_task|adjust_budget|review_category", "title": "short title", "description": "what to do"}]
+  }
+- Max 3 actions. Be rational, clear, non-judgmental.
+- Intent type: ${financialContext.userIntentType || 'analysis'}`;
+  }
+
+  return `You are Ayvro Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.${langInstruction}${financialBlock}
 
 TODAY: ${currentDate} (${dayOfWeek})
 
@@ -135,7 +172,7 @@ OUTPUT FORMAT (STRICT JSON, no markdown, no comments, no extra text):
       "confidence": 0.9
     }
   ],
-  "uncertainties": []
+  "uncertainties": []${financialContext?.signals ? ',\n  "financial_response": null' : ''}
 }`;
 }
 
@@ -154,7 +191,7 @@ function getDayOfWeek(dateStr: string): string {
 // ANALYZE FUNCTION
 // ============================================================================
 
-export async function analyzeMessage(userMessage: string, userLang?: string): Promise<AnalyzeResult> {
+export async function analyzeMessage(userMessage: string, userLang?: string, financialContext?: any): Promise<AnalyzeResult> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   
   const fallbackResult: AnalyzeResult = {
@@ -175,7 +212,7 @@ export async function analyzeMessage(userMessage: string, userLang?: string): Pr
   
   const currentDate = new Date().toISOString().split('T')[0];
   const dayOfWeek = getDayOfWeek(currentDate);
-  const systemPrompt = buildAnalyzePrompt(currentDate, dayOfWeek, userLang);
+  const systemPrompt = buildAnalyzePrompt(currentDate, dayOfWeek, userLang, financialContext);
   
   console.log(`[ANALYZE-CORE] Processing: "${userMessage.substring(0, 100)}", today=${currentDate} (${dayOfWeek})`);
   
