@@ -34,7 +34,7 @@ import { parseDateTime, isPureTime, buildISODateTime, formatDateIT, normalizeTit
 // HELPERS
 // ============================================================================
 
-function createResponse(partial: Partial<AIResponse>): AIResponse {
+function createResponse(partial: Partial<AIResponse>, structured?: any): AIResponse & { structured?: any } {
   const base: AIResponse = {
     reply: partial.reply || "Come posso aiutarti?",
     intent: partial.intent || "SMALL_TALK",
@@ -48,7 +48,7 @@ function createResponse(partial: Partial<AIResponse>): AIResponse {
   if (base.action.type !== "NONE" || base.needsConfirmation || base.missingFields.length > 0) {
     base.mode = "OPERATIVE";
   }
-  return base;
+  return structured ? { ...base, structured } : base;
 }
 
 function json(data: AIResponse): Response {
@@ -73,7 +73,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { userMessage, locale = "it" } = body;
+    const { userMessage, locale = "it", financialContext } = body;
 
     if (!userMessage || typeof userMessage !== "string") {
       return json(createResponse({ intent: "ERROR", reply: "Messaggio richiesto" }));
@@ -368,7 +368,7 @@ serve(async (req) => {
       // === LAYER 1: ANALYZE (LLM) ===
       await logAIRequest(supabase, userId);
       console.log("[Ayvro] === L1: ANALYZE ===");
-      analysis = await analyzeMessage(textToAnalyze, userLang.code);
+      analysis = await analyzeMessage(textToAnalyze, userLang.code, financialContext);
       // Cache the result (fire-and-forget)
       if (analysis.items && analysis.items.length > 0) {
         setCachedAnalysis(supabase, userId, textToAnalyze, analysis);
@@ -376,6 +376,14 @@ serve(async (req) => {
     }
     console.log("[Ayvro] Analyze result:", JSON.stringify(analysis, null, 2));
 
+    // Check if analyze returned a financial response
+    if (analysis.financial_response && analysis.financial_response.summary) {
+      console.log("[Ayvro] Financial response detected, returning structured");
+      return json(createResponse(
+        { intent: "ADVICE", reply: analysis.financial_response.summary },
+        analysis.financial_response
+      ));
+    }
     // If no items, fallback to deterministic router
     if (!analysis.items || analysis.items.length === 0) {
       const analysisFailed = analysis.uncertainties?.some(u => u.includes("API error"));

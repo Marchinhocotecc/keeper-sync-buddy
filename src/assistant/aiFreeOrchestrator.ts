@@ -190,7 +190,7 @@ function mapActionToData(action: any): AIFreeData {
 
 // ========== CALL AI FREE (via Edge Function - SECURE) ==========
 
-async function callAIFree(userMessage: string, userId: string): Promise<AIFreeOutput> {
+async function callAIFree(userMessage: string, userId: string, financialContext?: any): Promise<AIFreeOutput> {
   console.log('[AIFree] Calling ai-free-chat edge function');
   
   // Get current language from i18n
@@ -204,7 +204,8 @@ async function callAIFree(userMessage: string, userId: string): Promise<AIFreeOu
     const { data, error } = await supabase.functions.invoke('ai-free-chat', {
       body: {
         userMessage,
-        locale: currentLocale
+        locale: currentLocale,
+        financialContext,
       }
     });
     

@@ -4,11 +4,13 @@ import { TaskCard } from '@/components/TaskCard';
 import { AddTaskForm } from '@/components/AddTaskForm';
 import { WellnessCard } from '@/components/WellnessCard';
 import { FinancialInsightCard } from '@/components/FinancialInsightCard';
+import { WeeklySummaryCard } from '@/components/WeeklySummaryCard';
+import { MonthlySummaryCard } from '@/components/MonthlySummaryCard';
 import { Plus, AlertCircle, CheckCircle2, Clock, Flag, TrendingUp, Wallet } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useHomeData } from '@/hooks/useHomeData';
-import { useFinancialInsights } from '@/hooks/useFinancialInsights';
+import { useHomeInsights } from '@/hooks/useHomeInsights';
 import { useExpenses } from '@/hooks/useExpenses';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +24,7 @@ export default function HomePage() {
   const { tasks, addTask, toggleTask, deleteTask } = useTasks(userId);
   const { addEvent, updateEvent, deleteEvent } = useCalendarEvents(userId);
   const { expenses } = useExpenses(userId);
-  const { insight } = useFinancialInsights(userId);
+  const { insights, financialInsight, weeklySummary, monthlySummary } = useHomeInsights(userId);
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Quick stats
@@ -249,10 +251,27 @@ export default function HomePage() {
           </Card>
         </div>
 
-        {/* Financial Insight Card */}
-        {insight && userId && (
-          <div className="mb-6 animate-fade-in">
-            <FinancialInsightCard insight={insight} userId={userId} />
+        {/* Priority-based Insights (max 2) */}
+        {insights.length > 0 && (
+          <div className="space-y-4 mb-6 animate-fade-in">
+            {insights.map((insight, idx) => {
+              if ((insight.type === "critical_risk" || insight.type === "soft_warning") && insight.financialInsight && userId) {
+                return (
+                  <FinancialInsightCard
+                    key={`fi-${idx}`}
+                    insight={insight.financialInsight}
+                    userId={userId}
+                  />
+                );
+              }
+              if (insight.type === "weekly_summary" && insight.weeklySummary) {
+                return <WeeklySummaryCard key={`ws-${idx}`} summary={insight.weeklySummary} />;
+              }
+              if (insight.type === "monthly_summary" && insight.monthlySummary) {
+                return <MonthlySummaryCard key={`ms-${idx}`} summary={insight.monthlySummary} />;
+              }
+              return null;
+            })}
           </div>
         )}
 
@@ -315,10 +334,7 @@ export default function HomePage() {
                       todayTasks.map((task) => (
                         <TaskCard
                           key={task.id}
-                          task={{
-                            ...task,
-                            priority: task.priority as 'low' | 'medium' | 'high'
-                          }}
+                          task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }}
                           onToggle={handleToggleTask}
                           onDelete={handleDeleteTask}
                         />
@@ -328,17 +344,12 @@ export default function HomePage() {
 
                   <TabsContent value="upcoming" className="space-y-2.5 max-h-[350px] overflow-y-auto">
                     {upcomingTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
-                        Nessun task in programma
-                      </p>
+                      <p className="text-sm text-muted-foreground py-8 text-center">Nessun task in programma</p>
                     ) : (
                       upcomingTasks.map((task) => (
                         <TaskCard
                           key={task.id}
-                          task={{
-                            ...task,
-                            priority: task.priority as 'low' | 'medium' | 'high'
-                          }}
+                          task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }}
                           onToggle={handleToggleTask}
                           onDelete={handleDeleteTask}
                         />
@@ -348,17 +359,12 @@ export default function HomePage() {
 
                   <TabsContent value="low" className="space-y-2.5 max-h-[350px] overflow-y-auto">
                     {lowPriorityTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
-                        Nessun task a bassa priorità
-                      </p>
+                      <p className="text-sm text-muted-foreground py-8 text-center">Nessun task a bassa priorità</p>
                     ) : (
                       lowPriorityTasks.map((task) => (
                         <TaskCard
                           key={task.id}
-                          task={{
-                            ...task,
-                            priority: task.priority as 'low' | 'medium' | 'high'
-                          }}
+                          task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }}
                           onToggle={handleToggleTask}
                           onDelete={handleDeleteTask}
                         />
@@ -368,17 +374,12 @@ export default function HomePage() {
 
                   <TabsContent value="completed" className="space-y-2.5 max-h-[350px] overflow-y-auto">
                     {completedTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
-                        Nessun task completato ancora
-                      </p>
+                      <p className="text-sm text-muted-foreground py-8 text-center">Nessun task completato ancora</p>
                     ) : (
                       completedTasks.map((task) => (
                         <TaskCard
                           key={task.id}
-                          task={{
-                            ...task,
-                            priority: task.priority as 'low' | 'medium' | 'high'
-                          }}
+                          task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }}
                           onToggle={handleToggleTask}
                           onDelete={handleDeleteTask}
                         />

@@ -199,6 +199,33 @@ export type Database = {
         }
         Relationships: []
       }
+      monthly_summaries: {
+        Row: {
+          created_at: string
+          id: string
+          month: number
+          summary_json: Json
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: number
+          summary_json?: Json
+          user_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: number
+          summary_json?: Json
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           category: string | null
@@ -408,6 +435,33 @@ export type Database = {
           priority?: string | null
           title?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      weekly_summaries: {
+        Row: {
+          created_at: string
+          id: string
+          summary_json: Json
+          user_id: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          summary_json?: Json
+          user_id: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          summary_json?: Json
+          user_id?: string
+          week_end?: string
+          week_start?: string
         }
         Relationships: []
       }
