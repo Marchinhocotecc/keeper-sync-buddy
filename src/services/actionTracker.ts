@@ -10,6 +10,8 @@ export interface ActionEvent {
   id: string;
   type: "create_task" | "adjust_budget" | "set_limit";
   title: string;
+  suggestion?: string;    // original strategy text, e.g. "Riduci ristoranti del 20%"
+  category?: string;      // related spending category
   shownAt: string;
   clickedAt?: string;
   completedAt?: string;
@@ -132,4 +134,21 @@ export function countConsecutiveIgnored(history: ActionEvent[]): number {
     else break;
   }
   return count;
+}
+
+/**
+ * Get the most recent active (non-completed, non-ignored) strategy suggestion
+ */
+export async function getActiveStrategy(userId: string): Promise<{ suggestion: string; category: string } | null> {
+  const payload = await getPayload(userId);
+  const history = getHistory(payload);
+
+  // Find the latest action with a suggestion that's not completed or ignored
+  for (let i = history.length - 1; i >= 0; i--) {
+    const a = history[i];
+    if (a.suggestion && !a.completedAt && !a.ignored) {
+      return { suggestion: a.suggestion, category: a.category || "" };
+    }
+  }
+  return null;
 }

@@ -12,6 +12,7 @@ import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useHomeData } from '@/hooks/useHomeData';
 import { useHomeInsights } from '@/hooks/useHomeInsights';
 import { useExpenses } from '@/hooks/useExpenses';
+import { DailyNudge } from '@/components/DailyNudge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -213,6 +214,13 @@ export default function HomePage() {
             })}
           </p>
         </div>
+
+        {/* Daily Nudge */}
+        {userId && (
+          <div className="mb-4 animate-fade-in">
+            <DailyNudge userId={userId} />
+          </div>
+        )}
 
         {/* Quick Stats */}
         <div className="grid gap-4 sm:grid-cols-3 mb-6 animate-fade-in">

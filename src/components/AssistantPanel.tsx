@@ -14,6 +14,8 @@ import { loadFinancialProfile } from "@/services/financialState";
 import { evaluateRisk } from "@/services/riskEngine";
 import { getLatestWeeklySummary } from "@/services/weeklySummaryService";
 import { getLatestMonthlySummary } from "@/services/monthlySummaryService";
+import { getActiveStrategy } from "@/services/actionTracker";
+import { useExpenseReaction } from "@/hooks/useExpenseReaction";
 
 interface FinancialAction {
   type: string;
@@ -109,6 +111,7 @@ export default function AssistantPanel() {
   const [userId, setUserId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Array<{ text: string; priority: string }>>([]);
   
+  const { reactToExpense } = useExpenseReaction();
   const lastCallRef = useRef<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -264,7 +267,15 @@ export default function AssistantPanel() {
 
     try {
       // Build financial context in parallel with nothing blocking
-      const financialContext = await buildFinancialContext(rawText);
+      const [financialContext, activeStrategy] = await Promise.all([
+        buildFinancialContext(rawText),
+        userId ? getActiveStrategy(userId) : Promise.resolve(null),
+      ]);
+
+      // Inject active strategy into financial context
+      if (financialContext && activeStrategy) {
+        (financialContext as any).activeStrategy = activeStrategy;
+      }
 
       const { data, error } = await supabase.functions.invoke("ai-free-chat", {
         body: {
