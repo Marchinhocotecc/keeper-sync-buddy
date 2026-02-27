@@ -17,8 +17,8 @@ import { BudgetCard } from '@/components/BudgetCard';
 import { BudgetEditModal } from '@/components/BudgetEditModal';
 import { getMonthlyBudget, upsertMonthlyBudget } from '@/services/budgetService';
 
-// Ayro Palette colors for charts
-const COLORS = ['#4C4EFF', '#5B8CFF', '#76A4FF', '#4BE3C6', '#FFB457', '#FF6B6B', '#CFE1FF'];
+// Ayvro Teal Petroleum palette for charts
+const COLORS = ['#0F3D3E', '#145A5B', '#1E6F70', '#2E7D32', '#E6A23C', '#D64545', '#6B7280'];
 
 function FinancialInsightSection({ userId }: { userId: string }) {
   const { insight } = useFinancialInsights(userId);
