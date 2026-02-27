@@ -1,55 +1,80 @@
 
 
-# Piano: Intelligence Engine Completo per Ayvro
+# Piano: Comportamento Proattivo Immediato
 
-## Stato attuale — IMPLEMENTATO ✅
+## Cosa manca oggi
 
-**Cosa esiste:**
-- L0-L6 pipeline (signals, risk, profile, projection, advisor, insight card)
-- Chat via edge function `ai-free-chat` con intent classification
-- `FinancialInsightCard` proattiva nella Home
-- `financialState.ts` con `monthlySnapshots` persistenti
+1. **Nessun daily nudge** — La Home non mostra il `dailySafeLimit` come frase contestuale al primo accesso
+2. **Nessun micro-intervento post-spesa** — Dopo `recordExpense`, niente notifica immediata sullo stato
+3. **Nessuna memoria delle azioni suggerite** — Il sistema propone azioni ma non traccia se l'utente le ignora nei giorni successivi
+4. **Nessun pattern detection** — Non analizza i giorni ricorrenti ad alta spesa
+5. **Le risposte chat sono verbose** — Nessun vincolo di brevità nel prompt dell'edge function
 
-## ✅ Task 1: Chat finanziaria consapevole
+## Implementazione in 5 task
 
-- `AssistantPanel.tsx` invia `financialContext` (signals, risk, timeframe, userIntentType, lastWeeklySummary, lastMonthlySummary)
-- `ai-free-chat/analyzeCore.ts` include i segnali nel system prompt
-- `ai-free-chat/index.ts` intercetta `financial_response` e lo restituisce come `structured`
-- UI renderizza output strutturato con reasoning collassabile e action cards
+### Task 1: Daily Nudge nella Home
 
-## ✅ Task 2: Tabelle persistenza summary
+Creare `src/components/DailyNudge.tsx`:
+- Componente leggero (1 frase, no card pesante)
+- Legge `financialSignals` via `useFinancialInsights` (già calcolati)
+- Logica:
+  - `riskLevel === "safe"` → "Oggi puoi spendere fino a €{dailySafeLimit} senza alterare il budget."
+  - `riskLevel === "warning"` → "Oggi dovresti restare sotto €{dailySafeLimit}."
+  - `riskLevel === "critical"` → "Evita nuove spese oggi."
+- Mostrato solo 1 volta al giorno (usa `localStorage` con chiave `ayvro_nudge_${date}`)
+- Posizione: sopra i Quick Stats in `HomePage.tsx`, prima delle insight cards
 
-- `weekly_summaries` e `monthly_summaries` create con RLS owner-scoped
-- Indici unici su (user_id, week_start) e (user_id, month, year)
+### Task 2: Micro-intervento post-spesa (toast contestuale)
 
-## ✅ Task 3: Weekly Summary Engine
+Modificare `ActionEngine.ts` — aggiungere un hook wrapper o event emitter:
+- Creare `src/hooks/useExpenseReaction.ts`:
+  - Dopo ogni `recordExpense` con successo, ricalcola `financialSignals` velocemente
+  - Mostra un toast contestuale:
+    - Se `burnRate > 0.8` → toast warning: "Stai spendendo più del ritmo medio questa settimana."
+    - Se `dailySafeLimit < 10` → toast critical: "Limite giornaliero sotto €10. Attenzione."
+    - Se impulse spending detected → "Questa è la {n}ª spesa alta oggi."
+  - Integrato dove `recordExpense` viene chiamato (chat + UI)
 
-- `src/services/weeklySummaryService.ts`: calcolo deterministico
-- `src/hooks/useWeeklySummary.ts`: check + generate
-- `src/components/WeeklySummaryCard.tsx`: card minimal Ayvro
+### Task 3: Memoria azioni suggerite + reminder coerente
 
-## ✅ Task 4: Monthly Summary Engine
+Estendere `actionTracker.ts`:
+- Aggiungere campo `suggestion` a `ActionEvent` (testo del suggerimento originale, es. "Riduci ristoranti del 20%")
+- Creare `getActiveStrategy(userId)` — ritorna l'ultima azione suggerita non ancora completata/ignorata
+- In `useFinancialInsights.ts`, prima di generare nuovi insight, controllare:
+  - Se c'è una strategia attiva ignorata E l'utente ha registrato spese nella stessa categoria
+  - Aggiungere un flag `strategyIgnored: true` + testo al `financialContext` inviato all'LLM
+- L'LLM nel prompt riceve: "L'utente sta ignorando la strategia '{suggestion}'. Menzionalo brevemente."
 
-- `src/services/monthlySummaryService.ts`: calcolo deterministico con azione strategica concreta
-- `src/hooks/useMonthlySummary.ts`: check previous month
-- `src/components/MonthlySummaryCard.tsx`: card max 4 blocchi
+### Task 4: Pattern detection giorni ricorrenti
 
-## ✅ Task 5: Memory contestuale dell'assistente
+Creare `src/services/spendingPatterns.ts`:
+- Funzione `detectDayPatterns(userId)`:
+  - Analizza ultimi 30 giorni di spese
+  - Raggruppa per giorno della settimana (0=Dom, 1=Lun, ...)
+  - Identifica se un giorno ha media > 1.5x media globale
+  - Ritorna: `{ peakDay: string, avgPeakSpending: number, globalAvg: number }` o `null`
+- Integrare nel `DailyNudge`:
+  - Se `oggi === peakDay` → aggiungere: "Il {giorno} è il tuo giorno di spesa più alto. Vuoi impostare un limite?"
 
-- `AssistantPanel.tsx` carica `lastWeeklySummary` e `lastMonthlySummary` e li invia con ogni messaggio
-- L'edge function li include nel prompt come contesto storico
+### Task 5: Chat più breve e diretta
 
-## ✅ Task 6: Priorità di insight nella Home
+Modificare `supabase/functions/ai-free-chat/analyzeCore.ts`:
+- Nel system prompt aggiungere vincoli espliciti:
+  - "Rispondi in massimo 2-3 frasi."
+  - "Niente premesse, niente 'dipende da'."
+  - "Proponi sempre un'azione concreta come ultima frase."
+  - "Se hai dati sufficienti, dai numeri specifici."
+- Aggiungere al prompt il contesto `strategyIgnored` dal Task 3
 
-- `src/hooks/useHomeInsights.ts`: orchestratore con gerarchia
-  1. Critical risk → sempre
-  2. Monthly summary → primo accesso del mese
-  3. Weekly summary → primo accesso della settimana
-  4. Soft warnings → solo se nessun altro attivo
-- Max 2 insight contemporanei
-- `HomePage.tsx` usa `useHomeInsights`
+## File da creare
+1. `src/components/DailyNudge.tsx`
+2. `src/hooks/useExpenseReaction.ts`
+3. `src/services/spendingPatterns.ts`
 
-## ⏳ Task 7: Event-driven trigger (parziale)
+## File da modificare
+4. `src/pages/HomePage.tsx` — aggiungere `DailyNudge` sopra Quick Stats
+5. `src/services/actionTracker.ts` — aggiungere `suggestion` field + `getActiveStrategy()`
+6. `src/hooks/useFinancialInsights.ts` — passare `strategyIgnored` nel context
+7. `supabase/functions/ai-free-chat/analyzeCore.ts` — prompt più diretto + vincolo brevità + strategy awareness
+8. `src/components/AssistantPanel.tsx` — dopo invio spesa, triggerare `useExpenseReaction`
 
-- Il frontend usa React Query invalidation tramite gli hooks esistenti
-- Per un event bus completo servirebbe infrastruttura aggiuntiva (Supabase Realtime o pg_notify)
