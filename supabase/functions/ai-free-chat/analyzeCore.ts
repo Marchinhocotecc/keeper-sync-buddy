@@ -1,14 +1,11 @@
 /**
- * LAYER 1 — COGNITIVE ANALYZE (LLM)
+ * FALLBACK ANALYZER — analyzeCore (simplified)
  * 
- * RESPONSIBILITY: Understand what the user INTENDS to do.
- * OUTPUT: Structured JSON with atomic items.
+ * Called ONLY when Intent Classifier returns UNKNOWN
+ * and deterministic router doesn't match.
  * 
- * RULES:
- * - NO execution, NO UI, NO confirmation
- * - ONE call to LLM, ONE JSON output
- * - If a phrase implies a future action → MUST produce an item
- * - If it doesn't → architectural bug, not "stupid LLM"
+ * Handles: task/event/expense extraction from natural language.
+ * Financial logic has been moved to decisionEngine.ts.
  */
 
 // ============================================================================
@@ -31,11 +28,6 @@ export interface AnalyzeResult {
   language: string;
   items: AnalyzedItem[];
   uncertainties: string[];
-  financial_response?: {
-    summary: string;
-    reasoning: string;
-    actions: Array<{ type: string; title: string; description: string }>;
-  };
 }
 
 // ============================================================================
@@ -51,47 +43,10 @@ const FALLBACK_MODELS = [
 // HARDENED SYSTEM PROMPT
 // ============================================================================
 
-function buildAnalyzePrompt(currentDate: string, dayOfWeek: string, userLang?: string, financialContext?: any): string {
+function buildAnalyzePrompt(currentDate: string, dayOfWeek: string, userLang?: string): string {
   const langInstruction = userLang ? `\nIMPORTANT: The user's preferred language is "${userLang}". Detect and respect the language of the user's message. Keep all text fields (title, description) in the user's message language.` : '';
-  
-  let financialBlock = '';
-  if (financialContext?.signals) {
-    const s = financialContext.signals;
-    const r = financialContext.risk;
-    financialBlock = `
 
-FINANCIAL CONTEXT (pre-calculated, DO NOT recalculate):
-- Budget: €${s.budget || 0}, Spent: €${Math.round(s.totalSpent || 0)}
-- Burn rate: ${Math.round((s.burnRate || 0) * 100)}%
-- Daily safe limit: €${Math.round(s.dailySafeLimit || 0)}
-- Days remaining: ${s.daysRemaining || 0}
-- Projected end balance: €${Math.round(s.projectedEndBalance || 0)}
-- Top category: ${s.topCategory || 'N/A'}
-- Impulse days: ${s.impulseCount || 0}
-- Risk level: ${r?.riskLevel || 'unknown'} (flags: ${(r?.flags || []).join(', ') || 'none'})
-- Time progress: ${Math.round((s.timeProgress || 0) * 100)}%
-${financialContext.lastWeeklySummary ? `- Last weekly: spent €${Math.round(financialContext.lastWeeklySummary.totalSpent)}, variance ${Math.round(financialContext.lastWeeklySummary.variance)}%` : ''}
-${financialContext.lastMonthlySummary ? `- Last monthly: budget ${financialContext.lastMonthlySummary.budgetRespected ? 'respected' : 'exceeded'}, action: "${financialContext.lastMonthlySummary.strategicAction}"` : ''}
-
-When the user asks about finances, spending, budget, or affordability:
-- Use ONLY these pre-calculated values. Never invent numbers.
-- Respond with a SPECIAL financial response format by adding a "financial_response" field to your JSON output:
-  "financial_response": {
-    "summary": "concise answer (1-2 sentences)",
-    "reasoning": "brief explanation of your logic",
-    "actions": [{"type": "create_task|adjust_budget|review_category", "title": "short title", "description": "what to do"}]
-  }
-- Max 3 actions. Be rational, clear, non-judgmental.
-- Intent type: ${financialContext.userIntentType || 'analysis'}
-${financialContext.activeStrategy ? `\nSTRATEGY MEMORY:\nThe user has an active strategy: "${financialContext.activeStrategy.suggestion}"\nIf they are spending in "${financialContext.activeStrategy.category}" despite this strategy, briefly mention it.` : ''}`;
-  }
-
-  return `You are Ayvro Analyze Core. Your ONLY job: segment the user message into atomic items and return JSON.${langInstruction}${financialBlock}
-
-RESPONSE STYLE (when financial_response is used):
-- Maximum 2-3 sentences in summary. No preambles. No "dipende da".
-- Always end with a concrete action. Give specific numbers when data is available.
-- Be direct, rational, non-judgmental.
+  return `You are Ayvro Analyze Core (FALLBACK). Your ONLY job: segment the user message into atomic items and return JSON.${langInstruction}
 
 TODAY: ${currentDate} (${dayOfWeek})
 
@@ -128,40 +83,6 @@ TITLE RULES:
 - NO verb prefixes: remove "crea", "aggiungi", "ricordami di", "devo"
 - NO generic titles: "task", "evento", "cosa" are FORBIDDEN
 
-NEGATIVE EXAMPLES (DO NOT DO THIS):
-❌ "sabato spesa, domani lavoro alle 10" → 1 item with title "Sabato spesa, domani lavoro alle 10"
-❌ Merging distinct actions into one item
-❌ Title: "Task" or "Evento" or "Cosa"
-❌ Inventing a time when user didn't specify one
-❌ Returning 0 items for "devo comprare il latte" (this is clearly a task!)
-
-POSITIVE EXAMPLES:
-
-Input: "sabato spesa, domani lavoro alle 10 e dopodomani vado a sciare e spendo 50"
-Output: 4 items:
-1. {"type":"task","title":"Spesa","date":"SATURDAY_DATE","time":null,"amount":null,"confidence":0.9}
-2. {"type":"event","title":"Lavoro","date":"TOMORROW_DATE","time":"10:00","amount":null,"confidence":0.95}
-3. {"type":"event","title":"Sciare","date":"DAY_AFTER_DATE","time":null,"amount":null,"confidence":0.85}
-4. {"type":"expense","title":"Sci","date":"DAY_AFTER_DATE","time":null,"amount":50,"currency":"EUR","category":"svago","confidence":0.9}
-
-Input: "domani lavoro, venerdì ho padel e sabato ho il dottore"
-Output: 3 items (all events because they have specific days):
-1. {"type":"event","title":"Lavoro","date":"TOMORROW","time":null,"confidence":0.9}
-2. {"type":"event","title":"Padel","date":"FRIDAY","time":null,"confidence":0.9}
-3. {"type":"event","title":"Dottore","date":"SATURDAY","time":null,"confidence":0.9}
-
-Input: "ciao"
-Output: 1 item: {"type":"greeting","title":"ciao","confidence":1.0}
-
-Input: "ricordami di comprare il latte"
-Output: 1 item: {"type":"task","title":"Comprare il latte","date":null,"time":null,"confidence":0.95}
-
-Input: "mostra i miei task"
-Output: 1 item: {"type":"query","title":"tasks","confidence":0.95}
-
-Input: "pizza 12 euro"
-Output: 1 item: {"type":"expense","title":"Pizza","amount":12,"currency":"EUR","category":"cibo","confidence":0.95}
-
 OUTPUT FORMAT (STRICT JSON, no markdown, no comments, no extra text):
 {
   "language": "it",
@@ -178,7 +99,7 @@ OUTPUT FORMAT (STRICT JSON, no markdown, no comments, no extra text):
       "confidence": 0.9
     }
   ],
-  "uncertainties": []${financialContext?.signals ? ',\n  "financial_response": null' : ''}
+  "uncertainties": []
 }`;
 }
 
@@ -197,7 +118,7 @@ function getDayOfWeek(dateStr: string): string {
 // ANALYZE FUNCTION
 // ============================================================================
 
-export async function analyzeMessage(userMessage: string, userLang?: string, financialContext?: any): Promise<AnalyzeResult> {
+export async function analyzeMessage(userMessage: string, userLang?: string): Promise<AnalyzeResult> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   
   const fallbackResult: AnalyzeResult = {
@@ -218,9 +139,9 @@ export async function analyzeMessage(userMessage: string, userLang?: string, fin
   
   const currentDate = new Date().toISOString().split('T')[0];
   const dayOfWeek = getDayOfWeek(currentDate);
-  const systemPrompt = buildAnalyzePrompt(currentDate, dayOfWeek, userLang, financialContext);
+  const systemPrompt = buildAnalyzePrompt(currentDate, dayOfWeek, userLang);
   
-  console.log(`[ANALYZE-CORE] Processing: "${userMessage.substring(0, 100)}", today=${currentDate} (${dayOfWeek})`);
+  console.log(`[ANALYZE-CORE] Fallback processing: "${userMessage.substring(0, 100)}", today=${currentDate} (${dayOfWeek})`);
   
   for (const model of modelsToTry) {
     try {
