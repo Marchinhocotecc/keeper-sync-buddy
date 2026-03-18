@@ -3,6 +3,8 @@
  * Activated ONLY for FINANCIAL_DECISION and FINANCIAL_QUERY intents.
  * Receives pre-calculated signals, returns structured JSON.
  * NO conversation, NO empathy — pure rational analysis.
+ * 
+ * v2: ALWAYS proposes at least 1 micro-action. Never says just "continua così".
  */
 
 export interface DecisionAction {
@@ -40,62 +42,112 @@ function buildDeterministicDecision(signals: any, risk: any): DecisionResult {
   const burnPct = Math.round((signals.burnRate || 0) * 100);
   const remaining = Math.round((signals.budget || 0) - (signals.totalSpent || 0));
   const riskLevel = risk?.riskLevel || 'unknown';
+  const topCategory = signals.topCategory || 'N/A';
+  const topCategoryPct = signals.topCategoryPct || 0;
+  const dailySafe = Math.round(signals.dailySafeLimit || 0);
 
   let summary: string;
   let reasoning: string;
   const actions: DecisionAction[] = [];
 
   if (riskLevel === 'critical') {
-    summary = `Situazione critica: speso €${Math.round(signals.totalSpent)} su €${Math.round(signals.budget)}. Limite giornaliero: €${Math.round(signals.dailySafeLimit)}.`;
+    summary = `Situazione critica: speso €${Math.round(signals.totalSpent)} su €${Math.round(signals.budget)}. Limite giornaliero: €${dailySafe}.`;
     reasoning = `Burn rate al ${burnPct}%, proiezione fine mese €${Math.round(signals.projectedEndBalance)}.`;
     actions.push({
       type: 'reduce_daily_spending',
-      title: `Limite €${Math.round(signals.dailySafeLimit)}/giorno`,
-      description: `Riduci le spese giornaliere a massimo €${Math.round(signals.dailySafeLimit)} per rientrare nel budget.`
+      title: `Limite €${dailySafe}/giorno`,
+      description: `Riduci le spese giornaliere a massimo €${dailySafe} per rientrare nel budget.`
     });
+    if (topCategory !== 'N/A') {
+      actions.push({
+        type: 'limit_category',
+        title: `Taglia ${topCategory}`,
+        description: `${topCategory} è la categoria dominante. Prova a dimezzarla questa settimana.`
+      });
+    }
   } else if (riskLevel === 'warning') {
     summary = `Attenzione: burn rate al ${burnPct}%. Restano €${remaining}.`;
-    reasoning = `Spesa in linea ma tendenza in aumento. Categoria principale: ${signals.topCategory || 'N/A'}.`;
+    reasoning = `Spesa in linea ma tendenza in aumento. Categoria principale: ${topCategory}.`;
     actions.push({
       type: 'limit_category',
-      title: `Rivedi ${signals.topCategory || 'spese'}`,
-      description: `La categoria ${signals.topCategory || 'principale'} è quella con più spesa. Valuta se puoi ridurla.`
+      title: `Rivedi ${topCategory}`,
+      description: `La categoria ${topCategory} è quella con più spesa. Prova a ridurla del 20% questa settimana.`
+    });
+    actions.push({
+      type: 'save_more',
+      title: `Obiettivo: 1 giorno senza spese extra`,
+      description: `Prova a non spendere in ${topCategory} per un giorno intero.`
     });
   } else {
-    summary = `Tutto sotto controllo. Budget usato al ${burnPct}%, restano €${remaining}.`;
-    reasoning = `Spesa regolare, nessun segnale di rischio.`;
-    actions.push({ type: 'none', title: 'Nessuna azione', description: 'Continua così.' });
+    // SAFE — but NEVER just "continua così"
+    summary = `Budget sotto controllo: usato ${burnPct}%, restano €${remaining}.`;
+    reasoning = `Spesa regolare, nessun segnale di rischio critico.`;
+
+    // Always propose a useful micro-action even when safe
+    if (burnPct > 50) {
+      actions.push({
+        type: 'save_more',
+        title: `Risparmia €${Math.round(remaining * 0.1)}`,
+        description: `Sei a metà budget. Prova a mettere da parte €${Math.round(remaining * 0.1)} entro fine mese.`
+      });
+    } else if (topCategoryPct > 40) {
+      actions.push({
+        type: 'limit_category',
+        title: `Monitora ${topCategory}`,
+        description: `${topCategory} rappresenta il ${topCategoryPct}% delle spese. Tieni d'occhio questa categoria.`
+      });
+    } else if (dailySafe > 0) {
+      actions.push({
+        type: 'save_more',
+        title: `Budget giornaliero: €${dailySafe}`,
+        description: `Hai €${dailySafe} al giorno disponibili. Prova a stare sotto €${Math.round(dailySafe * 0.8)} per creare un margine.`
+      });
+    } else {
+      actions.push({
+        type: 'review_budget',
+        title: 'Rivedi obiettivi',
+        description: 'Stai andando bene. È un buon momento per impostare un obiettivo di risparmio.'
+      });
+    }
   }
 
   return { summary, reasoning, actions };
 }
 
-const DECISION_PROMPT = `You are Ayvro's financial decision engine.
+const DECISION_PROMPT = `Sei il motore decisionale finanziario di Ayvro.
 
-You receive pre-calculated signals. Do NOT recalculate numbers.
-Do NOT make conversation. Do NOT write long text.
+Ricevi segnali già calcolati.
+Non ricalcolare numeri.
+Non fare conversazione.
+Non scrivere testo lungo.
 
-Your job:
-- Interpret the risk level
-- Generate a concise summary
-- Propose max 2 concrete operational actions
+Il tuo compito:
+- Interpretare il livello di rischio
+- Generare un riassunto sintetico
+- Proporre massimo 2 azioni operative concrete
 
-Reply ONLY in valid JSON:
+REGOLE CRITICHE:
+- Se burnRate > 0.5 → suggerisci micro ottimizzazione
+- Se categoria dominante > 40% → suggerisci riduzione specifica
+- Se rischio safe → dai 1 azione leggera (NON zero azioni)
+- NON rispondere MAI solo "continua così" — proponi SEMPRE almeno 1 micro-azione utile
+
+Rispondi SOLO in JSON valido:
 
 {
-  "summary": "clear concise sentence",
-  "reasoning": "brief explanation based on received signals",
+  "summary": "frase sintetica chiara",
+  "reasoning": "spiegazione breve basata sui segnali ricevuti",
   "actions": [
     {
       "type": "limit_category | reduce_daily_spending | review_budget | save_more | none",
-      "title": "short title",
-      "description": "concrete specific action"
+      "title": "titolo breve",
+      "description": "azione concreta e specifica"
     }
   ]
 }
 
-If no actions needed, use "none".
-No text outside JSON.`;
+Se non servono azioni critiche, usa comunque 1 azione di tipo "save_more" o "review_budget".
+Non aggiungere testo fuori dal JSON.`;
 
 const FALLBACK_MODELS = [
   "openai/gpt-oss-120b:free",
@@ -120,21 +172,21 @@ export async function runDecisionEngine(
     ? [envModel, ...FALLBACK_MODELS.filter(m => m !== envModel)]
     : [...FALLBACK_MODELS];
 
-  const financialData = `User question: "${userMessage}"
-Language: ${userLang}
+  const financialData = `Domanda utente: "${userMessage}"
+Lingua: ${userLang}
 
-Pre-calculated signals:
-- Budget: €${signals.budget || 0}, Spent: €${Math.round(signals.totalSpent || 0)}
+Segnali pre-calcolati:
+- Budget: €${signals.budget || 0}, Speso: €${Math.round(signals.totalSpent || 0)}
 - Burn rate: ${Math.round((signals.burnRate || 0) * 100)}%
-- Daily safe limit: €${Math.round(signals.dailySafeLimit || 0)}
-- Days remaining: ${signals.daysRemaining || 0}
-- Projected end balance: €${Math.round(signals.projectedEndBalance || 0)}
-- Top category: ${signals.topCategory || 'N/A'}
-- Impulse days: ${signals.impulseCount || 0}
-- Risk level: ${risk?.riskLevel || 'unknown'} (flags: ${(risk?.flags || []).join(', ') || 'none'})
-- Time progress: ${Math.round((signals.timeProgress || 0) * 100)}%
+- Limite giornaliero sicuro: €${Math.round(signals.dailySafeLimit || 0)}
+- Giorni rimanenti: ${signals.daysRemaining || 0}
+- Proiezione fine mese: €${Math.round(signals.projectedEndBalance || 0)}
+- Categoria dominante: ${signals.topCategory || 'N/A'} (${signals.topCategoryPct || 0}%)
+- Giorni impulsivi: ${signals.impulseCount || 0}
+- Livello rischio: ${risk?.riskLevel || 'unknown'} (flags: ${(risk?.flags || []).join(', ') || 'nessuno'})
+- Progresso temporale: ${Math.round((signals.timeProgress || 0) * 100)}%
 
-Respond in ${userLang}.`;
+Rispondi in ${userLang}.`;
 
   for (const model of modelsToTry) {
     try {
@@ -183,6 +235,15 @@ Respond in ${userLang}.`;
       const validated = validateDecision(parsed);
 
       if (validated) {
+        // Post-validation: ensure at least 1 real action
+        if (validated.actions.length === 0 || validated.actions.every(a => a.type === 'none')) {
+          console.log("[DECISION-ENGINE] LLM returned no real actions, adding fallback micro-action");
+          validated.actions = [{
+            type: 'review_budget',
+            title: 'Rivedi obiettivi',
+            description: 'Verifica se il tuo budget attuale riflette le tue priorità reali.'
+          }];
+        }
         console.log(`[DECISION-ENGINE] Success (model=${model})`);
         return validated;
       }

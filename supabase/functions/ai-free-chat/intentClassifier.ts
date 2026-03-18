@@ -2,6 +2,8 @@
  * MODULE 1 — INTENT CLASSIFIER
  * Ultra-light LLM call: receives message, returns ONLY a label.
  * max_tokens: 20, temperature: 0
+ * 
+ * v2: Improved follow-up detection + better deterministic fallback
  */
 
 export type IntentLabel =
@@ -18,25 +20,54 @@ const VALID_LABELS: IntentLabel[] = [
   'EVENT_QUERY', 'PLANNING', 'GENERAL_CHAT', 'UNKNOWN'
 ];
 
-const CLASSIFIER_PROMPT = `You are an intent classifier for a personal assistant.
+const CLASSIFIER_PROMPT = `Sei un classificatore di intenti per un assistente personale.
 
-Classify the user message into ONE of these categories:
+Classifica il messaggio dell'utente in UNA SOLA delle seguenti categorie:
 
-- FINANCIAL_DECISION (e.g. can I afford it?, am I spending too much?, how much can I spend today?)
-- FINANCIAL_QUERY (e.g. how am I doing?, how much did I spend?, risk level?)
-- TASK_QUERY (e.g. list tasks, what do I have today?, show my to-do)
-- EVENT_QUERY (e.g. today's events?, what's on my calendar?)
-- PLANNING (e.g. when should I work out?, help me plan)
-- GENERAL_CHAT (any normal conversation, greetings, thanks, small talk)
-- UNKNOWN (cannot determine)
+- FINANCIAL_DECISION (es: posso permettermi?, sto spendendo troppo?, quanto posso spendere oggi?)
+- FINANCIAL_QUERY (es: come sto andando?, quanto ho speso?, livello di rischio?)
+- TASK_QUERY (es: elenca task, cosa ho oggi?, mostra to-do)
+- EVENT_QUERY (es: eventi di oggi?, cosa c'è in calendario?)
+- PLANNING (es: quando mi consigli di allenarmi?, pianifica la giornata, aiutami a organizzare)
+- GENERAL_CHAT (qualsiasi conversazione normale, saluti, ringraziamenti, domande astratte, follow-up come "perché?", "come mai?", "spiegami")
+- UNKNOWN (non determinabile)
 
-Reply ONLY with the label.
-No extra text. No explanation. No punctuation.`;
+Rispondi SOLO con la label.
+Non aggiungere testo.
+Non spiegare.
+Nessuna punteggiatura.`;
 
 const FALLBACK_MODELS = [
   "openai/gpt-oss-120b:free",
   "deepseek/deepseek-r1-0528:free",
 ];
+
+// ============================================================================
+// FOLLOW-UP DETECTION
+// ============================================================================
+
+const FOLLOW_UP_PATTERNS = [
+  /^perch[eéè]\??$/i,
+  /^come mai\??$/i,
+  /^spiegami$/i,
+  /^perch[eéè]\s+dici\s+cos[iì]\??$/i,
+  /^in che senso\??$/i,
+  /^cosa\s+intendi\??$/i,
+  /^cio[eè]\??$/i,
+  /^e\s+quindi\??$/i,
+  /^ma\s+perch[eéè]\??$/i,
+  /^e\s+perch[eéè]\??$/i,
+  /^cosa\s+significa\??$/i,
+  /^puoi\s+spiegare\??$/i,
+  /^why\??$/i,
+  /^what do you mean\??$/i,
+  /^explain$/i,
+];
+
+export function isFollowUp(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  return FOLLOW_UP_PATTERNS.some(p => p.test(lower));
+}
 
 /**
  * Deterministic fallback when LLM is unavailable
@@ -44,35 +75,51 @@ const FALLBACK_MODELS = [
 function classifyDeterministic(message: string): IntentLabel {
   const lower = message.toLowerCase().trim();
 
+  // Follow-up → always GENERAL_CHAT
+  if (isFollowUp(lower)) {
+    return 'GENERAL_CHAT';
+  }
+
   // Financial decision
-  if (/(?:posso permettermi|posso spendere|sto spendendo troppo|quanto posso|ce la faccio|can i afford|budget enough)/i.test(lower)) {
+  if (/(?:posso permettermi|posso spendere|sto spendendo troppo|quanto posso|ce la faccio|can i afford|budget enough|me lo posso permettere)/i.test(lower)) {
     return 'FINANCIAL_DECISION';
   }
 
   // Financial query
-  if (/(?:come sto andando|quanto ho speso|livello di rischio|situazione finanziaria|how much.*spent|burn rate|risk level|spending|spese totali|budget)/i.test(lower)) {
+  if (/(?:come sto andando|quanto ho speso|livello di rischio|situazione finanziaria|how much.*spent|burn rate|risk level|spending|spese totali|budget|come vanno le finanze)/i.test(lower)) {
     return 'FINANCIAL_QUERY';
   }
 
   // Task query
-  if (/(?:mostra.*task|elenca.*task|lista.*task|i miei task|show.*task|my tasks|cose da fare|to-?do)/i.test(lower)) {
+  if (/(?:mostra.*task|elenca.*task|lista.*task|i miei task|show.*task|cose da fare|to-?do|cosa ho da fare|cosa devo fare oggi)/i.test(lower)) {
     return 'TASK_QUERY';
   }
 
   // Event query
-  if (/(?:mostra.*event|elenca.*event|eventi di oggi|calendar|impegni|appuntamenti|show.*event)/i.test(lower)) {
+  if (/(?:mostra.*event|elenca.*event|eventi di oggi|calendar|impegni|appuntamenti|show.*event|cosa ho in agenda)/i.test(lower)) {
     return 'EVENT_QUERY';
   }
 
   // Planning
-  if (/(?:quando.*consigli|pianifica|organizza.*giornata|plan|schedule|help me plan|quando dovrei)/i.test(lower)) {
+  if (/(?:quando.*consigli|pianifica|organizza.*giornata|plan|schedule|help me plan|quando dovrei|quando mi consigli|come organizzo|aiutami a pianificare|routine)/i.test(lower)) {
     return 'PLANNING';
+  }
+
+  // General chat (broader patterns)
+  if (/(?:grazie|thanks|bravo|bene|ok grazie|perfetto|come stai|come va|buongiorno|buonasera|ciao|hey|ehi)/i.test(lower)) {
+    return 'GENERAL_CHAT';
   }
 
   return 'UNKNOWN';
 }
 
 export async function classifyIntent(message: string): Promise<IntentLabel> {
+  // Fast path: follow-ups are ALWAYS GENERAL_CHAT, skip LLM
+  if (isFollowUp(message)) {
+    console.log("[INTENT-CLASSIFIER] Follow-up detected, forcing GENERAL_CHAT");
+    return 'GENERAL_CHAT';
+  }
+
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
 
   if (!apiKey || !apiKey.startsWith("sk-or-")) {

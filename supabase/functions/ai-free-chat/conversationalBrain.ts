@@ -3,6 +3,8 @@
  * 
  * Brain: Handles GENERAL_CHAT, PLANNING, and natural conversation.
  * Translator: Converts DecisionEngine JSON into human-friendly responses.
+ * 
+ * v2: Receives conversation memory for coherent follow-ups.
  */
 
 import { DecisionResult } from "./decisionEngine.ts";
@@ -13,35 +15,52 @@ const FALLBACK_MODELS = [
 ];
 
 // ============================================================================
+// CONVERSATION MEMORY TYPE
+// ============================================================================
+
+export interface ConversationMemory {
+  lastIntent?: string;
+  lastUserMessage?: string;
+  lastAssistantResponse?: string;
+}
+
+// ============================================================================
 // CONVERSATIONAL BRAIN
 // ============================================================================
 
-const BRAIN_PROMPT = `You are Ayvro, an intelligent and concrete personal assistant.
+const BRAIN_PROMPT = `Sei Ayvro, assistente personale intelligente e concreto.
 
-You can:
-- explain decisions
-- help plan
-- ask smart questions
-- maintain conversational context
+Puoi:
+- spiegare decisioni
+- aiutare a pianificare
+- fare domande intelligenti
+- mantenere contesto conversazionale
 
-Do NOT generate JSON.
-Do NOT invent numbers.
-If you receive pre-calculated financial data, use it without modifying.
-If you don't have data, ask for clarification.
+Non generare JSON.
+Non inventare numeri.
+Se ricevi dati finanziari già calcolati, usali senza modificarli.
+Se non hai dati, chiedi chiarimento con una domanda intelligente e specifica.
 
-Reply naturally but concisely.
-Avoid generic or motivational phrases.
-Keep responses to 2-3 sentences maximum.`;
+Rispondi in modo naturale ma conciso.
+Evita frasi generiche o motivazionali.
+Massimo 2-3 frasi.
+
+REGOLE CRITICHE:
+- Se l'utente chiede "perché?", "come mai?", "spiegami" → spiega il contesto della conversazione precedente
+- Se l'utente chiede di pianificare (allenamento, routine, orari) → dai suggerimenti concreti basati sui dati disponibili
+- NON rispondere MAI "non ho capito" se la frase è chiara
+- Se sei in dubbio → fai una domanda intelligente, NON dire "non ho capito"`;
 
 export async function conversationalReply(
   userMessage: string,
   userLang: string = 'it',
-  context?: { todos?: any[]; events?: any[]; financialSummary?: string }
+  context?: { todos?: any[]; events?: any[]; financialSummary?: string },
+  memory?: ConversationMemory
 ): Promise<string> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
 
   if (!apiKey || !apiKey.startsWith("sk-or-")) {
-    return getFallbackReply(userLang);
+    return getFallbackReply(userLang, memory);
   }
 
   const envModel = Deno.env.get("OPENROUTER_MODEL");
@@ -50,19 +69,33 @@ export async function conversationalReply(
     : [...FALLBACK_MODELS];
 
   let contextBlock = '';
-  if (context) {
-    if (context.todos?.length) {
-      contextBlock += `\nUser's pending tasks: ${context.todos.filter(t => !t.completed).map(t => t.title).join(', ')}`;
-    }
-    if (context.events?.length) {
-      contextBlock += `\nUpcoming events: ${context.events.map(e => `${e.title} (${new Date(e.start_time).toLocaleDateString()})`).join(', ')}`;
-    }
-    if (context.financialSummary) {
-      contextBlock += `\nFinancial context: ${context.financialSummary}`;
+  
+  // Add conversation memory for coherent follow-ups
+  if (memory?.lastUserMessage && memory?.lastAssistantResponse) {
+    contextBlock += `\nConversazione precedente:`;
+    contextBlock += `\n- Utente: "${memory.lastUserMessage}"`;
+    contextBlock += `\n- Assistente: "${memory.lastAssistantResponse}"`;
+    if (memory.lastIntent) {
+      contextBlock += `\n- Intent precedente: ${memory.lastIntent}`;
     }
   }
 
-  const userPrompt = `${contextBlock ? `Context:${contextBlock}\n\n` : ''}User (language: ${userLang}): ${userMessage}`;
+  if (context) {
+    if (context.todos?.length) {
+      const pending = context.todos.filter(t => !t.completed);
+      if (pending.length > 0) {
+        contextBlock += `\nTask pendenti: ${pending.map(t => t.title).join(', ')}`;
+      }
+    }
+    if (context.events?.length) {
+      contextBlock += `\nProssimi eventi: ${context.events.map(e => `${e.title} (${new Date(e.start_time).toLocaleDateString()})`).join(', ')}`;
+    }
+    if (context.financialSummary) {
+      contextBlock += `\nContesto finanziario: ${context.financialSummary}`;
+    }
+  }
+
+  const userPrompt = `${contextBlock ? `Contesto:${contextBlock}\n\n` : ''}Utente (lingua: ${userLang}): ${userMessage}`;
 
   for (const model of modelsToTry) {
     try {
@@ -117,16 +150,28 @@ export async function conversationalReply(
     }
   }
 
-  return getFallbackReply(userLang);
+  return getFallbackReply(userLang, memory);
 }
 
-function getFallbackReply(lang: string): string {
+function getFallbackReply(lang: string, memory?: ConversationMemory): string {
+  // If there's memory context, give a contextual fallback instead of "non ho capito"
+  if (memory?.lastAssistantResponse) {
+    const contextFallbacks: Record<string, string> = {
+      it: "Puoi specificare meglio cosa vorresti sapere?",
+      en: "Can you be more specific about what you'd like to know?",
+      es: "¿Puedes especificar mejor qué te gustaría saber?",
+      fr: "Peux-tu préciser ce que tu voudrais savoir ?",
+      de: "Kannst du genauer sagen, was du wissen möchtest?",
+    };
+    return contextFallbacks[lang] || contextFallbacks['en'];
+  }
+
   const fallbacks: Record<string, string> = {
-    it: "Non ho capito bene. Puoi riformulare?",
-    en: "I didn't quite understand. Can you rephrase?",
-    es: "No entendí bien. ¿Puedes reformular?",
-    fr: "Je n'ai pas bien compris. Peux-tu reformuler ?",
-    de: "Ich habe nicht ganz verstanden. Kannst du umformulieren?",
+    it: "Non ho abbastanza informazioni, puoi specificare meglio?",
+    en: "I don't have enough information, can you be more specific?",
+    es: "No tengo suficiente información, ¿puedes ser más específico?",
+    fr: "Je n'ai pas assez d'informations, peux-tu être plus précis ?",
+    de: "Ich habe nicht genug Informationen, kannst du genauer sein?",
   };
   return fallbacks[lang] || fallbacks['en'];
 }
@@ -135,22 +180,23 @@ function getFallbackReply(lang: string): string {
 // TRANSLATOR (Decision → Natural language)
 // ============================================================================
 
-const TRANSLATOR_PROMPT = `You receive a JSON object with:
+const TRANSLATOR_PROMPT = `Ricevi un oggetto JSON con:
+
 - summary
 - reasoning
 - actions[]
 
-Transform it into a natural response for the user.
+Trasformalo in una risposta naturale per l'utente.
 
-Maintain:
-- clarity
-- concreteness
-- practical suggestions
+Mantieni:
+- chiarezza
+- concretezza
+- suggerimenti pratici
 
-Do NOT invent new actions.
-Do NOT change the meaning.
-Do NOT generate JSON.
-Keep it to 2-3 sentences. Be direct.`;
+Non inventare nuove azioni.
+Non cambiare il significato.
+Non generare JSON.
+Massimo 2-3 frasi. Sii diretto.`;
 
 export async function translateDecision(
   decision: DecisionResult,
@@ -168,7 +214,7 @@ export async function translateDecision(
     ? [envModel, ...FALLBACK_MODELS.filter(m => m !== envModel)]
     : [...FALLBACK_MODELS];
 
-  const userPrompt = `Language: ${userLang}
+  const userPrompt = `Lingua: ${userLang}
 
 Decision JSON:
 ${JSON.stringify(decision, null, 2)}`;

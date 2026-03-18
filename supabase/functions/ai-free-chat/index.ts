@@ -1,7 +1,7 @@
 /**
  * AI Free Chat — Edge Function Orchestrator
  * 
- * Multi-Prompt Architecture:
+ * Multi-Prompt Architecture v2:
  * 1. Intent Classifier (LLM ultra-light) → route
  * 2. Decision Engine (FINANCIAL_*) → JSON analysis
  * 3. Conversational Brain (GENERAL_CHAT, PLANNING) → natural reply
@@ -9,7 +9,11 @@
  * 5-6. Weekly/Monthly Summary LLM (proactive)
  * 7. Proactive Monitor (risk changes)
  * 
- * Fallback: analyzeCore.ts for UNKNOWN intents + deterministic router
+ * v2 fixes:
+ * - Follow-up detection → forces Conversational Brain with memory
+ * - Conversation memory (lastIntent, lastUserMessage, lastAssistantResponse)
+ * - No more "Nessun task" as default fallback
+ * - Proper routing for PLANNING and GENERAL_CHAT
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -30,9 +34,9 @@ import { executeAction } from "./executor.ts";
 import { randomGreeting, t, defaultSuggestions, formatTaskList, formatEventList, formatBudget } from "./responder.ts";
 import { deterministicRouter, handleSlotFilling } from "./router.ts";
 import { parseDateTime, isPureTime, buildISODateTime, formatDateIT, normalizeTitle, isForbiddenTitle } from "./parser.ts";
-import { classifyIntent, IntentLabel } from "./intentClassifier.ts";
+import { classifyIntent, isFollowUp, IntentLabel } from "./intentClassifier.ts";
 import { runDecisionEngine } from "./decisionEngine.ts";
-import { conversationalReply, translateDecision } from "./conversationalBrain.ts";
+import { conversationalReply, translateDecision, ConversationMemory } from "./conversationalBrain.ts";
 import { generateProactiveAlert } from "./proactiveMonitor.ts";
 
 // ============================================================================
@@ -65,6 +69,61 @@ function json(data: AIResponse): Response {
 
 function isPremiumOnly(type: string): boolean {
   return PREMIUM_ONLY_ACTIONS.includes(type);
+}
+
+// ============================================================================
+// CONVERSATION MEMORY HELPERS
+// ============================================================================
+
+async function loadConversationMemory(supabase: any, userId: string): Promise<ConversationMemory> {
+  try {
+    const { data } = await supabase
+      .from("assistant_state")
+      .select("intent_payload")
+      .eq("user_id", userId)
+      .maybeSingle();
+    
+    const payload = data?.intent_payload || {};
+    return {
+      lastIntent: payload.conversationMemory?.lastIntent || undefined,
+      lastUserMessage: payload.conversationMemory?.lastUserMessage || undefined,
+      lastAssistantResponse: payload.conversationMemory?.lastAssistantResponse || undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function saveConversationMemory(
+  supabase: any, userId: string, 
+  intentLabel: string, userMessage: string, assistantReply: string
+): Promise<void> {
+  try {
+    const { data } = await supabase
+      .from("assistant_state")
+      .select("intent_payload")
+      .eq("user_id", userId)
+      .maybeSingle();
+    
+    const currentPayload = data?.intent_payload || {};
+    
+    await supabase
+      .from("assistant_state")
+      .upsert({
+        user_id: userId,
+        intent_payload: {
+          ...currentPayload,
+          conversationMemory: {
+            lastIntent: intentLabel,
+            lastUserMessage: userMessage.substring(0, 200),
+            lastAssistantResponse: assistantReply.substring(0, 300),
+          }
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+  } catch (err) {
+    console.error("[Ayvro] Failed to save conversation memory:", err);
+  }
 }
 
 // ============================================================================
@@ -360,10 +419,38 @@ serve(async (req) => {
     }
 
     // ================================================================
-    // === MODULE 1: INTENT CLASSIFIER ===
+    // === LOAD CONVERSATION MEMORY ===
+    // ================================================================
+    const memory = await loadConversationMemory(supabase, userId);
+
+    // ================================================================
+    // === FOLLOW-UP DETECTION (BEFORE classifier) ===
     // ================================================================
     const textToAnalyze = input.isCancel && input.cancelContinuation ? input.cancelContinuation : input.normalizedText;
     
+    if (isFollowUp(textToAnalyze) && memory.lastAssistantResponse) {
+      console.log("[Ayvro] === FOLLOW-UP DETECTED → CONVERSATIONAL BRAIN ===");
+      await logAIRequest(supabase, userId);
+      const context = await fetchUserContext(supabase, userId);
+      const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
+        todos: context.todos,
+        events: context.events,
+        financialSummary: financialContext?.signals
+          ? `Budget €${financialContext.signals.budget || 0}, speso €${Math.round(financialContext.signals.totalSpent || 0)}, rischio: ${financialContext.risk?.riskLevel || 'unknown'}`
+          : undefined
+      }, memory);
+
+      await saveConversationMemory(supabase, userId, 'GENERAL_CHAT', message, brainReply);
+      return json(createResponse({
+        intent: "SMALL_TALK",
+        reply: brainReply,
+        suggestions: defaultSuggestions(userLang.code)
+      }));
+    }
+
+    // ================================================================
+    // === MODULE 1: INTENT CLASSIFIER ===
+    // ================================================================
     await logAIRequest(supabase, userId);
     console.log("[Ayvro] === M1: INTENT CLASSIFIER ===");
     const intentLabel = await classifyIntent(textToAnalyze);
@@ -383,6 +470,7 @@ serve(async (req) => {
       console.log("[Ayvro] === M4: TRANSLATOR ===");
       const naturalReply = await translateDecision(decision, userLang.code);
 
+      await saveConversationMemory(supabase, userId, intentLabel, message, naturalReply);
       return json(createResponse(
         { intent: "ADVICE", reply: naturalReply },
         { summary: decision.summary, reasoning: decision.reasoning, actions: decision.actions }
@@ -392,13 +480,17 @@ serve(async (req) => {
     // --- TASK_QUERY → Deterministic ---
     if (intentLabel === 'TASK_QUERY') {
       const context = await fetchUserContext(supabase, userId);
-      return json(createResponse({ intent: "QUERY_TASKS", reply: formatTaskList(context.todos) }));
+      const reply = formatTaskList(context.todos);
+      await saveConversationMemory(supabase, userId, 'TASK_QUERY', message, reply);
+      return json(createResponse({ intent: "QUERY_TASKS", reply }));
     }
 
     // --- EVENT_QUERY → Deterministic ---
     if (intentLabel === 'EVENT_QUERY') {
       const context = await fetchUserContext(supabase, userId);
-      return json(createResponse({ intent: "QUERY_EVENTS", reply: formatEventList(context.events) }));
+      const reply = formatEventList(context.events);
+      await saveConversationMemory(supabase, userId, 'EVENT_QUERY', message, reply);
+      return json(createResponse({ intent: "QUERY_EVENTS", reply }));
     }
 
     // --- PLANNING / GENERAL_CHAT → Conversational Brain ---
@@ -409,9 +501,11 @@ serve(async (req) => {
         todos: context.todos,
         events: context.events,
         financialSummary: financialContext?.signals
-          ? `Budget €${financialContext.signals.budget || 0}, spent €${Math.round(financialContext.signals.totalSpent || 0)}, risk: ${financialContext.risk?.riskLevel || 'unknown'}`
+          ? `Budget €${financialContext.signals.budget || 0}, speso €${Math.round(financialContext.signals.totalSpent || 0)}, rischio: ${financialContext.risk?.riskLevel || 'unknown'}`
           : undefined
-      });
+      }, memory);
+
+      await saveConversationMemory(supabase, userId, intentLabel, message, brainReply);
       return json(createResponse({
         intent: intentLabel === 'PLANNING' ? "ADVICE" : "SMALL_TALK",
         reply: brainReply,
@@ -427,9 +521,21 @@ serve(async (req) => {
       // Handle query intents
       if (routerResult.intent === "QUERY_TASKS" || routerResult.intent === "QUERY_EVENTS" || routerResult.intent === "QUERY_BUDGET") {
         const context = await fetchUserContext(supabase, userId);
-        if (routerResult.intent === "QUERY_TASKS") return json(createResponse({ intent: "QUERY_TASKS", reply: formatTaskList(context.todos) }));
-        if (routerResult.intent === "QUERY_EVENTS") return json(createResponse({ intent: "QUERY_EVENTS", reply: formatEventList(context.events) }));
-        if (routerResult.intent === "QUERY_BUDGET") return json(createResponse({ intent: "QUERY_BUDGET", reply: formatBudget(context.expenses, context.budget) }));
+        if (routerResult.intent === "QUERY_TASKS") {
+          const reply = formatTaskList(context.todos);
+          await saveConversationMemory(supabase, userId, 'TASK_QUERY', message, reply);
+          return json(createResponse({ intent: "QUERY_TASKS", reply }));
+        }
+        if (routerResult.intent === "QUERY_EVENTS") {
+          const reply = formatEventList(context.events);
+          await saveConversationMemory(supabase, userId, 'EVENT_QUERY', message, reply);
+          return json(createResponse({ intent: "QUERY_EVENTS", reply }));
+        }
+        if (routerResult.intent === "QUERY_BUDGET") {
+          const reply = formatBudget(context.expenses, context.budget);
+          await saveConversationMemory(supabase, userId, 'FINANCIAL_QUERY', message, reply);
+          return json(createResponse({ intent: "QUERY_BUDGET", reply }));
+        }
       }
       
       // Handle small talk / advice
@@ -505,22 +611,49 @@ serve(async (req) => {
       if (queryTitle.includes('spes') || queryTitle.includes('budget') || queryTitle.includes('expense')) {
         return json(createResponse({ intent: "QUERY_BUDGET", reply: formatBudget(context.expenses, context.budget) }));
       }
-      return json(createResponse({ intent: "QUERY_TASKS", reply: formatTaskList(context.todos) }));
+      // DON'T default to task list — use conversational brain instead
+      console.log("[Ayvro] Query type not determined, falling through to conversational brain");
     }
 
-    // If no items at all → conversational fallback
+    // If no items at all → conversational brain (NOT "howCanIHelp")
     if (!analysis.items || analysis.items.length === 0) {
+      console.log("[Ayvro] === No items from analyzeCore, using conversational brain ===");
+      const context = await fetchUserContext(supabase, userId);
+      const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
+        todos: context.todos,
+        events: context.events,
+        financialSummary: financialContext?.signals
+          ? `Budget €${financialContext.signals.budget || 0}, speso €${Math.round(financialContext.signals.totalSpent || 0)}, rischio: ${financialContext.risk?.riskLevel || 'unknown'}`
+          : undefined
+      }, memory);
+
+      await saveConversationMemory(supabase, userId, 'GENERAL_CHAT', message, brainReply);
       return json(createResponse({
         intent: "SMALL_TALK",
-        reply: t(userLang.code, "howCanIHelp"),
+        reply: brainReply,
         suggestions: defaultSuggestions(userLang.code)
       }));
     }
 
-
-
     // Filter out non-actionable items for validation
     const actionableItems = analysis.items.filter(i => i.type === 'task' || i.type === 'event' || i.type === 'expense');
+
+    // If no actionable items but we have items (queries handled above) → conversational brain
+    if (actionableItems.length === 0) {
+      console.log("[Ayvro] === No actionable items, using conversational brain ===");
+      const context = await fetchUserContext(supabase, userId);
+      const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
+        todos: context.todos,
+        events: context.events,
+      }, memory);
+
+      await saveConversationMemory(supabase, userId, 'GENERAL_CHAT', message, brainReply);
+      return json(createResponse({
+        intent: "SMALL_TALK",
+        reply: brainReply,
+        suggestions: defaultSuggestions(userLang.code)
+      }));
+    }
 
     // ================================================================
     // === LAYER 2: VALIDATE ===
@@ -566,8 +699,16 @@ serve(async (req) => {
       .filter((a): a is NonNullable<typeof a> => a !== null);
 
     if (actionsToConfirm.length === 0) {
+      // Instead of generic "howCanIHelp", use conversational brain
+      const context = await fetchUserContext(supabase, userId);
+      const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
+        todos: context.todos,
+        events: context.events,
+      }, memory);
+      
+      await saveConversationMemory(supabase, userId, 'GENERAL_CHAT', message, brainReply);
       return json(createResponse({
-        intent: "SMALL_TALK", reply: t(userLang.code, "howCanIHelp"),
+        intent: "SMALL_TALK", reply: brainReply,
         suggestions: defaultSuggestions(userLang.code)
       }));
     }
@@ -613,8 +754,16 @@ serve(async (req) => {
       }));
     }
 
+    // Final fallback: conversational brain instead of generic response
+    const context = await fetchUserContext(supabase, userId);
+    const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
+      todos: context.todos,
+      events: context.events,
+    }, memory);
+    
+    await saveConversationMemory(supabase, userId, 'GENERAL_CHAT', message, brainReply);
     return json(createResponse({
-      intent: "SMALL_TALK", reply: t(userLang.code, "howCanIHelp"),
+      intent: "SMALL_TALK", reply: brainReply,
       suggestions: defaultSuggestions(userLang.code)
     }));
 
