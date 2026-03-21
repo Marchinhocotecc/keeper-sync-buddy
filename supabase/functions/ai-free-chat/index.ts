@@ -22,22 +22,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { AIResponse, AIAction, AIIntent, CORS_HEADERS, PREMIUM_ONLY_ACTIONS } from "./types.ts";
 import { getFinancialAdvice } from "./financialAdvisor.ts";
 import { normalizeInput } from "./normalizer.ts";
-import { analyzeMessage, AnalyzeResult } from "./analyzeCore.ts";
-import { validateItems, buildMissingFieldQuestion } from "./validator.ts";
-import { itemToAction, buildSingleConfirmation, buildMultiConfirmation, buildMultiConfirmMessage } from "./confirmer.ts";
 import { 
   getAssistantState, updateAssistantState, clearAssistantState,
   getPendingAction, setPendingAction, fetchUserContext, loadPreferredLanguage,
-  checkRateLimit, logAIRequest, getCachedAnalysis, setCachedAnalysis
+  checkRateLimit, logAIRequest
 } from "./state.ts";
 import { executeAction } from "./executor.ts";
-import { randomGreeting, t, defaultSuggestions, formatTaskList, formatEventList, formatBudget } from "./responder.ts";
+import { defaultSuggestions, formatTaskList, formatEventList, formatBudget } from "./responder.ts";
 import { deterministicRouter, handleSlotFilling } from "./router.ts";
 import { parseDateTime, isPureTime, buildISODateTime, formatDateIT, normalizeTitle, isForbiddenTitle } from "./parser.ts";
-import { classifyIntent, isFollowUp, IntentLabel } from "./intentClassifier.ts";
+import { classifyIntent, isFollowUp } from "./intentClassifier.ts";
 import { runDecisionEngine } from "./decisionEngine.ts";
 import { conversationalReply, translateDecision, ConversationMemory } from "./conversationalBrain.ts";
-import { generateProactiveAlert } from "./proactiveMonitor.ts";
 
 // ============================================================================
 // HELPERS
