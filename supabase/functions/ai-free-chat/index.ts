@@ -22,22 +22,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { AIResponse, AIAction, AIIntent, CORS_HEADERS, PREMIUM_ONLY_ACTIONS } from "./types.ts";
 import { getFinancialAdvice } from "./financialAdvisor.ts";
 import { normalizeInput } from "./normalizer.ts";
-import { analyzeMessage, AnalyzeResult } from "./analyzeCore.ts";
-import { validateItems, buildMissingFieldQuestion } from "./validator.ts";
-import { itemToAction, buildSingleConfirmation, buildMultiConfirmation, buildMultiConfirmMessage } from "./confirmer.ts";
 import { 
   getAssistantState, updateAssistantState, clearAssistantState,
   getPendingAction, setPendingAction, fetchUserContext, loadPreferredLanguage,
-  checkRateLimit, logAIRequest, getCachedAnalysis, setCachedAnalysis
+  checkRateLimit, logAIRequest
 } from "./state.ts";
 import { executeAction } from "./executor.ts";
-import { randomGreeting, t, defaultSuggestions, formatTaskList, formatEventList, formatBudget } from "./responder.ts";
+import { t, defaultSuggestions, formatTaskList, formatEventList, formatBudget } from "./responder.ts";
 import { deterministicRouter, handleSlotFilling } from "./router.ts";
 import { parseDateTime, isPureTime, buildISODateTime, formatDateIT, normalizeTitle, isForbiddenTitle } from "./parser.ts";
-import { classifyIntent, isFollowUp, IntentLabel } from "./intentClassifier.ts";
+import { classifyIntent, isFollowUp } from "./intentClassifier.ts";
 import { runDecisionEngine } from "./decisionEngine.ts";
 import { conversationalReply, translateDecision, ConversationMemory } from "./conversationalBrain.ts";
-import { generateProactiveAlert } from "./proactiveMonitor.ts";
 
 // ============================================================================
 // HELPERS
@@ -383,27 +379,10 @@ serve(async (req) => {
       }
     }
 
-    // --- GREETING (skip LLM) ---
-    if (input.isGreeting) {
-      return json(createResponse({
-        intent: "SMALL_TALK", reply: randomGreeting(),
-        suggestions: defaultSuggestions(userLang.code)
-      }));
-    }
-
-    // --- ADVICE GUARDRAIL ---
-    const isAdvice = /cosa\s+(?:posso|potrei|dovrei)\s+fare|consigliami|cosa\s+faccio|aiutami|non\s+so\s+(?:cosa|che)\s+fare|cosa puoi fare|come funzion/i.test(message);
-    if (isAdvice) {
-      if (state.active_intent && state.active_intent !== 'NONE') {
-        await clearAssistantState(supabase, userId);
-        await setPendingAction(supabase, userId, null);
-      }
-      return json(createResponse({
-        intent: "ADVICE",
-        reply: t(userLang.code, "advice") || "Posso aiutarti a gestire task, eventi e spese.",
-        suggestions: defaultSuggestions(userLang.code)
-      }));
-    }
+    // NOTE: Greeting and ADVICE guardrails REMOVED.
+    // All messages now flow through the LLM Intent Classifier (Module 1).
+    // Greetings → GENERAL_CHAT → Conversational Brain
+    // Advice requests → PLANNING/GENERAL_CHAT → Conversational Brain
 
     // ================================================================
     // === RATE LIMIT CHECK ===
@@ -513,111 +492,62 @@ serve(async (req) => {
       }));
     }
 
-    // --- UNKNOWN → Try deterministic router first, then analyzeCore as fallback ---
-    console.log("[Ayvro] === UNKNOWN INTENT: trying deterministic router ===");
-    const routerResult = deterministicRouter(message, state);
+    // --- UNKNOWN → Try deterministic router for CREATION patterns only, then Brain ---
+    console.log("[Ayvro] === UNKNOWN INTENT: trying deterministic router for creation ===");
     
-    if (routerResult.matched) {
-      // Handle query intents
-      if (routerResult.intent === "QUERY_TASKS" || routerResult.intent === "QUERY_EVENTS" || routerResult.intent === "QUERY_BUDGET") {
-        const context = await fetchUserContext(supabase, userId);
-        if (routerResult.intent === "QUERY_TASKS") {
-          const reply = formatTaskList(context.todos);
-          await saveConversationMemory(supabase, userId, 'TASK_QUERY', message, reply);
-          return json(createResponse({ intent: "QUERY_TASKS", reply }));
-        }
-        if (routerResult.intent === "QUERY_EVENTS") {
-          const reply = formatEventList(context.events);
-          await saveConversationMemory(supabase, userId, 'EVENT_QUERY', message, reply);
-          return json(createResponse({ intent: "QUERY_EVENTS", reply }));
-        }
-        if (routerResult.intent === "QUERY_BUDGET") {
-          const reply = formatBudget(context.expenses, context.budget);
-          await saveConversationMemory(supabase, userId, 'FINANCIAL_QUERY', message, reply);
-          return json(createResponse({ intent: "QUERY_BUDGET", reply }));
-        }
-      }
+    // Only use deterministic router if message looks like a creation command
+    const isCreationPattern = /\b(crea|aggiungi|ricordami|devo|€|euro|\d+\s*€|nuovo|nuova|elimina|cancella|rimuovi)\b/i.test(message);
+    
+    if (isCreationPattern) {
+      const routerResult = deterministicRouter(message, state);
       
-      // Handle small talk / advice
-      if (routerResult.intent === "SMALL_TALK" || routerResult.intent === "ADVICE") {
-        return json(createResponse({
-          intent: routerResult.intent, reply: routerResult.reply!,
-          suggestions: routerResult.suggestions
-        }));
-      }
-
-      // Handle creation intents from deterministic router
-      if (routerResult.action && routerResult.action.type !== "NONE") {
-        if (routerResult.needsConfirmation || routerResult.missingFields?.length) {
-          if (routerResult.intent && routerResult.intent !== "NONE") {
-            await updateAssistantState(supabase, userId, {
-              active_intent: routerResult.intent,
-              intent_payload: { title: routerResult.action?.title }
+      if (routerResult.matched) {
+        // Handle creation intents from deterministic router
+        if (routerResult.action && routerResult.action.type !== "NONE") {
+          if (routerResult.needsConfirmation || routerResult.missingFields?.length) {
+            if (routerResult.intent && routerResult.intent !== "NONE") {
+              await updateAssistantState(supabase, userId, {
+                active_intent: routerResult.intent,
+                intent_payload: { title: routerResult.action?.title }
+              });
+            }
+          }
+          if (routerResult.action.type !== "NONE") {
+            await setPendingAction(supabase, userId, {
+              type: `CONFIRM_${routerResult.action.type}`,
+              payload: routerResult.action,
+              question: routerResult.confirmationQuestion || routerResult.reply || ""
             });
           }
+          return json(createResponse({
+            intent: routerResult.intent || "NONE",
+            action: routerResult.action || { type: "NONE" },
+            reply: routerResult.reply!,
+            needsConfirmation: routerResult.needsConfirmation || false,
+            confirmationQuestion: routerResult.confirmationQuestion || null,
+            missingFields: routerResult.missingFields || [],
+            suggestions: routerResult.suggestions
+          }));
         }
-        if (routerResult.action.type !== "NONE") {
-          await setPendingAction(supabase, userId, {
-            type: `CONFIRM_${routerResult.action.type}`,
-            payload: routerResult.action,
-            question: routerResult.confirmationQuestion || routerResult.reply || ""
-          });
+        
+        // Handle missing fields (incomplete creation)
+        if (routerResult.missingFields?.length) {
+          return json(createResponse({
+            intent: routerResult.intent || "NONE",
+            action: routerResult.action || { type: "NONE" },
+            reply: routerResult.reply!,
+            needsConfirmation: routerResult.needsConfirmation || false,
+            confirmationQuestion: routerResult.confirmationQuestion || null,
+            missingFields: routerResult.missingFields || [],
+            suggestions: routerResult.suggestions
+          }));
         }
-        return json(createResponse({
-          intent: routerResult.intent || "NONE",
-          action: routerResult.action || { type: "NONE" },
-          reply: routerResult.reply!,
-          needsConfirmation: routerResult.needsConfirmation || false,
-          confirmationQuestion: routerResult.confirmationQuestion || null,
-          missingFields: routerResult.missingFields || [],
-          suggestions: routerResult.suggestions
-        }));
       }
     }
 
-    // --- LAST RESORT: analyzeCore fallback ---
-    console.log("[Ayvro] === FALLBACK: analyzeCore ===");
-    const cachedResult = await getCachedAnalysis(supabase, textToAnalyze);
-    let analysis: AnalyzeResult;
-    if (cachedResult) {
-      console.log("[Ayvro] Cache HIT");
-      analysis = cachedResult as AnalyzeResult;
-    } else {
-      analysis = await analyzeMessage(textToAnalyze, userLang.code);
-      if (analysis.items && analysis.items.length > 0) {
-        setCachedAnalysis(supabase, userId, textToAnalyze, analysis);
-      }
-    }
-
-    // Handle greeting items from analyze
-    if (analysis.items?.length === 1 && analysis.items[0].type === 'greeting') {
-      return json(createResponse({
-        intent: "SMALL_TALK", reply: randomGreeting(),
-        suggestions: defaultSuggestions(userLang.code)
-      }));
-    }
-
-    // Handle query items from analyze
-    const queryItems = (analysis.items || []).filter(i => i.type === 'query');
-    if (queryItems.length > 0 && analysis.items!.every(i => i.type === 'query' || i.type === 'greeting')) {
-      const context = await fetchUserContext(supabase, userId);
-      const queryTitle = queryItems[0].title?.toLowerCase() || '';
-      if (queryTitle.includes('task') || queryTitle.includes('to-do') || queryTitle.includes('attivit')) {
-        return json(createResponse({ intent: "QUERY_TASKS", reply: formatTaskList(context.todos) }));
-      }
-      if (queryTitle.includes('event') || queryTitle.includes('appuntament') || queryTitle.includes('impegn')) {
-        return json(createResponse({ intent: "QUERY_EVENTS", reply: formatEventList(context.events) }));
-      }
-      if (queryTitle.includes('spes') || queryTitle.includes('budget') || queryTitle.includes('expense')) {
-        return json(createResponse({ intent: "QUERY_BUDGET", reply: formatBudget(context.expenses, context.budget) }));
-      }
-      // DON'T default to task list — use conversational brain instead
-      console.log("[Ayvro] Query type not determined, falling through to conversational brain");
-    }
-
-    // If no items at all → conversational brain (NOT "howCanIHelp")
-    if (!analysis.items || analysis.items.length === 0) {
-      console.log("[Ayvro] === No items from analyzeCore, using conversational brain ===");
+    // --- UNKNOWN with no creation pattern → Conversational Brain (PRIMARY fallback) ---
+    console.log("[Ayvro] === UNKNOWN → CONVERSATIONAL BRAIN (primary fallback) ===");
+    {
       const context = await fetchUserContext(supabase, userId);
       const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
         todos: context.todos,
@@ -634,138 +564,6 @@ serve(async (req) => {
         suggestions: defaultSuggestions(userLang.code)
       }));
     }
-
-    // Filter out non-actionable items for validation
-    const actionableItems = analysis.items.filter(i => i.type === 'task' || i.type === 'event' || i.type === 'expense');
-
-    // If no actionable items but we have items (queries handled above) → conversational brain
-    if (actionableItems.length === 0) {
-      console.log("[Ayvro] === No actionable items, using conversational brain ===");
-      const context = await fetchUserContext(supabase, userId);
-      const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
-        todos: context.todos,
-        events: context.events,
-      }, memory);
-
-      await saveConversationMemory(supabase, userId, 'GENERAL_CHAT', message, brainReply);
-      return json(createResponse({
-        intent: "SMALL_TALK",
-        reply: brainReply,
-        suggestions: defaultSuggestions(userLang.code)
-      }));
-    }
-
-    // ================================================================
-    // === LAYER 2: VALIDATE ===
-    // ================================================================
-    console.log("[Ayvro] === L2: VALIDATE ===");
-    const validated = validateItems(actionableItems);
-    const validItems = validated.filter(v => v.valid);
-    const invalidItems = validated.filter(v => !v.valid);
-
-    // All invalid → ask for missing data
-    if (validItems.length === 0 && invalidItems.length > 0) {
-      const first = invalidItems[0];
-      const intentMap: Record<string, string> = {
-        'task': 'CREATE_TASK', 'event': 'CREATE_EVENT', 'expense': 'RECORD_EXPENSE'
-      };
-      const activeIntent = intentMap[first.item.type] || 'NONE';
-      const payload: any = {};
-      if (first.item.title) payload.title = first.item.title;
-      if (first.item.date) payload.date = first.item.date;
-      if (first.item.time) payload.time = first.item.time;
-
-      await updateAssistantState(supabase, userId, { active_intent: activeIntent, intent_payload: payload });
-      const pendingType = activeIntent === 'CREATE_TASK' ? 'AWAIT_TASK_TITLE' : 'AWAIT_EVENT_DETAILS';
-      await setPendingAction(supabase, userId, {
-        type: pendingType, payload,
-        question: buildMissingFieldQuestion(first.item, first.missingFields)
-      });
-
-      return json(createResponse({
-        intent: activeIntent as AIIntent,
-        reply: buildMissingFieldQuestion(first.item, first.missingFields),
-        needsConfirmation: true,
-        missingFields: first.missingFields
-      }));
-    }
-
-    // ================================================================
-    // === LAYER 3: CONFIRM ===
-    // ================================================================
-    console.log("[Ayvro] === L3: CONFIRM ===");
-    const actionsToConfirm = validItems
-      .map(v => itemToAction(v.item))
-      .filter((a): a is NonNullable<typeof a> => a !== null);
-
-    if (actionsToConfirm.length === 0) {
-      // Instead of generic "howCanIHelp", use conversational brain
-      const context = await fetchUserContext(supabase, userId);
-      const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
-        todos: context.todos,
-        events: context.events,
-      }, memory);
-      
-      await saveConversationMemory(supabase, userId, 'GENERAL_CHAT', message, brainReply);
-      return json(createResponse({
-        intent: "SMALL_TALK", reply: brainReply,
-        suggestions: defaultSuggestions(userLang.code)
-      }));
-    }
-
-    // ================================================================
-    // === LAYER 6: RESPOND (with pending action set) ===
-    // ================================================================
-    console.log("[Ayvro] === L6: RESPOND ===");
-
-    if (actionsToConfirm.length === 1) {
-      const single = actionsToConfirm[0];
-      if (isPremiumOnly(single.type)) {
-        return json(createResponse({
-          intent: "NONE", reply: "⭐ Funzione Premium.",
-          suggestions: defaultSuggestions(userLang.code)
-        }));
-      }
-      await setPendingAction(supabase, userId, {
-        type: `CONFIRM_${single.type}`, payload: single.payload, question: single.confirmMessage
-      });
-      return json(createResponse({
-        intent: single.type as AIIntent,
-        action: { type: single.type as any, ...single.payload },
-        reply: single.confirmMessage,
-        needsConfirmation: true,
-        confirmationQuestion: single.confirmMessage
-      }));
-    }
-
-    // Multiple actions → batch confirmation
-    const nonPremium = actionsToConfirm.filter(a => !isPremiumOnly(a.type));
-    if (nonPremium.length > 0) {
-      await setPendingAction(supabase, userId, {
-        type: "CONFIRM_MULTI",
-        payload: { intents: nonPremium.map(a => ({ type: `CONFIRM_${a.type}`, payload: a.payload })) },
-        question: nonPremium.map(a => a.confirmMessage).join("\n")
-      });
-      return json(createResponse({
-        intent: "CREATE_TASK",
-        reply: buildMultiConfirmMessage(nonPremium),
-        needsConfirmation: true,
-        confirmationQuestion: "Confermi tutto?"
-      }));
-    }
-
-    // Final fallback: conversational brain instead of generic response
-    const context = await fetchUserContext(supabase, userId);
-    const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
-      todos: context.todos,
-      events: context.events,
-    }, memory);
-    
-    await saveConversationMemory(supabase, userId, 'GENERAL_CHAT', message, brainReply);
-    return json(createResponse({
-      intent: "SMALL_TALK", reply: brainReply,
-      suggestions: defaultSuggestions(userLang.code)
-    }));
 
   } catch (error) {
     console.error("[Ayvro] Error:", error);
