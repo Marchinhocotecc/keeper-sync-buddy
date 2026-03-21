@@ -28,7 +28,7 @@ import {
   checkRateLimit, logAIRequest
 } from "./state.ts";
 import { executeAction } from "./executor.ts";
-import { defaultSuggestions, formatTaskList, formatEventList, formatBudget } from "./responder.ts";
+import { t, defaultSuggestions, formatTaskList, formatEventList, formatBudget } from "./responder.ts";
 import { deterministicRouter, handleSlotFilling } from "./router.ts";
 import { parseDateTime, isPureTime, buildISODateTime, formatDateIT, normalizeTitle, isForbiddenTitle } from "./parser.ts";
 import { classifyIntent, isFollowUp } from "./intentClassifier.ts";
