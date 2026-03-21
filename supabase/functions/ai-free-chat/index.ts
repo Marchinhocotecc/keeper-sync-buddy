@@ -563,7 +563,7 @@ serve(async (req) => {
         reply: brainReply,
         suggestions: defaultSuggestions(userLang.code)
       }));
-
+    }
 
   } catch (error) {
     console.error("[Ayvro] Error:", error);
