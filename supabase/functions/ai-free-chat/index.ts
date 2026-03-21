@@ -496,111 +496,62 @@ serve(async (req) => {
       }));
     }
 
-    // --- UNKNOWN → Try deterministic router first, then analyzeCore as fallback ---
-    console.log("[Ayvro] === UNKNOWN INTENT: trying deterministic router ===");
-    const routerResult = deterministicRouter(message, state);
+    // --- UNKNOWN → Try deterministic router for CREATION patterns only, then Brain ---
+    console.log("[Ayvro] === UNKNOWN INTENT: trying deterministic router for creation ===");
     
-    if (routerResult.matched) {
-      // Handle query intents
-      if (routerResult.intent === "QUERY_TASKS" || routerResult.intent === "QUERY_EVENTS" || routerResult.intent === "QUERY_BUDGET") {
-        const context = await fetchUserContext(supabase, userId);
-        if (routerResult.intent === "QUERY_TASKS") {
-          const reply = formatTaskList(context.todos);
-          await saveConversationMemory(supabase, userId, 'TASK_QUERY', message, reply);
-          return json(createResponse({ intent: "QUERY_TASKS", reply }));
-        }
-        if (routerResult.intent === "QUERY_EVENTS") {
-          const reply = formatEventList(context.events);
-          await saveConversationMemory(supabase, userId, 'EVENT_QUERY', message, reply);
-          return json(createResponse({ intent: "QUERY_EVENTS", reply }));
-        }
-        if (routerResult.intent === "QUERY_BUDGET") {
-          const reply = formatBudget(context.expenses, context.budget);
-          await saveConversationMemory(supabase, userId, 'FINANCIAL_QUERY', message, reply);
-          return json(createResponse({ intent: "QUERY_BUDGET", reply }));
-        }
-      }
+    // Only use deterministic router if message looks like a creation command
+    const isCreationPattern = /\b(crea|aggiungi|ricordami|devo|€|euro|\d+\s*€|nuovo|nuova|elimina|cancella|rimuovi)\b/i.test(message);
+    
+    if (isCreationPattern) {
+      const routerResult = deterministicRouter(message, state);
       
-      // Handle small talk / advice
-      if (routerResult.intent === "SMALL_TALK" || routerResult.intent === "ADVICE") {
-        return json(createResponse({
-          intent: routerResult.intent, reply: routerResult.reply!,
-          suggestions: routerResult.suggestions
-        }));
-      }
-
-      // Handle creation intents from deterministic router
-      if (routerResult.action && routerResult.action.type !== "NONE") {
-        if (routerResult.needsConfirmation || routerResult.missingFields?.length) {
-          if (routerResult.intent && routerResult.intent !== "NONE") {
-            await updateAssistantState(supabase, userId, {
-              active_intent: routerResult.intent,
-              intent_payload: { title: routerResult.action?.title }
+      if (routerResult.matched) {
+        // Handle creation intents from deterministic router
+        if (routerResult.action && routerResult.action.type !== "NONE") {
+          if (routerResult.needsConfirmation || routerResult.missingFields?.length) {
+            if (routerResult.intent && routerResult.intent !== "NONE") {
+              await updateAssistantState(supabase, userId, {
+                active_intent: routerResult.intent,
+                intent_payload: { title: routerResult.action?.title }
+              });
+            }
+          }
+          if (routerResult.action.type !== "NONE") {
+            await setPendingAction(supabase, userId, {
+              type: `CONFIRM_${routerResult.action.type}`,
+              payload: routerResult.action,
+              question: routerResult.confirmationQuestion || routerResult.reply || ""
             });
           }
+          return json(createResponse({
+            intent: routerResult.intent || "NONE",
+            action: routerResult.action || { type: "NONE" },
+            reply: routerResult.reply!,
+            needsConfirmation: routerResult.needsConfirmation || false,
+            confirmationQuestion: routerResult.confirmationQuestion || null,
+            missingFields: routerResult.missingFields || [],
+            suggestions: routerResult.suggestions
+          }));
         }
-        if (routerResult.action.type !== "NONE") {
-          await setPendingAction(supabase, userId, {
-            type: `CONFIRM_${routerResult.action.type}`,
-            payload: routerResult.action,
-            question: routerResult.confirmationQuestion || routerResult.reply || ""
-          });
+        
+        // Handle missing fields (incomplete creation)
+        if (routerResult.missingFields?.length) {
+          return json(createResponse({
+            intent: routerResult.intent || "NONE",
+            action: routerResult.action || { type: "NONE" },
+            reply: routerResult.reply!,
+            needsConfirmation: routerResult.needsConfirmation || false,
+            confirmationQuestion: routerResult.confirmationQuestion || null,
+            missingFields: routerResult.missingFields || [],
+            suggestions: routerResult.suggestions
+          }));
         }
-        return json(createResponse({
-          intent: routerResult.intent || "NONE",
-          action: routerResult.action || { type: "NONE" },
-          reply: routerResult.reply!,
-          needsConfirmation: routerResult.needsConfirmation || false,
-          confirmationQuestion: routerResult.confirmationQuestion || null,
-          missingFields: routerResult.missingFields || [],
-          suggestions: routerResult.suggestions
-        }));
       }
     }
 
-    // --- LAST RESORT: analyzeCore fallback ---
-    console.log("[Ayvro] === FALLBACK: analyzeCore ===");
-    const cachedResult = await getCachedAnalysis(supabase, textToAnalyze);
-    let analysis: AnalyzeResult;
-    if (cachedResult) {
-      console.log("[Ayvro] Cache HIT");
-      analysis = cachedResult as AnalyzeResult;
-    } else {
-      analysis = await analyzeMessage(textToAnalyze, userLang.code);
-      if (analysis.items && analysis.items.length > 0) {
-        setCachedAnalysis(supabase, userId, textToAnalyze, analysis);
-      }
-    }
-
-    // Handle greeting items from analyze
-    if (analysis.items?.length === 1 && analysis.items[0].type === 'greeting') {
-      return json(createResponse({
-        intent: "SMALL_TALK", reply: randomGreeting(),
-        suggestions: defaultSuggestions(userLang.code)
-      }));
-    }
-
-    // Handle query items from analyze
-    const queryItems = (analysis.items || []).filter(i => i.type === 'query');
-    if (queryItems.length > 0 && analysis.items!.every(i => i.type === 'query' || i.type === 'greeting')) {
-      const context = await fetchUserContext(supabase, userId);
-      const queryTitle = queryItems[0].title?.toLowerCase() || '';
-      if (queryTitle.includes('task') || queryTitle.includes('to-do') || queryTitle.includes('attivit')) {
-        return json(createResponse({ intent: "QUERY_TASKS", reply: formatTaskList(context.todos) }));
-      }
-      if (queryTitle.includes('event') || queryTitle.includes('appuntament') || queryTitle.includes('impegn')) {
-        return json(createResponse({ intent: "QUERY_EVENTS", reply: formatEventList(context.events) }));
-      }
-      if (queryTitle.includes('spes') || queryTitle.includes('budget') || queryTitle.includes('expense')) {
-        return json(createResponse({ intent: "QUERY_BUDGET", reply: formatBudget(context.expenses, context.budget) }));
-      }
-      // DON'T default to task list — use conversational brain instead
-      console.log("[Ayvro] Query type not determined, falling through to conversational brain");
-    }
-
-    // If no items at all → conversational brain (NOT "howCanIHelp")
-    if (!analysis.items || analysis.items.length === 0) {
-      console.log("[Ayvro] === No items from analyzeCore, using conversational brain ===");
+    // --- UNKNOWN with no creation pattern → Conversational Brain (PRIMARY fallback) ---
+    console.log("[Ayvro] === UNKNOWN → CONVERSATIONAL BRAIN (primary fallback) ===");
+    {
       const context = await fetchUserContext(supabase, userId);
       const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
         todos: context.todos,

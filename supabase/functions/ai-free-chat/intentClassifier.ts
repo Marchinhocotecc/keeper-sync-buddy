@@ -3,7 +3,9 @@
  * Ultra-light LLM call: receives message, returns ONLY a label.
  * max_tokens: 20, temperature: 0
  * 
- * v2: Improved follow-up detection + better deterministic fallback
+ * v3: LLM is the PRIMARY source of truth.
+ * Deterministic patterns are ONLY used as fallback when LLM fails.
+ * Follow-up detection expanded with broader patterns.
  */
 
 export type IntentLabel =
@@ -20,22 +22,25 @@ const VALID_LABELS: IntentLabel[] = [
   'EVENT_QUERY', 'PLANNING', 'GENERAL_CHAT', 'UNKNOWN'
 ];
 
-const CLASSIFIER_PROMPT = `Sei un classificatore di intenti per un assistente personale.
+const CLASSIFIER_PROMPT = `You are an intent classifier for a personal assistant app.
 
-Classifica il messaggio dell'utente in UNA SOLA delle seguenti categorie:
+Classify the user message into EXACTLY ONE of these categories:
 
-- FINANCIAL_DECISION (es: posso permettermi?, sto spendendo troppo?, quanto posso spendere oggi?)
-- FINANCIAL_QUERY (es: come sto andando?, quanto ho speso?, livello di rischio?)
-- TASK_QUERY (es: elenca task, cosa ho oggi?, mostra to-do)
-- EVENT_QUERY (es: eventi di oggi?, cosa c'è in calendario?)
-- PLANNING (es: quando mi consigli di allenarmi?, pianifica la giornata, aiutami a organizzare)
-- GENERAL_CHAT (qualsiasi conversazione normale, saluti, ringraziamenti, domande astratte, follow-up come "perché?", "come mai?", "spiegami")
-- UNKNOWN (non determinabile)
+- FINANCIAL_DECISION (can I afford X?, am I spending too much?, how much can I spend today?)
+- FINANCIAL_QUERY (how am I doing financially?, how much have I spent?, risk level?, spending summary)
+- TASK_QUERY (show tasks, what tasks do I have?, my to-do list, what do I need to do?)
+- EVENT_QUERY (show events, what events today?, calendar, appointments)
+- PLANNING (when should I exercise?, plan my day, help me organize, suggest a routine)
+- GENERAL_CHAT (greetings, thanks, casual conversation, follow-ups like "why?", "explain", advice requests, "what can you do?", "help me")
+- UNKNOWN (cannot determine)
 
-Rispondi SOLO con la label.
-Non aggiungere testo.
-Non spiegare.
-Nessuna punteggiatura.`;
+CRITICAL RULES:
+- Greetings (hi, hello, good morning) → GENERAL_CHAT
+- "what can you do?" / "help" / "advise me" → GENERAL_CHAT
+- "why?" / "explain" / "what do you mean?" → GENERAL_CHAT
+- Short follow-ups without clear topic → GENERAL_CHAT
+
+Reply with ONLY the label. No text. No explanation. No punctuation.`;
 
 const FALLBACK_MODELS = [
   "openai/gpt-oss-120b:free",
@@ -43,14 +48,16 @@ const FALLBACK_MODELS = [
 ];
 
 // ============================================================================
-// FOLLOW-UP DETECTION
+// FOLLOW-UP DETECTION (expanded for multi-language)
 // ============================================================================
 
 const FOLLOW_UP_PATTERNS = [
+  // Italian
   /^perch[eéè]\??$/i,
   /^come mai\??$/i,
   /^spiegami$/i,
-  /^perch[eéè]\s+dici\s+cos[iì]\??$/i,
+  /^spiegami\s+meglio\??$/i,
+  /^perch[eéè]\s+dici\s+(cos[iì]|questo)\??$/i,
   /^in che senso\??$/i,
   /^cosa\s+intendi\??$/i,
   /^cio[eè]\??$/i,
@@ -59,9 +66,27 @@ const FOLLOW_UP_PATTERNS = [
   /^e\s+perch[eéè]\??$/i,
   /^cosa\s+significa\??$/i,
   /^puoi\s+spiegare\??$/i,
+  /^dimmi\s+di\s+pi[uù]\??$/i,
+  /^cosa\s+intendi\s+con\b/i,
+  /^ma\s+perch[eéè]\s+dici\s+(cos[iì]|questo)\??$/i,
+  /^in\s+che\s+senso\s+dici\??$/i,
+  /^e\s+come\s+mai\??$/i,
+  /^e\s+allora\??$/i,
+  /^ma\s+davvero\??$/i,
+  /^sul\s+serio\??$/i,
+  // English
   /^why\??$/i,
   /^what do you mean\??$/i,
   /^explain$/i,
+  /^explain\s+more\??$/i,
+  /^can you explain\??$/i,
+  /^tell me more\??$/i,
+  /^what does that mean\??$/i,
+  /^how come\??$/i,
+  /^really\??$/i,
+  /^and\s+why\??$/i,
+  // Generic short follow-ups (any language)
+  /^.{1,3}\??$/, // Very short messages ending with ? (e.g., "eh?", "e?", "hm?")
 ];
 
 export function isFollowUp(message: string): boolean {
@@ -70,7 +95,7 @@ export function isFollowUp(message: string): boolean {
 }
 
 /**
- * Deterministic fallback when LLM is unavailable
+ * Deterministic fallback — ONLY used when LLM is unavailable
  */
 function classifyDeterministic(message: string): IntentLabel {
   const lower = message.toLowerCase().trim();
@@ -106,7 +131,7 @@ function classifyDeterministic(message: string): IntentLabel {
   }
 
   // General chat (broader patterns)
-  if (/(?:grazie|thanks|bravo|bene|ok grazie|perfetto|come stai|come va|buongiorno|buonasera|ciao|hey|ehi)/i.test(lower)) {
+  if (/(?:grazie|thanks|bravo|bene|ok grazie|perfetto|come stai|come va|buongiorno|buonasera|ciao|hey|ehi|cosa puoi fare|aiutami|consigliami|come funzion|help)/i.test(lower)) {
     return 'GENERAL_CHAT';
   }
 
