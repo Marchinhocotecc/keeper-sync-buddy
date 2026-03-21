@@ -383,27 +383,10 @@ serve(async (req) => {
       }
     }
 
-    // --- GREETING (skip LLM) ---
-    if (input.isGreeting) {
-      return json(createResponse({
-        intent: "SMALL_TALK", reply: randomGreeting(),
-        suggestions: defaultSuggestions(userLang.code)
-      }));
-    }
-
-    // --- ADVICE GUARDRAIL ---
-    const isAdvice = /cosa\s+(?:posso|potrei|dovrei)\s+fare|consigliami|cosa\s+faccio|aiutami|non\s+so\s+(?:cosa|che)\s+fare|cosa puoi fare|come funzion/i.test(message);
-    if (isAdvice) {
-      if (state.active_intent && state.active_intent !== 'NONE') {
-        await clearAssistantState(supabase, userId);
-        await setPendingAction(supabase, userId, null);
-      }
-      return json(createResponse({
-        intent: "ADVICE",
-        reply: t(userLang.code, "advice") || "Posso aiutarti a gestire task, eventi e spese.",
-        suggestions: defaultSuggestions(userLang.code)
-      }));
-    }
+    // NOTE: Greeting and ADVICE guardrails REMOVED.
+    // All messages now flow through the LLM Intent Classifier (Module 1).
+    // Greetings → GENERAL_CHAT → Conversational Brain
+    // Advice requests → PLANNING/GENERAL_CHAT → Conversational Brain
 
     // ================================================================
     // === RATE LIMIT CHECK ===
