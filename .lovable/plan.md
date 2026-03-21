@@ -1,111 +1,90 @@
 
 
-## Piano: Architettura Multi-Prompt Specializzata (7 Moduli)
+## Piano: Fix Definitivo Routing — LLM Classifier come Fonte Principale
 
-### Situazione Attuale
+### Problemi Confermati nel Codice
 
-La edge function `ai-free-chat` usa un singolo prompt monolitico in `analyzeCore.ts` che fa tutto: classificazione intenti, analisi finanziaria, e estrazione dati. Il `financialAdvisor.ts` è separato ma viene chiamato solo per il bypass `__FINANCIAL_ADVICE__`. Weekly/Monthly summaries sono già deterministici (niente LLM). Non esiste un conversational brain separato ne un translator.
+1. **ADVICE guardrail (righe 394-406)** intercetta messaggi come "cosa faccio oggi" PRIMA del classifier LLM
+2. **Greeting check (riga 387-392)** intercetta "come va", "come stai" prima del classifier
+3. **Pattern multilingua nei deterministici** non scalano (solo italiano/inglese)
+4. **Decision Engine** usa un unico template, non differenzia tra "posso permettermi", "come sto andando", "sto spendendo troppo"
+5. **Conversational Brain fallback** risponde sempre "Puoi specificare meglio?"
+6. **Memoria conversazionale** esiste ma il follow-up bypass è troppo stretto (solo pattern esatti)
 
-### Architettura Proposta
+### Modifiche
 
-Ristrutturiamo la edge function in 7 moduli LLM specializzati, ognuno con un prompt dedicato e minimale:
+#### 1. `index.ts` — LLM Classifier diventa fonte principale
 
-```text
-Messaggio utente
-      │
-      ▼
-  ┌─────────────────┐
-  │ 1. INTENT        │  ← LLM ultra-leggero (solo label)
-  │    CLASSIFIER     │
-  └────────┬──────────┘
-           │
-     ┌─────┴──────────────────────────┐
-     │              │                  │
-     ▼              ▼                  ▼
-FINANCIAL_*    TASK/EVENT/PLANNING   GENERAL_CHAT
-     │              │                  │
-     ▼              │                  ▼
-┌──────────┐        │           ┌──────────────┐
-│2. DECISION│       │           │3. CONVERSA-  │
-│  ENGINE   │       │           │   TIONAL     │
-│(JSON only)│       │           │   BRAIN      │
-└─────┬─────┘       │           └──────────────┘
-      │              │
-      ▼              ▼
-┌──────────┐    Router deterministico
-│4. TRANS- │    (esistente)
-│  LATOR   │
-└──────────┘
+**Rimuovere completamente:**
+- Blocco ADVICE guardrail (righe 394-406)
+- Blocco greeting check (righe 387-392)
 
-Proattivi (trigger-based, non in-chat):
-┌──────────┐  ┌──────────┐  ┌──────────┐
-│5. WEEKLY │  │6. MONTHLY│  │7. PROAC- │
-│  SUMMARY │  │  SUMMARY │  │  TIVITY  │
-└──────────┘  └──────────┘  └──────────┘
+**Nuovo flusso dopo slot filling:**
+```
+Follow-up check → bypass al Brain con memoria
+      ↓ (se non follow-up)
+Rate limit check
+      ↓
+LLM Intent Classifier (UNICA fonte di verità)
+      ↓
+Switch deterministico per intent label
 ```
 
-### Modifiche Dettagliate
+Il greeting sarà gestito dal classifier (`GENERAL_CHAT`) → Conversational Brain. L'advice sarà gestito dal classifier (`PLANNING`/`GENERAL_CHAT`) → Conversational Brain.
 
-#### 1. Nuovo file: `supabase/functions/ai-free-chat/intentClassifier.ts`
-- Prompt ultra-minimale: riceve messaggio, ritorna SOLO una label (`FINANCIAL_DECISION`, `FINANCIAL_QUERY`, `TASK_QUERY`, `EVENT_QUERY`, `PLANNING`, `GENERAL_CHAT`, `UNKNOWN`)
-- Usa `google/gemini-2.5-flash-lite` via Lovable AI (o il modello free OpenRouter esistente) con `max_tokens: 20`, `temperature: 0`
-- Fallback: se il classifier fallisce, usa il `deterministicRouter` esistente per mappare
+**Percorso UNKNOWN migliorato:**
+- Provare router deterministico SOLO per pattern di creazione (`crea|aggiungi|ricordami|devo|€`)
+- Se non matcha → Conversational Brain direttamente (NON analyzeCore)
+- `analyzeCore` rimane solo come estremo fallback per entity extraction su messaggi di creazione
 
-#### 2. Nuovo file: `supabase/functions/ai-free-chat/decisionEngine.ts`
-- Si attiva SOLO per `FINANCIAL_DECISION` e `FINANCIAL_QUERY`
-- Riceve i segnali pre-calcolati (da `financialSignals`/`riskEngine`)
-- Ritorna JSON strutturato: `{ summary, reasoning, actions[] }`
-- Sostituisce la logica finanziaria attualmente inline in `analyzeCore.ts`
-- Fallback deterministico già esistente in `financialAdvisor.ts` → riusato
+#### 2. `intentClassifier.ts` — Pattern deterministici solo come fallback
 
-#### 3. Nuovo file: `supabase/functions/ai-free-chat/conversationalBrain.ts`
-- Si attiva per `GENERAL_CHAT`, `PLANNING`, e come "traduttore" per risposte finanziarie
-- Prompt: naturale, conciso, non genera JSON, non inventa numeri
-- Riceve contesto conversazionale e dati pre-calcolati se disponibili
+I pattern deterministici restano ma servono SOLO quando l'LLM fallisce (timeout, no API key, errore). Non vengono mai chiamati prima dell'LLM.
 
-#### 4. Integrato in `conversationalBrain.ts` (funzione `translateDecision`)
-- Trasforma output JSON del Decision Engine in risposta naturale
-- Nessun LLM aggiuntivo: è una funzione del Conversational Brain con prompt dedicato
+Nessuna espansione multilingua dei pattern — l'LLM gestisce tutte le lingue nativamente.
 
-#### 5-6. `supabase/functions/ai-free-chat/weeklySummaryLLM.ts` e `monthlySummaryLLM.ts`
-- Wrappano i dati deterministici esistenti (`weeklySummaryService.ts`, `monthlySummaryService.ts`)
-- Aggiungono un layer LLM opzionale per generare JSON strutturato come specificato nei prompt
-- Chiamati proattivamente (non in-chat), solo quando servono i riassunti
+#### 3. `index.ts` — Memoria minima obbligatoria
 
-#### 7. Nuovo file: `supabase/functions/ai-free-chat/proactiveMonitor.ts`
-- Trigger: chiamato quando cambia il `riskLevel` (da `riskEngine.ts`)
-- Input: risk_increase/risk_decrease
-- Output: JSON `{ trigger, message, micro_action }`
-- Integrato nel flusso proattivo esistente (`DailyNudge`, `FinancialInsightCard`)
+La struttura `{ lastIntent, lastUserMessage, lastAssistantResponse }` esiste già. Migliorare il follow-up detection:
 
-#### Modifica principale: `supabase/functions/ai-free-chat/index.ts`
-- Il flusso diventa:
-  1. Normalize (invariato)
-  2. Cancel/Confirm/UIAction (invariato)
-  3. **Intent Classifier** (sostituisce la chiamata diretta ad `analyzeCore`)
-  4. Routing basato sulla label:
-     - `FINANCIAL_*` → Decision Engine → Translator → risposta
-     - `TASK_QUERY`/`EVENT_QUERY` → Router deterministico (invariato)
-     - `PLANNING`/`GENERAL_CHAT` → Conversational Brain
-     - `UNKNOWN` → fallback al router deterministico, poi `analyzeCore` come ultima risorsa
-  5. Per creazione task/eventi → il router deterministico e `analyzeCore` restano come fallback
+- Espandere `isFollowUp` con pattern più ampi (non solo esatti: anche "ma perché dici questo?", "cosa intendi con...")
+- Passare la memoria SEMPRE al Conversational Brain (già fatto, verificare consistenza)
+- Se follow-up e lastIntent era FINANCIAL → includere il reasoning del decision engine precedente nel contesto
 
-#### `analyzeCore.ts` → ridotto
-- Non è più il punto d'ingresso principale
-- Viene chiamato SOLO come fallback quando Intent Classifier dice `UNKNOWN` e il router deterministico non matcha
-- Il prompt viene semplificato (rimuovere tutta la parte finanziaria, che ora è nel Decision Engine)
+#### 4. `decisionEngine.ts` — Risposte differenziate per tipo di domanda
 
-### Impatto sul Client
+Aggiungere al prompt del Decision Engine la classificazione della domanda:
 
-Nessuna modifica necessaria su `aiFreeOrchestrator.ts` - il contratto API (`AIResponse`) resta identico. Il client continua a ricevere `{ reply, intent, action, needsConfirmation, ... }`.
+- **"posso permettermi X"** → risposta decisionale (SI/NO + condizione): aggiungere campo `decision_type: 'affordability'` nel prompt, forzare output con `verdict: "si/no"` + `condition`
+- **"come sto andando"** → risposta analitica: `decision_type: 'status_report'`, focus su trend e proiezione
+- **"sto spendendo troppo"** → risposta diagnostica: `decision_type: 'diagnostic'`, focus su categoria dominante e confronto
 
-### Provider AI
+Modificare `buildDeterministicDecision` per rilevare il tipo di domanda dal `userMessage` e generare risposte differenziate invece di un unico template basato solo sul riskLevel.
 
-Il progetto usa attualmente OpenRouter con modelli free. Le nuove chiamate useranno lo stesso provider. L'Intent Classifier userà il modello più leggero disponibile (`max_tokens: 20`). Il Decision Engine e Conversational Brain useranno il modello standard.
+#### 5. `conversationalBrain.ts` — Eliminare fallback generici
 
-### Rischi e Mitigazioni
+**Riscrivere `getFallbackReply`:**
+- Se `memory.lastIntent` contiene FINANCIAL → "Vuoi che approfondisca l'analisi delle spese o hai una domanda specifica?"
+- Se `memory.lastIntent` contiene TASK → "Vuoi che ti aiuti a organizzare i task?"
+- Se `memory.lastIntent` contiene EVENT → "Hai bisogno di gestire un evento?"
+- Default (nessuna memoria) → "Come posso aiutarti? Posso gestire task, eventi e spese."
 
-- **Latenza**: l'Intent Classifier aggiunge una chiamata LLM. Mitigato da `max_tokens: 20` e modello leggero
-- **Rate limits**: più chiamate per messaggio finanziario (classifier + decision + translator). Mitigato: per TASK/EVENT il classifier è l'unica chiamata LLM (il resto è deterministico)
-- **Backward compatibility**: il contratto API non cambia, il client non viene toccato
+**Bloccare completamente** la frase "Puoi specificare meglio?" — sostituita con domande contestuali.
+
+**Migliorare prompt BRAIN** per PLANNING: aggiungere istruzione esplicita di proporre orari concreti e suggerimenti basati sugli eventi/task già presenti.
+
+#### 6. `router.ts` — Ridurre scope a sola creazione
+
+I query pattern (righe 367-378) NON vengono più usati come prima linea — il classifier LLM li gestisce. Restano solo come fallback nel percorso UNKNOWN per intercettare pattern di creazione espliciti.
+
+### File Modificati
+
+- `supabase/functions/ai-free-chat/index.ts` — rimuovere bypass pre-classifier, semplificare UNKNOWN path
+- `supabase/functions/ai-free-chat/intentClassifier.ts` — espandere follow-up patterns
+- `supabase/functions/ai-free-chat/decisionEngine.ts` — differenziare risposte per tipo domanda
+- `supabase/functions/ai-free-chat/conversationalBrain.ts` — eliminare fallback generici, migliorare PLANNING
+
+### Nessuna Modifica al Client
+
+Il contratto API (`AIResponse`) resta identico.
 
