@@ -458,7 +458,8 @@ serve(async (req) => {
     }
 
     // --- TASK_QUERY → Deterministic ---
-    console.log("[Ayvro] ROUTED_TO: DB_QUERY (tasks)");
+    if (intentLabel === 'TASK_QUERY') {
+      console.log("[Ayvro] ROUTED_TO: DB_QUERY (tasks)");
       const context = await fetchUserContext(supabase, userId);
       const reply = formatTaskList(context.todos);
       await saveConversationMemory(supabase, userId, 'TASK_QUERY', message, reply);
@@ -466,7 +467,8 @@ serve(async (req) => {
     }
 
     // --- EVENT_QUERY → Deterministic ---
-    console.log("[Ayvro] ROUTED_TO: DB_QUERY (events)");
+    if (intentLabel === 'EVENT_QUERY') {
+      console.log("[Ayvro] ROUTED_TO: DB_QUERY (events)");
       const context = await fetchUserContext(supabase, userId);
       const reply = formatEventList(context.events);
       await saveConversationMemory(supabase, userId, 'EVENT_QUERY', message, reply);
