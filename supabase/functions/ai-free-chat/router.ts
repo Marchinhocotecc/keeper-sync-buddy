@@ -1,6 +1,7 @@
 /**
  * Router Module - Deterministic Pattern Matching
- * PRIORITÀ: TASK > EVENT > EXPENSE > QUERIES > GREETINGS
+ * SCOPE: Entity creation + deletion + expense recording + query fallback
+ * Query patterns use centralized terminology from terminology.ts
  */
 
 import { 
@@ -10,6 +11,9 @@ import {
   CANCEL_PREFIX_PATTERNS,
   ADVICE_PATTERNS 
 } from "./types.ts";
+import {
+  TASK_QUERY_PATTERN, EVENT_QUERY_PATTERN, EXPENSE_QUERY_PATTERN
+} from "./terminology.ts";
 import { 
   parseDateTime, 
   parseExpense, 
@@ -363,39 +367,21 @@ export function deterministicRouter(message: string, state?: any): RouterResult 
     }
   }
   
-  // === QUERY COMMANDS ===
-  if (/\b(mostra|vedi|lista|elenco|quali|quanti)\s*(i\s+)?(miei\s+)?(task|attivita|cose da fare|to-?do)/i.test(lower)) {
+  // === QUERY COMMANDS (using centralized terminology) ===
+  if (TASK_QUERY_PATTERN.test(lower)) {
     return { matched: true, intent: "QUERY_TASKS", action: { type: "QUERY_TASKS" } };
   }
   
-  if (/\b(mostra|vedi|lista|elenco|quali|quanti)\s*(i\s+)?(miei\s+)?(eventi|appuntamenti|impegni)/i.test(lower)) {
+  if (EVENT_QUERY_PATTERN.test(lower)) {
     return { matched: true, intent: "QUERY_EVENTS", action: { type: "QUERY_EVENTS" } };
   }
   
-  if (/\b(mostra|vedi|quanto|quante|budget|spese|speso)\s*/i.test(lower) && 
-      /\b(spese|budget|speso|soldi|euro|€)/i.test(lower)) {
+  if (EXPENSE_QUERY_PATTERN.test(lower)) {
     return { matched: true, intent: "QUERY_BUDGET", action: { type: "QUERY_BUDGET" } };
   }
   
-  // === GREETINGS & SMALL TALK ===
-  const greetings = ["ciao", "salve", "buongiorno", "buonasera", "hey", "ehi", "come va", "come stai", "tutto bene"];
-  if (greetings.some(g => lower.startsWith(g) || lower === g)) {
-    return {
-      matched: true,
-      intent: "SMALL_TALK",
-      reply: randomGreeting()
-    };
-  }
-  
-  // === HELP/CAPABILITIES ===
-  if (/\b(cosa puoi fare|aiut|help|come funzion|cosa sai fare)\b/i.test(lower)) {
-    return {
-      matched: true,
-      intent: "ADVICE",
-      reply: "Posso aiutarti a gestire task, eventi e spese. Prova: \"padel domani alle 20\" o \"sigarette €5\".",
-      suggestions: ["Mostra task", "Aggiungi evento", "Mostra spese"]
-    };
-  }
+  // NOTE: Greetings and help handlers REMOVED.
+  // These are handled by LLM Intent Classifier → GENERAL_CHAT → Conversational Brain.
   
   return { matched: false };
 }
