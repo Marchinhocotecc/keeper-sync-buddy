@@ -431,9 +431,9 @@ serve(async (req) => {
     // === MODULE 1: INTENT CLASSIFIER ===
     // ================================================================
     await logAIRequest(supabase, userId);
-    console.log("[Ayvro] === M1: INTENT CLASSIFIER ===");
+    console.log(`[Ayvro] INPUT: "${textToAnalyze.substring(0, 100)}"`);
     const intentLabel = await classifyIntent(textToAnalyze);
-    console.log(`[Ayvro] Intent classified: ${intentLabel}`);
+    console.log(`[Ayvro] INTENT: ${intentLabel}`);
 
     // ================================================================
     // === ROUTE BY INTENT LABEL ===
@@ -441,7 +441,7 @@ serve(async (req) => {
 
     // --- FINANCIAL_DECISION / FINANCIAL_QUERY → Decision Engine + Translator ---
     if (intentLabel === 'FINANCIAL_DECISION' || intentLabel === 'FINANCIAL_QUERY') {
-      console.log("[Ayvro] === M2: DECISION ENGINE ===");
+      console.log("[Ayvro] ROUTED_TO: DECISION_ENGINE");
       const signals = financialContext?.signals || {};
       const risk = financialContext?.risk || { riskLevel: 'unknown', flags: [] };
       
@@ -457,7 +457,7 @@ serve(async (req) => {
     }
 
     // --- TASK_QUERY → Deterministic ---
-    if (intentLabel === 'TASK_QUERY') {
+    console.log("[Ayvro] ROUTED_TO: DB_QUERY (tasks)");
       const context = await fetchUserContext(supabase, userId);
       const reply = formatTaskList(context.todos);
       await saveConversationMemory(supabase, userId, 'TASK_QUERY', message, reply);
@@ -465,7 +465,7 @@ serve(async (req) => {
     }
 
     // --- EVENT_QUERY → Deterministic ---
-    if (intentLabel === 'EVENT_QUERY') {
+    console.log("[Ayvro] ROUTED_TO: DB_QUERY (events)");
       const context = await fetchUserContext(supabase, userId);
       const reply = formatEventList(context.events);
       await saveConversationMemory(supabase, userId, 'EVENT_QUERY', message, reply);
@@ -474,7 +474,7 @@ serve(async (req) => {
 
     // --- PLANNING / GENERAL_CHAT → Conversational Brain ---
     if (intentLabel === 'PLANNING' || intentLabel === 'GENERAL_CHAT') {
-      console.log("[Ayvro] === M3: CONVERSATIONAL BRAIN ===");
+      console.log(`[Ayvro] ROUTED_TO: CONVERSATIONAL_BRAIN (${intentLabel})`);
       const context = await fetchUserContext(supabase, userId);
       const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
         todos: context.todos,
