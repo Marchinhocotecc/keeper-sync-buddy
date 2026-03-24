@@ -20,6 +20,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 
 import { AIResponse, AIAction, AIIntent, CORS_HEADERS, PREMIUM_ONLY_ACTIONS } from "./types.ts";
+import { CREATION_PATTERN } from "./terminology.ts";
 import { getFinancialAdvice } from "./financialAdvisor.ts";
 import { normalizeInput } from "./normalizer.ts";
 import { 
@@ -496,7 +497,7 @@ serve(async (req) => {
     console.log("[Ayvro] === UNKNOWN INTENT: trying deterministic router for creation ===");
     
     // Only use deterministic router if message looks like a creation command
-    const isCreationPattern = /\b(crea|aggiungi|ricordami|devo|€|euro|\d+\s*€|nuovo|nuova|elimina|cancella|rimuovi)\b/i.test(message);
+    const isCreationPattern = CREATION_PATTERN.test(message);
     
     if (isCreationPattern) {
       const routerResult = deterministicRouter(message, state);
