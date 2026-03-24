@@ -8,6 +8,12 @@
  * Follow-up detection expanded with broader patterns.
  */
 
+import {
+  TASK_QUERY_PATTERN, EVENT_QUERY_PATTERN, EXPENSE_QUERY_PATTERN,
+  FINANCIAL_DECISION_PATTERN, FINANCIAL_QUERY_PATTERN,
+  PLANNING_PATTERN, GENERAL_CHAT_PATTERN
+} from "./terminology.ts";
+
 export type IntentLabel =
   | 'FINANCIAL_DECISION'
   | 'FINANCIAL_QUERY'
@@ -95,7 +101,8 @@ export function isFollowUp(message: string): boolean {
 }
 
 /**
- * Deterministic fallback — ONLY used when LLM is unavailable
+ * Deterministic fallback — ONLY used when LLM is unavailable.
+ * Uses centralized terminology patterns from terminology.ts.
  */
 function classifyDeterministic(message: string): IntentLabel {
   const lower = message.toLowerCase().trim();
@@ -105,33 +112,38 @@ function classifyDeterministic(message: string): IntentLabel {
     return 'GENERAL_CHAT';
   }
 
-  // Financial decision
-  if (/(?:posso permettermi|posso spendere|sto spendendo troppo|quanto posso|ce la faccio|can i afford|budget enough|me lo posso permettere)/i.test(lower)) {
+  // Financial decision (centralized)
+  if (FINANCIAL_DECISION_PATTERN.test(lower)) {
     return 'FINANCIAL_DECISION';
   }
 
-  // Financial query
-  if (/(?:come sto andando|quanto ho speso|livello di rischio|situazione finanziaria|how much.*spent|burn rate|risk level|spending|spese totali|budget|come vanno le finanze)/i.test(lower)) {
+  // Financial query (centralized)
+  if (FINANCIAL_QUERY_PATTERN.test(lower)) {
     return 'FINANCIAL_QUERY';
   }
 
-  // Task query
-  if (/(?:mostra.*task|elenca.*task|lista.*task|i miei task|show.*task|cose da fare|to-?do|cosa ho da fare|cosa devo fare oggi)/i.test(lower)) {
+  // Task query (centralized — covers "che task ho", "task di oggi", etc.)
+  if (TASK_QUERY_PATTERN.test(lower)) {
     return 'TASK_QUERY';
   }
 
-  // Event query
-  if (/(?:mostra.*event|elenca.*event|eventi di oggi|calendar|impegni|appuntamenti|show.*event|cosa ho in agenda)/i.test(lower)) {
+  // Event query (centralized — covers "che eventi ho", "agenda di oggi", etc.)
+  if (EVENT_QUERY_PATTERN.test(lower)) {
     return 'EVENT_QUERY';
   }
 
-  // Planning
-  if (/(?:quando.*consigli|pianifica|organizza.*giornata|plan|schedule|help me plan|quando dovrei|quando mi consigli|come organizzo|aiutami a pianificare|routine)/i.test(lower)) {
+  // Expense query (centralized)
+  if (EXPENSE_QUERY_PATTERN.test(lower)) {
+    return 'FINANCIAL_QUERY';
+  }
+
+  // Planning (centralized)
+  if (PLANNING_PATTERN.test(lower)) {
     return 'PLANNING';
   }
 
-  // General chat (broader patterns)
-  if (/(?:grazie|thanks|bravo|bene|ok grazie|perfetto|come stai|come va|buongiorno|buonasera|ciao|hey|ehi|cosa puoi fare|aiutami|consigliami|come funzion|help)/i.test(lower)) {
+  // General chat (centralized)
+  if (GENERAL_CHAT_PATTERN.test(lower)) {
     return 'GENERAL_CHAT';
   }
 
