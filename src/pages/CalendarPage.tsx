@@ -455,13 +455,13 @@ export default function CalendarPage() {
           ) : (
             <form onSubmit={handleUpdateEvent} className="space-y-4 py-4">
               <div className="space-y-2">
-              <Label htmlFor="edit-title">{t('calendar.eventTitle')} *</Label>
-              <Input id="edit-title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required placeholder={t('calendar.titlePlaceholder')} />
+                <Label htmlFor="edit-title">{t('calendar.eventTitle')} *</Label>
+                <Input
                   id="edit-title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required
-                  placeholder="Es: Riunione con il team"
+                  placeholder={t('calendar.titlePlaceholder')}
                 />
               </div>
 
