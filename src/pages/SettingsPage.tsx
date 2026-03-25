@@ -346,8 +346,6 @@ export default function SettingsPage() {
 
           {/* Theme Section */}
           <motion.div variants={itemVariants}>
-          {/* Theme Section */}
-          <motion.div variants={itemVariants}>
             <Card className="app-card">
               <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center gap-3 mb-2 sm:mb-3">

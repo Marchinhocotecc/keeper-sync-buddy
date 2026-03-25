@@ -32,36 +32,62 @@ export function Navigation() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 w-full bg-card border-b border-border h-[56px]">
-      <div className="container mx-auto px-4 sm:px-6 max-w-screen-xl h-full">
-        <div className="flex items-center justify-between h-full">
-          <Link to="/" className="flex items-center gap-2 shrink-0 group">
-            <img src={ayvroLogo} alt="Ayvro" className="w-8 h-8 rounded-lg shadow-ayvro group-hover:shadow-[0_4px_16px_rgba(15,61,62,0.3)] transition-shadow" />
-            <h1 className="text-base sm:text-lg font-semibold text-foreground tracking-tight hidden sm:block">
-              Ayvro
-            </h1>
-          </Link>
-          
-          <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide">
-            {links.map((link) => {
-              const Icon = link.icon;
-              const isActive = location.pathname === link.to;
-              return (
-                <Link key={link.to} to={link.to} className={cn(
-                  'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-all shrink-0',
-                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                )}>
-                  <Icon className={cn("h-4 w-4", isActive ? "text-primary-foreground" : "")} />
-                  <span className="hidden sm:inline text-[13px]">{link.label}</span>
-                </Link>
-              );
-            })}
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="ml-1 h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 rounded-lg" title={t('nav.logout')}>
-              <LogOut className="h-4 w-4" />
-            </Button>
+    <>
+      {/* Desktop top nav */}
+      <nav className="sticky top-0 z-50 w-full bg-card border-b border-border h-[56px] hidden sm:block">
+        <div className="container mx-auto px-4 sm:px-6 max-w-screen-xl h-full">
+          <div className="flex items-center justify-between h-full">
+            <Link to="/" className="flex items-center gap-2 shrink-0 group">
+              <img src={ayvroLogo} alt="Ayvro" className="w-8 h-8 rounded-lg shadow-ayvro group-hover:shadow-[0_4px_16px_rgba(15,61,62,0.3)] transition-shadow" />
+              <h1 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">
+                Ayvro
+              </h1>
+            </Link>
+            
+            <div className="flex items-center gap-1">
+              {links.map((link) => {
+                const Icon = link.icon;
+                const isActive = location.pathname === link.to;
+                return (
+                  <Link key={link.to} to={link.to} className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                    isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}>
+                    <Icon className={cn("h-4 w-4", isActive ? "text-primary-foreground" : "")} />
+                    <span className="text-[13px]">{link.label}</span>
+                  </Link>
+                );
+              })}
+              <Button variant="ghost" size="icon" onClick={handleLogout} className="ml-1 h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 rounded-lg" title={t('nav.logout')}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border sm:hidden safe-area-bottom">
+        <div className="flex items-center justify-around h-14 px-1">
+          {links.map((link) => {
+            const Icon = link.icon;
+            const isActive = location.pathname === link.to;
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-lg transition-colors min-w-0',
+                  isActive ? 'text-primary' : 'text-muted-foreground'
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-[10px] font-medium truncate max-w-[60px]">{link.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 }

@@ -1,11 +1,13 @@
 /**
  * Daily Nudge — single contextual sentence shown once per day.
- * Reads financialSignals + risk level + spending patterns.
+ * Reads financialSignals + risk level + spending patterns + wellness data.
  */
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { detectDayPatterns, type DayPattern } from "@/services/spendingPatterns";
+import { useWellness } from "@/hooks/useWellness";
 import { AlertCircle, TrendingDown, Shield } from "lucide-react";
 
 interface DailyNudgeProps {
@@ -13,7 +15,9 @@ interface DailyNudgeProps {
 }
 
 export function DailyNudge({ userId }: DailyNudgeProps) {
+  const { t } = useTranslation();
   const { insight } = useFinancialInsights(userId);
+  const { wellnessData } = useWellness(userId);
   const [dismissed, setDismissed] = useState(false);
   const [dayPattern, setDayPattern] = useState<DayPattern | null>(null);
 
@@ -41,25 +45,30 @@ export function DailyNudge({ userId }: DailyNudgeProps) {
     setDismissed(true);
   };
 
-  // Build nudge text
   let nudgeText = "";
   let Icon = Shield;
 
   if (risk === "critical") {
-    nudgeText = "Evita nuove spese oggi.";
+    nudgeText = t('nudge.avoidSpending');
     Icon = AlertCircle;
   } else if (risk === "warning") {
-    nudgeText = `Oggi dovresti restare sotto €${Math.round(dailySafeLimit)}.`;
+    nudgeText = t('nudge.stayUnder', { amount: Math.round(dailySafeLimit) });
     Icon = TrendingDown;
   } else {
-    nudgeText = `Oggi puoi spendere fino a €${Math.round(dailySafeLimit)} senza alterare il budget.`;
+    nudgeText = t('nudge.canSpend', { amount: Math.round(dailySafeLimit) });
     Icon = Shield;
   }
 
-  // Append peak day warning if applicable
+  // Append peak day warning
   const today = new Date().getDay();
   if (dayPattern && dayPattern.peakDay === today) {
-    nudgeText += ` Il ${dayPattern.peakDayName} è il tuo giorno di spesa più alto.`;
+    nudgeText += ` ${t('nudge.peakDay', { day: dayPattern.peakDayName })}`;
+  }
+
+  // Wellness integration: low sleep warning
+  const yesterdayData = wellnessData?.[1];
+  if (yesterdayData?.sleep && yesterdayData.sleep < 6) {
+    nudgeText += ` ${t('nudge.lowSleep')}`;
   }
 
   const colorClasses = {
@@ -74,7 +83,7 @@ export function DailyNudge({ userId }: DailyNudgeProps) {
       onClick={handleDismiss}
       role="button"
       tabIndex={0}
-      aria-label="Chiudi nudge"
+      aria-label={t('nudge.closeNudge')}
     >
       <Icon className="h-4 w-4 shrink-0" />
       <span className="flex-1">{nudgeText}</span>
