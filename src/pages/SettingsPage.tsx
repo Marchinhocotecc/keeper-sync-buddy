@@ -532,7 +532,6 @@ export default function SettingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        </motion.div>
 
         {/* Reset Memory Confirmation Modal */}
         <Dialog open={showResetMemoryModal} onOpenChange={setShowResetMemoryModal}>
