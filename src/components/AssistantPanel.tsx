@@ -54,6 +54,7 @@ function detectIntentType(message: string): string {
 }
 
 function StructuredResponseView({ structured }: { structured: StructuredResponse }) {
+  const { t } = useTranslation();
   const [showReasoning, setShowReasoning] = useState(false);
 
   return (
@@ -67,7 +68,7 @@ function StructuredResponseView({ structured }: { structured: StructuredResponse
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             {showReasoning ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            Ragionamento
+            {t('assistant.reasoning')}
           </button>
           {showReasoning && (
             <p className="text-xs text-muted-foreground mt-1 pl-4 border-l-2 border-border">

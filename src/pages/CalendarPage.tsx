@@ -108,11 +108,7 @@ export default function CalendarPage() {
     e.preventDefault();
     
     if (!formData.title.trim()) {
-      toast({
-        title: "Errore",
-        description: "Il titolo è obbligatorio",
-        variant: "destructive"
-      });
+      toast({ title: t('common.error'), description: t('calendar.titleRequired'), variant: "destructive" });
       return;
     }
 
@@ -129,11 +125,7 @@ export default function CalendarPage() {
         endDateTime = `${formData.start_date}T${formData.end_time || formData.start_time}:00`;
 
         if (new Date(endDateTime) <= new Date(startDateTime)) {
-          toast({
-            title: "Errore",
-            description: "L'ora di fine deve essere successiva all'ora di inizio",
-            variant: "destructive"
-          });
+          toast({ title: t('common.error'), description: t('calendar.endBeforeStart'), variant: "destructive" });
           return;
         }
       }
@@ -158,11 +150,7 @@ export default function CalendarPage() {
     if (!selectedEvent) return;
 
     if (!formData.title.trim()) {
-      toast({
-        title: "Errore",
-        description: "Il titolo è obbligatorio",
-        variant: "destructive"
-      });
+      toast({ title: t('common.error'), description: t('calendar.titleRequired'), variant: "destructive" });
       return;
     }
 
@@ -178,11 +166,7 @@ export default function CalendarPage() {
         endDateTime = `${formData.start_date}T${formData.end_time || formData.start_time}:00`;
 
         if (new Date(endDateTime) <= new Date(startDateTime)) {
-          toast({
-            title: "Errore",
-            description: "L'ora di fine deve essere successiva all'ora di inizio",
-            variant: "destructive"
-          });
+          toast({ title: t('common.error'), description: t('calendar.endBeforeStart'), variant: "destructive" });
           return;
         }
       }
@@ -275,7 +259,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background pb-20 sm:pb-0">
       <div className="page-container">
         {/* Header */}
         <div className="page-header animate-fade-in">
@@ -409,7 +393,7 @@ export default function CalendarPage() {
       <Button
         onClick={openCreateDialog}
         size="lg"
-        className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-110 z-50"
+        className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-110 z-40"
       >
         <Plus className="h-5 w-5 sm:h-6 sm:w-6" />
       </Button>
@@ -419,7 +403,7 @@ export default function CalendarPage() {
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
-              {isEditing ? t('calendar.edit') : 'Dettagli Evento'}
+              {isEditing ? t('calendar.edit') : t('calendar.eventDetails')}
             </DialogTitle>
           </DialogHeader>
 
@@ -471,29 +455,29 @@ export default function CalendarPage() {
           ) : (
             <form onSubmit={handleUpdateEvent} className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-title">Titolo *</Label>
+                <Label htmlFor="edit-title">{t('calendar.eventTitle')} *</Label>
                 <Input
                   id="edit-title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required
-                  placeholder="Es: Riunione con il team"
+                  placeholder={t('calendar.titlePlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-description">Descrizione</Label>
+                <Label htmlFor="edit-description">{t('calendar.description')}</Label>
                 <Textarea
                   id="edit-description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Aggiungi dettagli..."
+                  placeholder={t('calendar.descriptionPlaceholder')}
                   rows={3}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-date">Data *</Label>
+                <Label htmlFor="edit-date">{t('calendar.date')} *</Label>
                 <Input
                   id="edit-date"
                   type="date"
@@ -521,7 +505,7 @@ export default function CalendarPage() {
               {!formData.isAllDay && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-start-time">Inizio</Label>
+                    <Label htmlFor="edit-start-time">{t('calendar.startTime')}</Label>
                     <Input
                       id="edit-start-time"
                       type="time"
@@ -530,7 +514,7 @@ export default function CalendarPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-end-time">Fine</Label>
+                    <Label htmlFor="edit-end-time">{t('calendar.endTime')}</Label>
                     <Input
                       id="edit-end-time"
                       type="time"
@@ -578,29 +562,29 @@ export default function CalendarPage() {
 
           <form onSubmit={handleCreateEvent} className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Titolo *</Label>
+              <Label htmlFor="title">{t('calendar.eventTitle')} *</Label>
               <Input
                 id="title"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
-                placeholder="Es: Riunione con il team"
+                placeholder={t('calendar.titlePlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Descrizione</Label>
+              <Label htmlFor="description">{t('calendar.description')}</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Aggiungi dettagli..."
+                placeholder={t('calendar.descriptionPlaceholder')}
                 rows={3}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="date">Data *</Label>
+              <Label htmlFor="date">{t('calendar.date')} *</Label>
               <Input
                 id="date"
                 type="date"
@@ -628,7 +612,7 @@ export default function CalendarPage() {
             {!formData.isAllDay && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="start-time">Inizio</Label>
+                  <Label htmlFor="start-time">{t('calendar.startTime')}</Label>
                   <Input
                     id="start-time"
                     type="time"
@@ -637,7 +621,7 @@ export default function CalendarPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="end-time">Fine</Label>
+                  <Label htmlFor="end-time">{t('calendar.endTime')}</Label>
                   <Input
                     id="end-time"
                     type="time"
