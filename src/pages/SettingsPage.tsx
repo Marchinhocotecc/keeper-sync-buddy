@@ -151,7 +151,7 @@ export default function SettingsPage() {
             },
             updated_at: new Date().toISOString()
           }, { onConflict: 'user_id' });
-        toast({ title: checked ? 'Memoria assistente attivata' : 'Memoria assistente disattivata' });
+        toast({ title: checked ? t('settings.assistantMemoryEnabled') : t('settings.assistantMemoryDisabled') });
       } catch (error) {
         console.error('Error updating assistant memory:', error);
       }
@@ -175,14 +175,11 @@ export default function SettingsPage() {
           })
           .eq('user_id', user.id);
         
-        toast({ title: 'Memoria assistente resettata con successo' });
+        toast({ title: t('settings.resetMemorySuccess') });
         setShowResetMemoryModal(false);
       }
     } catch (error) {
-      toast({ 
-        title: 'Errore durante il reset della memoria',
-        variant: 'destructive'
-      });
+      toast({ title: t('settings.resetMemoryError'), variant: 'destructive' });
     } finally {
       setIsResettingMemory(false);
     }
@@ -212,16 +209,12 @@ export default function SettingsPage() {
           email: profileEmail
         }));
 
-        toast({ title: 'Profilo aggiornato con successo' });
+        toast({ title: t('settings.profileUpdated') });
       }
       
       setShowProfileModal(false);
     } catch (error: any) {
-      toast({ 
-        title: 'Errore durante l\'aggiornamento del profilo',
-        description: error.message,
-        variant: 'destructive'
-      });
+      toast({ title: t('settings.profileUpdateError'), description: error.message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -279,7 +272,7 @@ export default function SettingsPage() {
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm sm:text-base font-medium text-foreground truncate">
-                      {userProfile.name || 'Utente'}
+                      {userProfile.name || t('common.user')}
                     </p>
                     <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       {userProfile.email}
@@ -291,7 +284,7 @@ export default function SettingsPage() {
                     onClick={() => setShowProfileModal(true)}
                     className="text-primary text-xs sm:text-sm shrink-0"
                   >
-                    Modifica
+                    {t('settings.editProfile')}
                   </Button>
                 </div>
               </CardContent>
@@ -393,8 +386,8 @@ export default function SettingsPage() {
                     <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <Label className="text-sm sm:text-base font-medium">Assistente</Label>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Configura il tuo coach personale</p>
+                    <Label className="text-sm sm:text-base font-medium">{t('settings.assistant')}</Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{t('settings.assistantDesc')}</p>
                   </div>
                 </div>
                 
@@ -402,8 +395,8 @@ export default function SettingsPage() {
                 
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs sm:text-sm font-medium text-foreground">Memoria assistente</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">L'assistente ricorda le tue preferenze</p>
+                    <p className="text-xs sm:text-sm font-medium text-foreground">{t('settings.assistantMemory')}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">{t('settings.assistantMemoryDesc')}</p>
                   </div>
                   <Switch
                     checked={assistantMemory}
@@ -419,7 +412,7 @@ export default function SettingsPage() {
                   onClick={() => setShowResetMemoryModal(true)}
                 >
                   <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-2" />
-                  Reset memoria assistente
+                  {t('settings.resetMemory')}
                 </Button>
               </CardContent>
             </Card>
@@ -434,8 +427,8 @@ export default function SettingsPage() {
                     <HelpCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <Label className="text-sm sm:text-base font-medium">Supporto</Label>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Assistenza e informazioni</p>
+                    <Label className="text-sm sm:text-base font-medium">{t('settings.support')}</Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{t('settings.supportDesc')}</p>
                   </div>
                 </div>
                 
@@ -445,7 +438,7 @@ export default function SettingsPage() {
                 >
                   <div className="flex items-center gap-2 sm:gap-3">
                     <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                    <span className="text-xs sm:text-sm font-medium">Scrivici</span>
+                    <span className="text-xs sm:text-sm font-medium">{t('settings.contactUs')}</span>
                   </div>
                   <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 </a>
@@ -456,7 +449,7 @@ export default function SettingsPage() {
                 >
                   <div className="flex items-center gap-2 sm:gap-3">
                     <ExternalLink className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                    <span className="text-xs sm:text-sm font-medium">Privacy & Termini</span>
+                    <span className="text-xs sm:text-sm font-medium">{t('settings.privacyTerms')}</span>
                   </div>
                   <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 </a>
@@ -481,29 +474,27 @@ export default function SettingsPage() {
         <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
           <DialogContent className="max-w-sm mx-4">
             <DialogHeader>
-              <DialogTitle>Modifica Profilo</DialogTitle>
-              <DialogDescription>
-                Aggiorna le tue informazioni personali
-              </DialogDescription>
+              <DialogTitle>{t('settings.editProfileTitle')}</DialogTitle>
+              <DialogDescription>{t('settings.editProfileDesc')}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Nome</Label>
+                <Label htmlFor="name">{t('settings.name')}</Label>
                 <Input
                   id="name"
                   value={profileName}
                   onChange={(e) => setProfileName(e.target.value)}
-                  placeholder="Il tuo nome"
+                  placeholder={t('settings.namePlaceholder')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('settings.email')}</Label>
                 <Input
                   id="email"
                   type="email"
                   value={profileEmail}
                   onChange={(e) => setProfileEmail(e.target.value)}
-                  placeholder="La tua email"
+                  placeholder={t('settings.emailPlaceholder')}
                 />
               </div>
               <a 
@@ -511,23 +502,16 @@ export default function SettingsPage() {
                 className="text-sm text-primary hover:underline block"
                 onClick={(e) => {
                   e.preventDefault();
-                  toast({ title: 'Funzionalità in arrivo', description: 'Il cambio password sarà disponibile presto.' });
+                  toast({ title: t('settings.changePasswordSoon') });
                 }}
               >
-                Cambia password
+                {t('settings.changePassword')}
               </a>
             </div>
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowProfileModal(false)}>
-                Annulla
-              </Button>
+              <Button variant="outline" onClick={() => setShowProfileModal(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleSaveProfile} disabled={isSaving}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Salvataggio...
-                  </>
-                ) : 'Salva'}
+                {isSaving ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('common.saving')}</>) : t('common.save')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -537,26 +521,17 @@ export default function SettingsPage() {
         <Dialog open={showResetMemoryModal} onOpenChange={setShowResetMemoryModal}>
           <DialogContent className="max-w-sm mx-4">
             <DialogHeader>
-              <DialogTitle>Reset Memoria Assistente</DialogTitle>
-              <DialogDescription>
-                Sei sicuro di voler resettare la memoria dell'assistente? Tutte le preferenze salvate verranno eliminate.
-              </DialogDescription>
+              <DialogTitle>{t('settings.resetMemoryTitle')}</DialogTitle>
+              <DialogDescription>{t('settings.resetMemoryDesc')}</DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowResetMemoryModal(false)}>
-                Annulla
-              </Button>
+              <Button variant="outline" onClick={() => setShowResetMemoryModal(false)}>{t('common.cancel')}</Button>
               <Button 
                 variant="destructive" 
                 onClick={handleResetMemory}
                 disabled={isResettingMemory}
               >
-                {isResettingMemory ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Reset in corso...
-                  </>
-                ) : 'Conferma Reset'}
+                {isResettingMemory ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('settings.resetting')}</>) : t('settings.resetConfirm')}
               </Button>
             </DialogFooter>
           </DialogContent>
