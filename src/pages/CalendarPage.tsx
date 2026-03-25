@@ -108,11 +108,7 @@ export default function CalendarPage() {
     e.preventDefault();
     
     if (!formData.title.trim()) {
-      toast({
-        title: "Errore",
-        description: "Il titolo è obbligatorio",
-        variant: "destructive"
-      });
+      toast({ title: t('common.error'), description: t('calendar.titleRequired'), variant: "destructive" });
       return;
     }
 
@@ -129,11 +125,7 @@ export default function CalendarPage() {
         endDateTime = `${formData.start_date}T${formData.end_time || formData.start_time}:00`;
 
         if (new Date(endDateTime) <= new Date(startDateTime)) {
-          toast({
-            title: "Errore",
-            description: "L'ora di fine deve essere successiva all'ora di inizio",
-            variant: "destructive"
-          });
+          toast({ title: t('common.error'), description: t('calendar.endBeforeStart'), variant: "destructive" });
           return;
         }
       }
@@ -158,11 +150,7 @@ export default function CalendarPage() {
     if (!selectedEvent) return;
 
     if (!formData.title.trim()) {
-      toast({
-        title: "Errore",
-        description: "Il titolo è obbligatorio",
-        variant: "destructive"
-      });
+      toast({ title: t('common.error'), description: t('calendar.titleRequired'), variant: "destructive" });
       return;
     }
 
@@ -178,11 +166,7 @@ export default function CalendarPage() {
         endDateTime = `${formData.start_date}T${formData.end_time || formData.start_time}:00`;
 
         if (new Date(endDateTime) <= new Date(startDateTime)) {
-          toast({
-            title: "Errore",
-            description: "L'ora di fine deve essere successiva all'ora di inizio",
-            variant: "destructive"
-          });
+          toast({ title: t('common.error'), description: t('calendar.endBeforeStart'), variant: "destructive" });
           return;
         }
       }
@@ -275,7 +259,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background pb-20 sm:pb-0">
       <div className="page-container">
         {/* Header */}
         <div className="page-header animate-fade-in">
@@ -409,7 +393,7 @@ export default function CalendarPage() {
       <Button
         onClick={openCreateDialog}
         size="lg"
-        className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-110 z-50"
+        className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-110 z-40">
       >
         <Plus className="h-5 w-5 sm:h-6 sm:w-6" />
       </Button>
@@ -419,7 +403,7 @@ export default function CalendarPage() {
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
-              {isEditing ? t('calendar.edit') : 'Dettagli Evento'}
+              {isEditing ? t('calendar.edit') : t('calendar.eventDetails')}
             </DialogTitle>
           </DialogHeader>
 
@@ -471,8 +455,8 @@ export default function CalendarPage() {
           ) : (
             <form onSubmit={handleUpdateEvent} className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-title">Titolo *</Label>
-                <Input
+              <Label htmlFor="edit-title">{t('calendar.eventTitle')} *</Label>
+              <Input id="edit-title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required placeholder={t('calendar.titlePlaceholder')} />
                   id="edit-title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
