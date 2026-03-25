@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,14 +16,8 @@ interface BudgetEditModalProps {
   isSaving: boolean;
 }
 
-export function BudgetEditModal({
-  open,
-  onOpenChange,
-  currentBudget,
-  currentNote = '',
-  onSave,
-  isSaving
-}: BudgetEditModalProps) {
+export function BudgetEditModal({ open, onOpenChange, currentBudget, currentNote = '', onSave, isSaving }: BudgetEditModalProps) {
+  const { t } = useTranslation();
   const [budgetValue, setBudgetValue] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
@@ -38,13 +33,11 @@ export function BudgetEditModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
     const numValue = parseFloat(budgetValue);
     if (isNaN(numValue) || numValue < 0) {
-      setError('Inserisci un valore positivo');
+      setError(t('expenses.positiveValueError'));
       return;
     }
-
     await onSave(numValue, note);
   };
 
@@ -60,45 +53,23 @@ export function BudgetEditModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Modifica Budget Mensile</DialogTitle>
+          <DialogTitle>{t('expenses.editBudget')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="budget">Budget Mensile (€)</Label>
-            <Input
-              id="budget"
-              type="text"
-              inputMode="decimal"
-              value={budgetValue}
-              onChange={handleBudgetChange}
-              placeholder="0.00"
-              className={error ? 'border-destructive' : ''}
-            />
+            <Label htmlFor="budget">{t('expenses.budgetLabel')}</Label>
+            <Input id="budget" type="text" inputMode="decimal" value={budgetValue} onChange={handleBudgetChange} placeholder="0.00" className={error ? 'border-destructive' : ''} />
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="note">Note (opzionale)</Label>
-            <Textarea
-              id="note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Aggiungi una nota..."
-              rows={3}
-              maxLength={200}
-            />
+            <Label htmlFor="note">{t('expenses.budgetNoteLabel')}</Label>
+            <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('expenses.budgetNotePlaceholder')} rows={3} maxLength={200} />
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSaving}
-            >
-              Annulla
-            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>{t('common.cancel')}</Button>
             <Button type="submit" disabled={isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salva
+              {t('common.save')}
             </Button>
           </DialogFooter>
         </form>
