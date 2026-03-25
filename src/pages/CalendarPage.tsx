@@ -466,18 +466,18 @@ export default function CalendarPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-description">Descrizione</Label>
+                <Label htmlFor="edit-description">{t('calendar.description')}</Label>
                 <Textarea
                   id="edit-description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Aggiungi dettagli..."
+                  placeholder={t('calendar.descriptionPlaceholder')}
                   rows={3}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-date">Data *</Label>
+                <Label htmlFor="edit-date">{t('calendar.date')} *</Label>
                 <Input
                   id="edit-date"
                   type="date"
@@ -505,7 +505,7 @@ export default function CalendarPage() {
               {!formData.isAllDay && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-start-time">Inizio</Label>
+                    <Label htmlFor="edit-start-time">{t('calendar.startTime')}</Label>
                     <Input
                       id="edit-start-time"
                       type="time"
@@ -514,7 +514,7 @@ export default function CalendarPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-end-time">Fine</Label>
+                    <Label htmlFor="edit-end-time">{t('calendar.endTime')}</Label>
                     <Input
                       id="edit-end-time"
                       type="time"
@@ -562,29 +562,29 @@ export default function CalendarPage() {
 
           <form onSubmit={handleCreateEvent} className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Titolo *</Label>
+              <Label htmlFor="title">{t('calendar.eventTitle')} *</Label>
               <Input
                 id="title"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
-                placeholder="Es: Riunione con il team"
+                placeholder={t('calendar.titlePlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Descrizione</Label>
+              <Label htmlFor="description">{t('calendar.description')}</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Aggiungi dettagli..."
+                placeholder={t('calendar.descriptionPlaceholder')}
                 rows={3}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="date">Data *</Label>
+              <Label htmlFor="date">{t('calendar.date')} *</Label>
               <Input
                 id="date"
                 type="date"
@@ -612,7 +612,7 @@ export default function CalendarPage() {
             {!formData.isAllDay && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="start-time">Inizio</Label>
+                  <Label htmlFor="start-time">{t('calendar.startTime')}</Label>
                   <Input
                     id="start-time"
                     type="time"
