@@ -621,7 +621,7 @@ export default function CalendarPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="end-time">Fine</Label>
+                  <Label htmlFor="end-time">{t('calendar.endTime')}</Label>
                   <Input
                     id="end-time"
                     type="time"
