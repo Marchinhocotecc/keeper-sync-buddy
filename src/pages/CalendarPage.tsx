@@ -17,6 +17,10 @@ import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function CalendarPage() {
   const { t } = useTranslation();
@@ -27,6 +31,7 @@ export default function CalendarPage() {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const {
     events,
@@ -446,7 +451,7 @@ export default function CalendarPage() {
                   <Edit className="h-4 w-4" />
                   {t('calendar.edit')}
                 </Button>
-                <Button onClick={handleDeleteEvent} variant="destructive" className="flex-1 gap-2">
+                <Button onClick={() => setShowDeleteConfirm(true)} variant="destructive" className="flex-1 gap-2">
                   <Trash2 className="h-4 w-4" />
                   {t('calendar.delete')}
                 </Button>
@@ -552,6 +557,22 @@ export default function CalendarPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('common.confirm')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('common.deleteConfirm', { item: selectedEvent?.title || '' })}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDeleteEvent}>
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create Event Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>

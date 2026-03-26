@@ -8,8 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -72,6 +76,8 @@ export default function ExpensesPage() {
       setIsSavingBudget(false);
     }
   }, [userId, currentMonth, currentYear, toast, t]);
+
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     amount: '', category: 'food', description: '', date: new Date().toISOString().split('T')[0],
@@ -183,7 +189,13 @@ export default function ExpensesPage() {
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               {filteredExpenses.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-8">{t('expenses.noExpenses')}</p>
+                <div className="text-center py-10">
+                  <Wallet className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground mb-4">{t('expenses.noExpenses')}</p>
+                  <Button variant="outline" onClick={() => setShowAddForm(true)} className="gap-2 text-sm">
+                    <Plus className="h-4 w-4" />{t('expenses.addExpense')}
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-2 sm:space-y-3 max-h-[400px] overflow-y-auto">
                   {filteredExpenses.slice(0, 10).map((expense) => (
@@ -196,7 +208,7 @@ export default function ExpensesPage() {
                       </div>
                       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                         <span className="text-sm font-semibold">€{parseFloat(String(expense.amount)).toFixed(2)}</span>
-                        <Button variant="ghost" size="icon" onClick={() => deleteExpense.mutate(expense.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0">
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(expense.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -269,6 +281,21 @@ export default function ExpensesPage() {
       </Dialog>
 
       <BudgetEditModal open={showBudgetModal} onOpenChange={setShowBudgetModal} currentBudget={budget} currentNote={budgetNote} onSave={handleSaveBudget} isSaving={isSavingBudget} />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('common.confirm')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('common.deleteConfirmGeneric')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteTarget) { deleteExpense.mutate(deleteTarget); setDeleteTarget(null); } }}>
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

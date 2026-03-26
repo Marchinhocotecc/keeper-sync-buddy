@@ -264,7 +264,13 @@ export default function HomePage() {
 
                   <TabsContent value="today" className="space-y-2.5 max-h-[350px] overflow-y-auto">
                     {todayTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">{t('home.noPriorityTasks')}</p>
+                      <div className="text-center py-8">
+                        <Flag className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground mb-3">{t('home.noPriorityTasks')}</p>
+                        <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="gap-2">
+                          <Plus className="h-3.5 w-3.5" />{t('home.add')}
+                        </Button>
+                      </div>
                     ) : todayTasks.map((task) => (
                       <TaskCard key={task.id} task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }} onToggle={handleToggleTask} onDelete={handleDeleteTask} />
                     ))}
