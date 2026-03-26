@@ -1,124 +1,62 @@
 
 
-## Piano: Portare Ayvro a 9/10
+## Piano: Ayvro da 7.5 a 9/10 — Completamento
 
-### Stato Attuale: ~6/10
+### Cosa manca
 
-Dopo analisi completa del codice, i problemi principali sono raggruppabili in 5 macro-aree.
-
----
-
-### AREA 1: Internazionalizzazione rotta (4/10 → 9/10)
-
-**Problema**: L'app ha 22 file di traduzione ma ~80% delle stringhe UI sono hardcoded in italiano. HomePage, WellnessCard, DailyNudge, BudgetCard, ExpensesPage, CalendarPage, SettingsPage contengono tutte stringhe italiane dirette.
-
-**Esempi trovati**:
-- HomePage: "Ciao", "Task completati", "Priorità alta", "Spese settimana", "I miei Task", "Aggiungi", "Nessun task prioritario per oggi", "Fatto!", "Ops!"
-- WellnessCard: "Benessere", "Passi", "Ore di sonno", "Meditazione", "Salvataggio..."
-- DailyNudge: "Evita nuove spese oggi", "Oggi dovresti restare sotto..."
-- ExpensesPage: "Totale Spese", "Rimanente", "Spese Recenti", "Per Categoria", "Cibo", "Trasporti"
-- SettingsPage: "Modifica", "Assistente", "Memoria assistente", "Scrivici"
-- CalendarPage: date format hardcoded `it-IT`, "Errore", "Il titolo è obbligatorio"
-- AssistantPage: "Start Chat", "Manage tasks & events" (hardcoded in English)
-
-**Azione**: Sostituire TUTTE le stringhe hardcoded con chiamate `t()`. Aggiungere le chiavi mancanti a `en.json` e propagare a tutti i locale file.
-
-**File coinvolti**: `HomePage.tsx`, `WellnessCard.tsx`, `DailyNudge.tsx`, `ExpensesPage.tsx`, `CalendarPage.tsx`, `SettingsPage.tsx`, `AssistantPage.tsx`, `AssistantPanel.tsx`, `AddTaskForm.tsx`, `BudgetCard.tsx`, `BudgetEditModal.tsx`, `FinancialInsightCard.tsx`, `en.json` + tutti i locale.
+3 blocchi di lavoro rimasti, in ordine di priorita.
 
 ---
 
-### AREA 2: Wellness disconnesso dal core (3/10 → 8/10)
+### BLOCCO 1: Delete Confirmations + Empty States (impatto maggiore)
 
-**Problema**: WellnessCard è un widget isolato che non si integra con il motore finanziario ne con l'assistente. Non aggiunge valore alla value proposition "Decision Engine for Your Money".
+**Delete confirmations** — Aggiungere AlertDialog prima di ogni azione delete:
+- `ExpensesPage.tsx`: conferma prima di eliminare spesa
+- `CalendarPage.tsx`: conferma prima di eliminare evento
+- `TaskCard.tsx`: conferma prima di eliminare task
 
-**Azione**:
-1. Rinominare la sezione da "Benessere" a "Daily Check-in" — mantenerla ma collegarla al contesto
-2. Aggiungere nel DailyNudge un riferimento al sonno/passi se disponibili (es: "Hai dormito poco ieri, attenzione alle decisioni impulsive")
-3. Rendere il wellness opzionale/collassabile nella HomePage per non distrarre dal focus finanziario
+Pattern: stato `deleteTarget` + AlertDialog che chiama la delete reale solo su conferma.
 
-**File coinvolti**: `WellnessCard.tsx`, `DailyNudge.tsx`, `HomePage.tsx`
+**Empty states guidati** — Quando non ci sono dati, mostrare card con CTA:
+- `HomePage.tsx`: se nessun task → "Crea il tuo primo task" con bottone
+- `ExpensesPage.tsx`: se nessuna spesa → "Registra la prima spesa" + se budget = 0 → "Imposta il budget mensile"
+- `CalendarPage.tsx`: se nessun evento → "Crea il primo evento"
 
----
-
-### AREA 3: UX e Layout inconsistente (6/10 → 9/10)
-
-**Problema**:
-- Navigation su mobile mostra solo icone senza bottom tab bar (standard mobile)
-- HomePage mischia task + wellness senza gerarchia chiara
-- CalendarPage ha FAB che si sovrappone alla navbar mobile
-- SettingsPage ha `motion.div` annidati duplicati (riga 348-349: due `motion.div variants={itemVariants}` consecutivi)
-- No password reset flow
-- No onboarding per nuovi utenti (OnboardingPage esiste ma non è usata nel flusso)
-
-**Azione**:
-1. Aggiungere bottom tab bar per mobile (standard pattern) — la navbar attuale diventa desktop-only
-2. Fixare il FAB position su CalendarPage per evitare overlap con bottom nav
-3. Fixare il doppio `motion.div` in SettingsPage (bug visivo)
-4. Aggiungere password reset flow (`/reset-password` page + link "Forgot password?" in AuthPage)
-5. Collegare OnboardingPage nel flusso post-signup (prima del redirect a Home)
-
-**File coinvolti**: `Navigation.tsx` (nuovo bottom nav), `CalendarPage.tsx`, `SettingsPage.tsx`, `AuthPage.tsx`, `App.tsx`
+**File**: `ExpensesPage.tsx`, `CalendarPage.tsx`, `TaskCard.tsx`, `HomePage.tsx`
 
 ---
 
-### AREA 4: Robustezza dati e feedback (5/10 → 9/10)
+### BLOCCO 2: Password Reset + Onboarding Flow
 
-**Problema**:
-- Expense delete non ha conferma
-- Calendar event delete non ha conferma
-- Task delete non ha conferma
-- Nessuna empty state guidata (primo accesso: pagine vuote senza CTA chiare)
-- Budget default = 0 senza prompt per impostarlo
-- Nessun feedback di successo dopo creazione evento calendario
+**Password reset**:
+- Creare `src/pages/ResetPasswordPage.tsx` — form con email, chiama `supabase.auth.resetPasswordForEmail()`
+- Aggiungere route `/reset-password` in `App.tsx`
+- Aggiungere link "Forgot password?" in `AuthPage.tsx`
+- Aggiungere chiavi i18n: `auth.forgotPassword`, `auth.resetSent`, `auth.resetEmail`
 
-**Azione**:
-1. Aggiungere dialog di conferma per tutte le azioni delete (expense, event, task)
-2. Aggiungere empty states guidati: primo accesso mostra card con CTA "Imposta il tuo budget", "Aggiungi la prima spesa", "Crea il primo task"
-3. Aggiungere toast di successo dopo creazione evento
-4. Prompt budget al primo accesso se budget = 0
+**Onboarding post-signup**:
+- In `App.tsx` o `ProtectedRoute.tsx`, dopo primo login verificare se profilo e' nuovo (nessun budget, nessun task)
+- Se nuovo → redirect a `/onboarding` (la pagina esiste gia')
 
-**File coinvolti**: `ExpensesPage.tsx`, `CalendarPage.tsx`, `HomePage.tsx`, `TaskCard.tsx`
+**File**: nuovo `ResetPasswordPage.tsx`, `App.tsx`, `AuthPage.tsx`, `en.json`
 
 ---
 
-### AREA 5: Assistente AI (attuale 5/10 → 8/10)
+### BLOCCO 3: Propagazione Traduzioni (21 locale files)
 
-**Problema**: Già affrontato nei piani precedenti. Rimangono:
-- AssistantPage richiede click "Start Chat" — aggiunge friction inutile
-- No indicatore di caricamento chiaro durante la risposta AI
-- Nessun onboarding nell'assistente (cosa può fare?)
-- Quick actions poco visibili
+Copiare tutte le nuove chiavi da `en.json` ai 21 file locale con i valori tradotti nella lingua corrispondente. Le chiavi nuove sono in: `common`, `home`, `calendar`, `expenses`, `assistant`, `settings`, `nudge`, `insight`, `auth`.
 
-**Azione**:
-1. Rimuovere la splash page "Start Chat" — mostrare direttamente la chat con welcome message
-2. Migliorare l'indicatore di typing/loading (dots animati)
-3. Aggiungere 3-4 suggestion chips visibili all'apertura ("Come sto andando?", "Che task ho?", "Posso permettermi...?")
-
-**File coinvolti**: `AssistantPage.tsx`, `AssistantPanel.tsx`
+**File**: tutti i file in `src/i18n/locales/` (da.json, de.json, es.json, et.json, fr.json, hi.json, hr.json, it.json, ja.json, ko.json, lt.json, lv.json, nl.json, no.json, pl.json, pt.json, ro.json, ru.json, sq.json, sv.json, zh.json)
 
 ---
 
-### Riepilogo file modificati
+### Ordine di implementazione
 
-| Area | File | Tipo modifica |
-|------|------|---------------|
-| i18n | 15+ componenti + 22 locale files | Sostituzione stringhe |
-| Wellness | 3 componenti | Refactor integrazione |
-| UX | 6 componenti | Layout + nuova bottom nav |
-| Robustezza | 4 componenti | Conferme + empty states |
-| Assistente | 2 componenti | Rimozione friction |
-
-### Ordine di implementazione consigliato
-
-1. **Fix bug** (SettingsPage doppio motion.div) — 2 min
-2. **Bottom nav mobile** — impatto UX maggiore
-3. **i18n completo** — coerenza globale
-4. **Delete confirmations + empty states** — robustezza
-5. **Assistant splash removal** — riduzione friction
-6. **Wellness integration** — valore aggiunto
-7. **Password reset + onboarding flow** — completezza auth
+1. **Blocco 1** — Delete confirmations + empty states (impatto UX immediato)
+2. **Blocco 2** — Password reset + onboarding (completezza auth)
+3. **Blocco 3** — Traduzioni (coerenza globale)
 
 ### Nessuna modifica al database
 
-Tutte le modifiche sono frontend. Il contratto API e le tabelle Supabase restano invariati.
+Tutto frontend. Le tabelle Supabase restano invariate.
 
