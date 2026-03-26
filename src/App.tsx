@@ -20,6 +20,7 @@ import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsAndConditionsPage from "./pages/TermsAndConditionsPage";
 import AcceptTermsPage from "./pages/AcceptTermsPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -84,6 +85,7 @@ const App = () => (
               }
             />
             <Route path="/onboarding" element={<OnboardingPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
