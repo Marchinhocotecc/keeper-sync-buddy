@@ -330,7 +330,7 @@ export default function CalendarPage() {
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h2 className="text-base sm:text-lg font-semibold text-foreground flex items-center gap-2">
               <CalendarIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              {format(date, 'EEEE, d MMMM yyyy', { locale: it })}
+              {format(date, 'EEEE, d MMMM yyyy', { locale: getDateLocale(t('', { lng: undefined }) ? 'en' : 'en') })}
             </h2>
           </div>
 
