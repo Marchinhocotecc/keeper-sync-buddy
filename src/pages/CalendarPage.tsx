@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Calendar as CalendarIcon, Clock, Tag, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
-import { it } from 'date-fns/locale';
+import { getDateLocale } from '@/utils/dateLocale';
 import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
