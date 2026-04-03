@@ -1,62 +1,71 @@
 
 
-## Piano: Ayvro da 7.5 a 9/10 — Completamento
+## Piano: Ayvro da 8 a 9/10 — Ultime Lacune
 
-### Cosa manca
-
-3 blocchi di lavoro rimasti, in ordine di priorita.
+### Cosa manca (6 interventi)
 
 ---
 
-### BLOCCO 1: Delete Confirmations + Empty States (impatto maggiore)
+### 1. AuthPage — i18n completo
+Sostituire tutte le stringhe hardcoded con `t()`:
+- "Sign In" → `t('auth.signIn')`
+- "Sign Up" → `t('auth.signUp')`
+- "Create Account" → `t('auth.signUp')`
+- "Forgot password?" → `t('auth.forgotPassword')`
+- "I accept the" / "Terms and Conditions" → `t('auth.acceptTerms')` + `t('auth.termsLink')`
+- "Email", "Password", placeholder text
 
-**Delete confirmations** — Aggiungere AlertDialog prima di ogni azione delete:
-- `ExpensesPage.tsx`: conferma prima di eliminare spesa
-- `CalendarPage.tsx`: conferma prima di eliminare evento
-- `TaskCard.tsx`: conferma prima di eliminare task
+Aggiungere chiavi mancanti a `en.json`: `auth.acceptTerms`, `auth.termsLink`, `auth.passwordPlaceholder`.
 
-Pattern: stato `deleteTarget` + AlertDialog che chiama la delete reale solo su conferma.
-
-**Empty states guidati** — Quando non ci sono dati, mostrare card con CTA:
-- `HomePage.tsx`: se nessun task → "Crea il tuo primo task" con bottone
-- `ExpensesPage.tsx`: se nessuna spesa → "Registra la prima spesa" + se budget = 0 → "Imposta il budget mensile"
-- `CalendarPage.tsx`: se nessun evento → "Crea il primo evento"
-
-**File**: `ExpensesPage.tsx`, `CalendarPage.tsx`, `TaskCard.tsx`, `HomePage.tsx`
+**File**: `AuthPage.tsx`, `en.json`
 
 ---
 
-### BLOCCO 2: Password Reset + Onboarding Flow
+### 2. NotificationSettings — i18n
+Sostituire "Benessere", "Check-in serale", "Orario:" e qualsiasi altra stringa hardcoded con `t()`.
 
-**Password reset**:
-- Creare `src/pages/ResetPasswordPage.tsx` — form con email, chiama `supabase.auth.resetPasswordForEmail()`
-- Aggiungere route `/reset-password` in `App.tsx`
-- Aggiungere link "Forgot password?" in `AuthPage.tsx`
-- Aggiungere chiavi i18n: `auth.forgotPassword`, `auth.resetSent`, `auth.resetEmail`
-
-**Onboarding post-signup**:
-- In `App.tsx` o `ProtectedRoute.tsx`, dopo primo login verificare se profilo e' nuovo (nessun budget, nessun task)
-- Se nuovo → redirect a `/onboarding` (la pagina esiste gia')
-
-**File**: nuovo `ResetPasswordPage.tsx`, `App.tsx`, `AuthPage.tsx`, `en.json`
+**File**: `NotificationSettings.tsx`, `en.json`
 
 ---
 
-### BLOCCO 3: Propagazione Traduzioni (21 locale files)
+### 3. TermsAndConditionsPage + AcceptTermsPage — i18n
+Queste pagine sono interamente in italiano. Sostituire tutto il testo con chiavi i18n.
 
-Copiare tutte le nuove chiavi da `en.json` ai 21 file locale con i valori tradotti nella lingua corrispondente. Le chiavi nuove sono in: `common`, `home`, `calendar`, `expenses`, `assistant`, `settings`, `nudge`, `insight`, `auth`.
+**File**: `TermsAndConditionsPage.tsx`, `AcceptTermsPage.tsx`, `en.json`
 
-**File**: tutti i file in `src/i18n/locales/` (da.json, de.json, es.json, et.json, fr.json, hi.json, hr.json, it.json, ja.json, ko.json, lt.json, lv.json, nl.json, no.json, pl.json, pt.json, ro.json, ru.json, sq.json, sv.json, zh.json)
+---
+
+### 4. Onboarding redirect per nuovi utenti
+In `ProtectedRoute.tsx`, dopo autenticazione verificare se il profilo e' vuoto (nessun budget/task). Se si, redirect a `/onboarding`.
+
+Logica: query leggera a Supabase per contare task + verificare budget. Se entrambi zero → redirect. Salvare flag `onboarding_completed` in localStorage per evitare check ripetuti.
+
+**File**: `ProtectedRoute.tsx`
+
+---
+
+### 5. CalendarPage locale dinamico
+Attualmente importa solo `it` da date-fns. Creare un helper che mappa `i18n.language` al locale date-fns corretto per formattare date nella lingua giusta.
+
+**File**: `CalendarPage.tsx` (o nuovo `src/utils/dateLocale.ts`)
+
+---
+
+### 6. Propagazione traduzioni reali ai 21 locale
+I file locale hanno le chiavi ma molti valori sono in inglese (copia diretta). Generare traduzioni corrette per le nuove chiavi aggiunte nei punti 1-3 sopra.
+
+**File**: tutti i `src/i18n/locales/*.json`
 
 ---
 
 ### Ordine di implementazione
 
-1. **Blocco 1** — Delete confirmations + empty states (impatto UX immediato)
-2. **Blocco 2** — Password reset + onboarding (completezza auth)
-3. **Blocco 3** — Traduzioni (coerenza globale)
+1. AuthPage i18n (visibile subito, utente e' su /auth)
+2. NotificationSettings i18n
+3. Terms pages i18n
+4. CalendarPage locale dinamico
+5. Onboarding redirect
+6. Propagazione traduzioni
 
 ### Nessuna modifica al database
-
-Tutto frontend. Le tabelle Supabase restano invariate.
 
