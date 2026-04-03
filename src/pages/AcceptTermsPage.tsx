@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ import { Loader2, ScrollText, Sparkles } from 'lucide-react';
 
 export default function AcceptTermsPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -17,8 +19,8 @@ export default function AcceptTermsPage() {
   const handleAcceptTerms = async () => {
     if (!accepted) {
       toast({
-        title: 'Un momento!',
-        description: 'Devi accettare i Termini e Condizioni per continuare 📋',
+        title: t('common.error'),
+        description: t('auth.termsRequired'),
         variant: 'destructive',
       });
       return;
@@ -36,14 +38,14 @@ export default function AcceptTermsPage() {
       if (error) throw error;
 
       toast({
-        title: 'Benvenuto in Ayvro!',
-        description: 'Sono felice di averti qui.',
+        title: t('acceptTerms.welcomeTitle'),
+        description: t('acceptTerms.welcomeDesc'),
       });
 
       navigate('/');
     } catch (error: any) {
       toast({
-        title: 'Ops!',
+        title: t('common.error'),
         description: error.message,
         variant: 'destructive',
       });
@@ -66,9 +68,9 @@ export default function AcceptTermsPage() {
               <Sparkles className="h-7 w-7 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Quasi ci siamo! 🎉</CardTitle>
+          <CardTitle className="text-2xl font-bold">{t('acceptTerms.title')} 🎉</CardTitle>
           <CardDescription>
-            Per continuare a usare Ayvro, accetta i nostri Termini e Condizioni.
+            {t('acceptTerms.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -77,12 +79,12 @@ export default function AcceptTermsPage() {
               <ScrollText className="h-5 w-5 text-primary mt-0.5" />
               <div className="text-sm text-muted-foreground">
                 <p className="mb-2 font-medium text-foreground">
-                  Utilizzando Ayvro, accetti di:
+                  {t('acceptTerms.byUsing')}
                 </p>
                 <ul className="list-disc list-inside space-y-1">
-                  <li>Rispettare le regole di utilizzo del servizio</li>
-                  <li>Mantenere sicure le tue credenziali</li>
-                  <li>Acconsentire al trattamento dei tuoi dati</li>
+                  <li>{t('acceptTerms.rule1')}</li>
+                  <li>{t('acceptTerms.rule2')}</li>
+                  <li>{t('acceptTerms.rule3')}</li>
                 </ul>
               </div>
             </div>
@@ -97,12 +99,12 @@ export default function AcceptTermsPage() {
               className="mt-0.5"
             />
             <Label htmlFor="accept-terms" className="text-sm leading-relaxed cursor-pointer">
-              Accetto i{' '}
+              {t('auth.acceptTerms')}{' '}
               <Link
                 to="/terms-and-conditions"
                 className="text-primary hover:underline font-medium"
               >
-                Termini e Condizioni
+                {t('auth.termsLink')}
               </Link>
             </Label>
           </div>
@@ -114,7 +116,7 @@ export default function AcceptTermsPage() {
               disabled={!accepted || loading}
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Continua ✨
+              {t('acceptTerms.continue')} ✨
             </Button>
             <Button
               variant="ghost"
@@ -122,7 +124,7 @@ export default function AcceptTermsPage() {
               className="w-full text-muted-foreground rounded-xl"
               disabled={loading}
             >
-              Esci e usa un altro account
+              {t('acceptTerms.logout')}
             </Button>
           </div>
         </CardContent>

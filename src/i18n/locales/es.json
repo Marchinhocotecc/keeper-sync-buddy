@@ -254,16 +254,18 @@
     "profileUpdateError": "Error updating profile"
   },
   "auth": {
-    "signIn": "Iniciar Sesión",
+    "signIn": "Iniciar sesión",
     "signUp": "Registrarse",
-    "email": "Correo Electrónico",
-    "password": "Contraseña",
-    "noAccount": "¿No tienes una cuenta?",
-    "haveAccount": "¿Ya tienes una cuenta?",
-    "signInGoogle": "Iniciar sesión con Google",
-    "welcome": "Bienvenido a Ayvro",
-    "welcomeBack": "¡Bienvenido de nuevo!",
-    "forgotPassword": "Forgot password?",
+    "email": "Email",
+    "emailPlaceholder": "tu@ejemplo.com",
+    "password": "Password",
+    "passwordPlaceholder": "Al menos 6 caracteres",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "signInGoogle": "Sign in with Google",
+    "welcome": "Welcome to Ayvro",
+    "welcomeBack": "Welcome back!",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
     "resetPassword": "Reset Password",
     "resetPasswordDesc": "Enter your email and we'll send you a link to reset your password.",
     "resetSent": "Reset link sent!",
@@ -273,7 +275,12 @@
     "updatePassword": "Update Password",
     "passwordUpdated": "Password updated successfully!",
     "passwordMismatch": "Passwords do not match",
-    "backToLogin": "Back to login"
+    "backToLogin": "Back to login",
+    "acceptTerms": "Acepto los",
+    "termsLink": "Términos y Condiciones",
+    "termsRequired": "Debes aceptar los Términos y Condiciones para continuar.",
+    "checkEmail": "Revisa tu email",
+    "checkEmailDesc": "Te enviamos un enlace de confirmación."
   },
   "terms": {
     "title": "Términos y Condiciones",
@@ -317,5 +324,36 @@
     "critical": "Critical",
     "moreDetails": "More details",
     "lessDetails": "Less details"
+  },
+  "notifications": {
+    "title": "Notificaciones",
+    "subtitle": "Recordatorios amables cuando los necesites",
+    "blocked": "Las notificaciones están bloqueadas. Actívalas en la configuración del navegador.",
+    "enablePrompt": "Activa las notificaciones para recibir recordatorios",
+    "enable": "Activar",
+    "allNotifications": "Todas las notificaciones",
+    "maxPerDay": "Máx 5 por día",
+    "tasks": "Tareas",
+    "tasksDesc": "Plazos y recordatorios",
+    "calendar": "Calendario",
+    "calendarDesc": "30 min antes de eventos",
+    "dailyFocus": "Enfoque diario",
+    "dailyFocusDesc": "Una vez al día",
+    "time": "Hora",
+    "wellbeing": "Bienestar",
+    "wellbeingDesc": "Check-in nocturno",
+    "active": "Notificaciones activas"
+  },
+  "acceptTerms": {
+    "title": "¡Casi listo!",
+    "description": "Para seguir usando Ayvro, acepta nuestros Términos y Condiciones.",
+    "welcomeTitle": "¡Bienvenido a Ayvro!",
+    "welcomeDesc": "Encantado de tenerte aquí.",
+    "byUsing": "Al usar Ayvro, aceptas:",
+    "rule1": "Respetar las reglas de uso del servicio",
+    "rule2": "Mantener seguras tus credenciales",
+    "rule3": "Consentir el tratamiento de tus datos",
+    "continue": "Continuar",
+    "logout": "Cerrar sesión y usar otra cuenta"
   }
 }

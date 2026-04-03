@@ -273,7 +273,14 @@
     "updatePassword": "Update Password",
     "passwordUpdated": "Password updated successfully!",
     "passwordMismatch": "Passwords do not match",
-    "backToLogin": "Back to login"
+    "backToLogin": "Back to login",
+    "emailPlaceholder": "you@example.com",
+    "passwordPlaceholder": "At least 6 characters",
+    "acceptTerms": "I accept the",
+    "termsLink": "Terms and Conditions",
+    "termsRequired": "You must accept the Terms and Conditions to continue.",
+    "checkEmail": "Check your email",
+    "checkEmailDesc": "We sent you a confirmation link."
   },
   "terms": {
     "title": "使用条款",
@@ -317,5 +324,36 @@
     "critical": "Critical",
     "moreDetails": "More details",
     "lessDetails": "Less details"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Gentle reminders when you need them",
+    "blocked": "Notifications are blocked. Enable them in your browser settings.",
+    "enablePrompt": "Enable notifications to receive reminders",
+    "enable": "Enable",
+    "allNotifications": "All notifications",
+    "maxPerDay": "Max 5 per day",
+    "tasks": "Tasks",
+    "tasksDesc": "Deadlines and reminders",
+    "calendar": "Calendar",
+    "calendarDesc": "30 min before events",
+    "dailyFocus": "Daily focus",
+    "dailyFocusDesc": "Once a day",
+    "time": "Time",
+    "wellbeing": "Wellbeing",
+    "wellbeingDesc": "Evening check-in",
+    "active": "Notifications active"
+  },
+  "acceptTerms": {
+    "title": "Almost there!",
+    "description": "To continue using Ayvro, please accept our Terms and Conditions.",
+    "welcomeTitle": "Welcome to Ayvro!",
+    "welcomeDesc": "Happy to have you here.",
+    "byUsing": "By using Ayvro, you agree to:",
+    "rule1": "Follow the service usage rules",
+    "rule2": "Keep your credentials secure",
+    "rule3": "Consent to your data processing",
+    "continue": "Continue",
+    "logout": "Log out and use another account"
   }
 }

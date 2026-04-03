@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Calendar as CalendarIcon, Clock, Tag, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
-import { it } from 'date-fns/locale';
+import { getDateLocale } from '@/utils/dateLocale';
 import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function CalendarPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const [date, setDate] = useState<Date>(new Date());
   const [userId, setUserId] = useState<string | undefined>();
@@ -330,7 +330,7 @@ export default function CalendarPage() {
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h2 className="text-base sm:text-lg font-semibold text-foreground flex items-center gap-2">
               <CalendarIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              {format(date, 'EEEE, d MMMM yyyy', { locale: it })}
+              {format(date, 'EEEE, d MMMM yyyy', { locale: getDateLocale(i18n.language) })}
             </h2>
           </div>
 
@@ -429,7 +429,7 @@ export default function CalendarPage() {
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <CalendarIcon className="h-4 w-4" />
                   <span>
-                    {format(parseISO(selectedEvent.start_time), 'EEEE, d MMMM yyyy', { locale: it })}
+                    {format(parseISO(selectedEvent.start_time), 'EEEE, d MMMM yyyy', { locale: getDateLocale(i18n.language) })}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">

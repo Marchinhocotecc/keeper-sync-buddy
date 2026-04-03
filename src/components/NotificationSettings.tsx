@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { 
   Bell, 
@@ -39,6 +40,7 @@ const itemVariants = {
 };
 
 export default function NotificationSettings({ userId }: NotificationSettingsProps) {
+  const { t } = useTranslation();
   const {
     isInitialized,
     permissionStatus,
@@ -73,9 +75,9 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
             <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
           </div>
           <div className="min-w-0">
-            <Label className="text-sm sm:text-base font-medium">Notifiche</Label>
+            <Label className="text-sm sm:text-base font-medium">{t('notifications.title')}</Label>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Promemoria gentili quando servono
+              {t('notifications.subtitle')}
             </p>
           </div>
         </div>
@@ -85,7 +87,7 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
           <Alert variant="destructive" className="py-2">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              Le notifiche sono bloccate. Attivale dalle impostazioni del browser.
+              {t('notifications.blocked')}
             </AlertDescription>
           </Alert>
         )}
@@ -95,9 +97,9 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
             <Alert className="py-2 bg-primary/5 border-primary/20">
               <Bell className="h-4 w-4 text-primary" />
               <AlertDescription className="text-xs flex items-center justify-between">
-                <span>Attiva le notifiche per ricevere promemoria</span>
+                <span>{t('notifications.enablePrompt')}</span>
                 <Button size="sm" variant="default" onClick={requestPermission} className="ml-2 h-7 text-xs">
-                  Attiva
+                  {t('notifications.enable')}
                 </Button>
               </AlertDescription>
             </Alert>
@@ -118,8 +120,8 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
               <BellOff className="h-4 w-4 text-muted-foreground shrink-0" />
             )}
             <div className="min-w-0">
-              <p className="text-sm font-medium">Tutte le notifiche</p>
-              <p className="text-xs text-muted-foreground">Max 5 al giorno</p>
+              <p className="text-sm font-medium">{t('notifications.allNotifications')}</p>
+              <p className="text-xs text-muted-foreground">{t('notifications.maxPerDay')}</p>
             </div>
           </div>
           <Switch
@@ -141,8 +143,8 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-blue-500" />
                 <div>
-                  <p className="text-sm">Task</p>
-                  <p className="text-xs text-muted-foreground">Scadenze e promemoria</p>
+                  <p className="text-sm">{t('notifications.tasks')}</p>
+                  <p className="text-xs text-muted-foreground">{t('notifications.tasksDesc')}</p>
                 </div>
               </div>
               <Switch
@@ -156,8 +158,8 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-purple-500" />
                 <div>
-                  <p className="text-sm">Calendario</p>
-                  <p className="text-xs text-muted-foreground">30 min prima degli eventi</p>
+                  <p className="text-sm">{t('notifications.calendar')}</p>
+                  <p className="text-xs text-muted-foreground">{t('notifications.calendarDesc')}</p>
                 </div>
               </div>
               <Switch
@@ -171,8 +173,8 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
               <div className="flex items-center gap-2">
                 <Target className="h-4 w-4 text-emerald-500" />
                 <div>
-                  <p className="text-sm">Focus giornaliero</p>
-                  <p className="text-xs text-muted-foreground">Una volta al giorno</p>
+                  <p className="text-sm">{t('notifications.dailyFocus')}</p>
+                  <p className="text-xs text-muted-foreground">{t('notifications.dailyFocusDesc')}</p>
                 </div>
               </div>
               <Switch
@@ -185,7 +187,7 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
               <div className="pl-9">
                 <div className="flex items-center gap-2">
                   <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Orario:</span>
+                  <span className="text-xs text-muted-foreground">{t('notifications.time')}:</span>
                   <Select 
                     value={preferences.focusTime} 
                     onValueChange={(val) => updatePreference('focusTime', val)}
@@ -210,8 +212,8 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
               <div className="flex items-center gap-2">
                 <Heart className="h-4 w-4 text-red-400" />
                 <div>
-                  <p className="text-sm">Benessere</p>
-                  <p className="text-xs text-muted-foreground">Check-in serale</p>
+                  <p className="text-sm">{t('notifications.wellbeing')}</p>
+                  <p className="text-xs text-muted-foreground">{t('notifications.wellbeingDesc')}</p>
                 </div>
               </div>
               <Switch
@@ -224,7 +226,7 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
               <div className="pl-9">
                 <div className="flex items-center gap-2">
                   <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Orario:</span>
+                  <span className="text-xs text-muted-foreground">{t('notifications.time')}:</span>
                   <Select 
                     value={preferences.wellbeingTime} 
                     onValueChange={(val) => updatePreference('wellbeingTime', val)}
@@ -250,7 +252,7 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
         {canShow && preferences.enabled && (
           <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Notifiche attive</span>
+            <span>{t('notifications.active')}</span>
           </div>
         )}
       </CardContent>
