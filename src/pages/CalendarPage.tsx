@@ -429,7 +429,7 @@ export default function CalendarPage() {
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <CalendarIcon className="h-4 w-4" />
                   <span>
-                    {format(parseISO(selectedEvent.start_time), 'EEEE, d MMMM yyyy', { locale: it })}
+                    {format(parseISO(selectedEvent.start_time), 'EEEE, d MMMM yyyy', { locale: getDateLocale(i18n.language) })}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
