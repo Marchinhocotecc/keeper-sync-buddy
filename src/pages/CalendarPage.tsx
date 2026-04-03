@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function CalendarPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const [date, setDate] = useState<Date>(new Date());
   const [userId, setUserId] = useState<string | undefined>();
