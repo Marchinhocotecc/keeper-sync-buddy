@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { isNativePlatform } from '@/lib/capacitorStorage';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +16,7 @@ import { useEffect } from 'react';
 
 export default function AuthPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -39,7 +41,7 @@ export default function AuthPage() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!termsAccepted) {
-      toast({ title: 'Terms required', description: 'Please accept the Terms and Conditions to continue.', variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('auth.termsRequired'), variant: 'destructive' });
       return;
     }
     setLoading(true);
@@ -50,9 +52,9 @@ export default function AuthPage() {
         options: { emailRedirectTo: redirectTo, data: { terms_accepted: true, terms_accepted_at: new Date().toISOString() } },
       });
       if (error) throw error;
-      toast({ title: 'Check your email', description: 'We sent you a confirmation link.' });
+      toast({ title: t('auth.checkEmail'), description: t('auth.checkEmailDesc') });
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: t('common.error'), description: error.message, variant: 'destructive' });
     } finally { setLoading(false); }
   };
 
@@ -65,7 +67,7 @@ export default function AuthPage() {
       if (!data.user?.user_metadata?.terms_accepted) navigate('/accept-terms');
       else navigate('/');
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: t('common.error'), description: error.message, variant: 'destructive' });
     } finally { setLoading(false); }
   };
 
@@ -77,30 +79,30 @@ export default function AuthPage() {
             <img src={ayvroLogo} alt="Ayvro" className="w-14 h-14 rounded-xl shadow-ayvro" />
           </div>
           <CardTitle className="text-2xl font-semibold text-foreground tracking-tight">Ayvro</CardTitle>
-          <CardDescription className="text-muted-foreground text-sm">Decision Engine for Your Money</CardDescription>
+          <CardDescription className="text-muted-foreground text-sm">{t('home.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2 rounded-lg bg-muted p-1">
-              <TabsTrigger value="signin" className="rounded-md text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">Sign In</TabsTrigger>
-              <TabsTrigger value="signup" className="rounded-md text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">Sign Up</TabsTrigger>
+              <TabsTrigger value="signin" className="rounded-md text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">{t('auth.signIn')}</TabsTrigger>
+              <TabsTrigger value="signup" className="rounded-md text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">{t('auth.signUp')}</TabsTrigger>
             </TabsList>
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email-signin" className="text-sm">Email</Label>
-                  <Input id="email-signin" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={loading} className="h-10 rounded-lg bg-muted border-border" />
+                  <Label htmlFor="email-signin" className="text-sm">{t('auth.email')}</Label>
+                  <Input id="email-signin" type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={(e) => setEmail(e.target.value)} required disabled={loading} className="h-10 rounded-lg bg-muted border-border" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password-signin" className="text-sm">Password</Label>
+                  <Label htmlFor="password-signin" className="text-sm">{t('auth.password')}</Label>
                   <Input id="password-signin" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={loading} className="h-10 rounded-lg bg-muted border-border" />
                 </div>
                 <Button type="submit" className="w-full h-10 rounded-lg font-medium" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Sign In
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {t('auth.signIn')}
                 </Button>
                 <div className="text-center">
                   <Link to="/reset-password" className="text-sm text-primary hover:underline">
-                    Forgot password?
+                    {t('auth.forgotPassword')}
                   </Link>
                 </div>
               </form>
@@ -108,21 +110,21 @@ export default function AuthPage() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email-signup" className="text-sm">Email</Label>
-                  <Input id="email-signup" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={loading} className="h-10 rounded-lg bg-muted border-border" />
+                  <Label htmlFor="email-signup" className="text-sm">{t('auth.email')}</Label>
+                  <Input id="email-signup" type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={(e) => setEmail(e.target.value)} required disabled={loading} className="h-10 rounded-lg bg-muted border-border" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password-signup" className="text-sm">Password</Label>
-                  <Input id="password-signup" type="password" placeholder="At least 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={loading} minLength={6} className="h-10 rounded-lg bg-muted border-border" />
+                  <Label htmlFor="password-signup" className="text-sm">{t('auth.password')}</Label>
+                  <Input id="password-signup" type="password" placeholder={t('auth.passwordPlaceholder')} value={password} onChange={(e) => setPassword(e.target.value)} required disabled={loading} minLength={6} className="h-10 rounded-lg bg-muted border-border" />
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border">
                   <Checkbox id="terms" checked={termsAccepted} onCheckedChange={(checked) => setTermsAccepted(checked === true)} disabled={loading} className="mt-0.5" />
                   <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer text-muted-foreground">
-                    I accept the{' '}<Link to="/terms-and-conditions" className="text-primary hover:underline font-medium" target="_blank">Terms and Conditions</Link>
+                    {t('auth.acceptTerms')}{' '}<Link to="/terms-and-conditions" className="text-primary hover:underline font-medium" target="_blank">{t('auth.termsLink')}</Link>
                   </Label>
                 </div>
                 <Button type="submit" className="w-full h-10 rounded-lg font-medium" disabled={loading || !termsAccepted}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create Account
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {t('auth.signUp')}
                 </Button>
               </form>
             </TabsContent>
