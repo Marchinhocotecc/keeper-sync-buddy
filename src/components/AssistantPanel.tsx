@@ -154,20 +154,8 @@ export default function AssistantPanel() {
     [t('assistant.suggestion_tasks')]: "__UI_ACTION__:SHOW_TASKS",
     [t('assistant.suggestion_events')]: "__UI_ACTION__:SHOW_EVENTS",
     [t('assistant.suggestion_expenses')]: "__UI_ACTION__:SHOW_EXPENSES",
-    "Mostra task": "__UI_ACTION__:SHOW_TASKS",
-    "Mostra eventi": "__UI_ACTION__:SHOW_EVENTS",
-    "Mostra spese": "__UI_ACTION__:SHOW_EXPENSES",
-    "Show tasks": "__UI_ACTION__:SHOW_TASKS",
-    "Show events": "__UI_ACTION__:SHOW_EVENTS",
-    "Show expenses": "__UI_ACTION__:SHOW_EXPENSES",
-    "Aggiungi task": "__UI_ACTION__:ADD_TASK",
-    "Aggiungi evento": "__UI_ACTION__:CREATE_EVENT",
-    "Add task": "__UI_ACTION__:ADD_TASK",
-    "Add event": "__UI_ACTION__:CREATE_EVENT",
-    "Elimina tutti": "__UI_ACTION__:DELETE_ALL",
-    "Delete all": "__UI_ACTION__:DELETE_ALL",
-    "Completa tutte": "__UI_ACTION__:COMPLETE_ALL_TASKS",
-    "Complete all": "__UI_ACTION__:COMPLETE_ALL_TASKS",
+    [t('assistant.quick_new_task')]: "__UI_ACTION__:ADD_TASK",
+    [t('assistant.quick_add_task')]: "__UI_ACTION__:ADD_TASK",
   };
 
   const handleClearHistory = async () => {

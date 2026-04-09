@@ -12,7 +12,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setAuthenticated(true);
-        checkOnboarding(session.user.id);
+        checkOnboarding(session.user);
       } else {
         setLoading(false);
       }
