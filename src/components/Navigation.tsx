@@ -19,7 +19,7 @@ export function Navigation() {
       await supabase.auth.signOut();
       navigate('/auth');
     } catch (error: any) {
-      toast({ title: 'Error', description: 'Something went wrong. Try again.', variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('common.tryAgain'), variant: 'destructive' });
     }
   };
 
