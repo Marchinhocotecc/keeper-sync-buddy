@@ -14,7 +14,8 @@
     "noData": "No data",
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
-    "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone."
+    "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
+    "tryAgain": "Something went wrong. Try again."
   },
   "nav": {
     "home": "Strona główna",
@@ -355,5 +356,20 @@
     "rule3": "Consent to your data processing",
     "continue": "Continue",
     "logout": "Log out and use another account"
+  },
+  "onboarding": {
+    "taskTitle": "Manage your Tasks",
+    "taskDesc": "Organize your activities with smart priorities. Ayvro helps you stay focused.",
+    "taskExample": "\"Add buy milk\"",
+    "expenseTitle": "Track your Expenses",
+    "expenseDesc": "Ayvro analyzes your financial signals and proposes concrete actions.",
+    "expenseExample": "\"Coffee €3.50\"",
+    "assistantTitle": "Talk to Ayvro",
+    "assistantDesc": "Your financial decision engine. Ask and get rational answers.",
+    "assistantExample": "\"What's on my agenda tomorrow?\"",
+    "trySaying": "Try saying:",
+    "next": "Next",
+    "start": "Get Started",
+    "skip": "Skip tutorial"
   }
 }

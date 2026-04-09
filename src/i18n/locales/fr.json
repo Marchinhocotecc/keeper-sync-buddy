@@ -14,7 +14,8 @@
     "noData": "No data",
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
-    "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone."
+    "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
+    "tryAgain": "Quelque chose a mal tourné. Réessayez."
   },
   "nav": {
     "home": "Accueil",
@@ -355,5 +356,20 @@
     "rule3": "Consentir au traitement de vos données",
     "continue": "Continuer",
     "logout": "Se déconnecter et utiliser un autre compte"
+  },
+  "onboarding": {
+    "taskTitle": "Gérez vos tâches",
+    "taskDesc": "Organisez vos activités avec des priorités intelligentes. Ayvro vous aide à rester concentré.",
+    "taskExample": "\"Ajouter acheter du lait\"",
+    "expenseTitle": "Suivez vos dépenses",
+    "expenseDesc": "Ayvro analyse vos signaux financiers et propose des actions concrètes.",
+    "expenseExample": "\"Café €3,50\"",
+    "assistantTitle": "Parlez à Ayvro",
+    "assistantDesc": "Votre moteur de décision financière. Demandez et obtenez des réponses rationnelles.",
+    "assistantExample": "\"Qu'ai-je à l'agenda demain ?\"",
+    "trySaying": "Essayez de dire :",
+    "next": "Suivant",
+    "start": "Commencer",
+    "skip": "Passer le tutoriel"
   }
 }
