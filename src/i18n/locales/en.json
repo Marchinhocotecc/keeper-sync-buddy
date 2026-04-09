@@ -1,5 +1,5 @@
 {
-  "common": { "back": "Back", "save": "Save", "cancel": "Cancel", "delete": "Delete", "edit": "Edit", "close": "Close", "confirm": "Confirm", "error": "Error", "success": "Success", "loading": "Loading...", "saving": "Saving...", "noData": "No data", "user": "User", "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.", "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone." },
+  "common": { "back": "Back", "save": "Save", "cancel": "Cancel", "delete": "Delete", "edit": "Edit", "close": "Close", "confirm": "Confirm", "error": "Error", "success": "Success", "loading": "Loading...", "saving": "Saving...", "noData": "No data", "user": "User", "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.", "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.", "tryAgain": "Something went wrong. Try again." },
   "nav": { "home": "Home", "calendar": "Calendar", "expenses": "Expenses", "assistant": "Assistant", "settings": "Settings", "logout": "Logout" },
   "home": {
     "title": "Ayvro",
