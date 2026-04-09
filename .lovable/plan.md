@@ -1,58 +1,49 @@
 
 
-## Piano: Ayvro da 8 a 9/10 — Ultime Lacune
+## Stato Attuale: ~8.5/10
 
-### Cosa manca (6 interventi)
-
----
-
-### 1. AuthPage — i18n completo
-Sostituire tutte le stringhe hardcoded con `t()`:
-- "Sign In" → `t('auth.signIn')`
-- "Sign Up" → `t('auth.signUp')`
-- "Create Account" → `t('auth.signUp')`
-- "Forgot password?" → `t('auth.forgotPassword')`
-- "I accept the" / "Terms and Conditions" → `t('auth.acceptTerms')` + `t('auth.termsLink')`
-- "Email", "Password", placeholder text
-
-Aggiungere chiavi mancanti a `en.json`: `auth.acceptTerms`, `auth.termsLink`, `auth.passwordPlaceholder`.
-
-**File**: `AuthPage.tsx`, `en.json`
+Il grosso del lavoro e' fatto. Restano **5 interventi puntuali** per il 9.5/10.
 
 ---
 
-### 2. NotificationSettings — i18n
-Sostituire "Benessere", "Check-in serale", "Orario:" e qualsiasi altra stringa hardcoded con `t()`.
+### 1. OnboardingPage — i18n completo
+**Problema**: Tutte le stringhe sono hardcoded in italiano: "Gestisci i tuoi Task", "Traccia le tue Spese", "Parla con Ayvro", "Avanti", "Inizia", "Salta tutorial", "Prova a dire:".
 
-**File**: `NotificationSettings.tsx`, `en.json`
+**Azione**: Sostituire con `t()`, aggiungere chiavi `onboarding.*` a `en.json` e propagare ai locale.
 
----
-
-### 3. TermsAndConditionsPage + AcceptTermsPage — i18n
-Queste pagine sono interamente in italiano. Sostituire tutto il testo con chiavi i18n.
-
-**File**: `TermsAndConditionsPage.tsx`, `AcceptTermsPage.tsx`, `en.json`
+**File**: `OnboardingPage.tsx`, `en.json`
 
 ---
 
-### 4. Onboarding redirect per nuovi utenti
-In `ProtectedRoute.tsx`, dopo autenticazione verificare se il profilo e' vuoto (nessun budget/task). Se si, redirect a `/onboarding`.
+### 2. Navigation — stringa hardcoded
+**Problema**: Riga 22: `toast({ title: 'Error', description: 'Something went wrong. Try again.' })` — hardcoded in inglese.
 
-Logica: query leggera a Supabase per contare task + verificare budget. Se entrambi zero → redirect. Salvare flag `onboarding_completed` in localStorage per evitare check ripetuti.
+**Azione**: Sostituire con `t('common.error')` e `t('common.tryAgain')`.
 
-**File**: `ProtectedRoute.tsx`
-
----
-
-### 5. CalendarPage locale dinamico
-Attualmente importa solo `it` da date-fns. Creare un helper che mappa `i18n.language` al locale date-fns corretto per formattare date nella lingua giusta.
-
-**File**: `CalendarPage.tsx` (o nuovo `src/utils/dateLocale.ts`)
+**File**: `Navigation.tsx`
 
 ---
 
-### 6. Propagazione traduzioni reali ai 21 locale
-I file locale hanno le chiavi ma molti valori sono in inglese (copia diretta). Generare traduzioni corrette per le nuove chiavi aggiunte nei punti 1-3 sopra.
+### 3. AssistantPanel — UI_ACTION_MAP hardcoded
+**Problema**: Righe 157-170: "Mostra task", "Mostra eventi", "Aggiungi task" ecc. sono hardcoded in italiano E inglese. Non funzionano per le altre 20 lingue.
+
+**Azione**: Rimuovere le stringhe hardcoded e usare solo le chiavi `t()` gia' presenti (righe 154-156). Il map basato su traduzione dinamica copre gia' tutte le lingue.
+
+**File**: `AssistantPanel.tsx`
+
+---
+
+### 4. ProtectedRoute — onboarding flag fix
+**Problema**: L'onboarding redirect funziona ma salva il flag con `localStorage.setItem('onboarding_completed_' + userId)` solo se trova dati. L'`OnboardingPage` invece usa `supabase.auth.updateUser({ data: { onboarding_completed: true } })`. Mismatch: il ProtectedRoute non controlla il metadata utente, e l'OnboardingPage non setta il localStorage.
+
+**Azione**: Allineare: in ProtectedRoute controllare anche `user.user_metadata.onboarding_completed`. In OnboardingPage settare anche il localStorage flag per evitare query ripetute.
+
+**File**: `ProtectedRoute.tsx`, `OnboardingPage.tsx`
+
+---
+
+### 5. Propagazione traduzioni nuove chiavi onboarding
+Aggiungere le chiavi `onboarding.*` a tutti i 21 file locale con traduzioni corrette per le lingue principali (it, de, fr, es, pt) e inglese come fallback per le altre.
 
 **File**: tutti i `src/i18n/locales/*.json`
 
@@ -60,12 +51,11 @@ I file locale hanno le chiavi ma molti valori sono in inglese (copia diretta). G
 
 ### Ordine di implementazione
 
-1. AuthPage i18n (visibile subito, utente e' su /auth)
-2. NotificationSettings i18n
-3. Terms pages i18n
-4. CalendarPage locale dinamico
-5. Onboarding redirect
-6. Propagazione traduzioni
+1. OnboardingPage i18n
+2. Navigation fix stringa
+3. AssistantPanel cleanup hardcoded
+4. ProtectedRoute + OnboardingPage flag alignment
+5. Propagazione traduzioni
 
 ### Nessuna modifica al database
 
