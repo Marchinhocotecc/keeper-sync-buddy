@@ -26,8 +26,14 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkOnboarding = async (userId: string) => {
-    const flag = localStorage.getItem(`onboarding_completed_${userId}`);
+  const checkOnboarding = async (user: { id: string; user_metadata?: Record<string, any> }) => {
+    if (user.user_metadata?.onboarding_completed) {
+      localStorage.setItem(`onboarding_completed_${user.id}`, 'true');
+      setLoading(false);
+      return;
+    }
+
+    const flag = localStorage.getItem(`onboarding_completed_${user.id}`);
     if (flag === 'true') {
       setLoading(false);
       return;
@@ -35,14 +41,14 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
     try {
       const [{ count: taskCount }, { data: budget }] = await Promise.all([
-        supabase.from('todos').select('*', { count: 'exact', head: true }).eq('user_id', userId),
-        supabase.from('budgets').select('id').eq('user_id', userId).limit(1),
+        supabase.from('todos').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('budgets').select('id').eq('user_id', user.id).limit(1),
       ]);
 
       if ((taskCount ?? 0) === 0 && (!budget || budget.length === 0)) {
         setNeedsOnboarding(true);
       } else {
-        localStorage.setItem(`onboarding_completed_${userId}`, 'true');
+        localStorage.setItem(`onboarding_completed_${user.id}`, 'true');
       }
     } catch {
       // If check fails, let them through
