@@ -120,7 +120,7 @@
 
     /* Muted */
     --muted: 180 15% 14%;
-    --muted-foreground: 220 9% 60%;
+    --muted-foreground: 220 9% 65%;
 
     /* Accent */
     --accent: 181 30% 18%;
@@ -283,7 +283,7 @@
 }
 
 .app-card-value {
-  @apply text-xl sm:text-2xl font-semibold;
+  @apply text-xl sm:text-2xl font-semibold text-foreground;
 }
 
 /* Button - clean, professional */

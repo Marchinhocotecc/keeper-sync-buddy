@@ -78,7 +78,9 @@
     "sleepGoal": "Ore di sonno (obiettivo: 8h)",
     "meditationGoal": "Meditazione (obiettivo: 20min)",
     "dailyCheckin": "Check-in Giornaliero",
-    "wellnessSaved": "Dati salvati!"
+    "wellnessSaved": "Dati salvati!",
+    "viewAll": "Vedi tutti ({{count}})",
+    "showLess": "Mostra meno"
   },
   "calendar": {
     "title": "Calendario",

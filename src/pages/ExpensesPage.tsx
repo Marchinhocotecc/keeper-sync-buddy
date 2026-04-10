@@ -14,12 +14,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BudgetCard } from '@/components/BudgetCard';
 import { BudgetEditModal } from '@/components/BudgetEditModal';
 import { getMonthlyBudget, upsertMonthlyBudget } from '@/services/budgetService';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const COLORS = ['#0F3D3E', '#145A5B', '#1E6F70', '#2E7D32', '#E6A23C', '#D64545', '#6B7280'];
 
@@ -44,6 +45,10 @@ export default function ExpensesPage() {
   const [isLoadingBudget, setIsLoadingBudget] = useState(true);
   const [budget, setBudget] = useState(0);
   const [budgetNote, setBudgetNote] = useState('');
+
+  // Quick add state
+  const [quickAmount, setQuickAmount] = useState('');
+  const [quickCategory, setQuickCategory] = useState('food');
 
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
@@ -101,6 +106,15 @@ export default function ExpensesPage() {
     setShowAddForm(false);
   };
 
+  const handleQuickAdd = async () => {
+    const amount = parseFloat(quickAmount);
+    if (isNaN(amount) || amount <= 0) return;
+    const today = new Date().toISOString().split('T')[0];
+    await addExpense.mutateAsync({ amount, category: quickCategory, description: '', date: today });
+    setQuickAmount('');
+    toast({ title: t('home.taskAdded') });
+  };
+
   const filteredExpenses = Array.isArray(expenses) ? expenses : [];
   
   const currentMonthExpenses = useMemo(() => {
@@ -134,9 +148,14 @@ export default function ExpensesPage() {
     return (
       <div className="min-h-screen bg-background">
         <div className="page-container">
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-pulse text-muted-foreground">{t('expenses.loading')}</div>
+          <Skeleton className="h-10 w-48 mb-2" />
+          <Skeleton className="h-6 w-64 mb-6" />
+          <div className="grid gap-3 sm:grid-cols-3 mb-6">
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
           </div>
+          <Skeleton className="h-64 rounded-xl" />
         </div>
       </div>
     );
@@ -179,6 +198,41 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Quick add inline */}
+        <Card className="app-card mb-6 animate-fade-in">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="€"
+                value={quickAmount}
+                onChange={(e) => setQuickAmount(e.target.value)}
+                className="w-24 h-9 text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+              />
+              <Select value={quickCategory} onValueChange={setQuickCategory}>
+                <SelectTrigger className="w-32 h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="food">{t('expenses.food')}</SelectItem>
+                  <SelectItem value="transport">{t('expenses.transport')}</SelectItem>
+                  <SelectItem value="entertainment">{t('expenses.entertainment')}</SelectItem>
+                  <SelectItem value="shopping">{t('expenses.shopping')}</SelectItem>
+                  <SelectItem value="health">{t('expenses.health')}</SelectItem>
+                  <SelectItem value="bills">{t('expenses.bills')}</SelectItem>
+                  <SelectItem value="other">{t('expenses.other')}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" onClick={handleQuickAdd} disabled={!quickAmount || parseFloat(quickAmount) <= 0} className="h-9 px-4">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         <FinancialInsightSection userId={userId} />
 
@@ -227,14 +281,26 @@ export default function ExpensesPage() {
               {categoryData.length === 0 ? (
                 <p className="text-center text-sm text-muted-foreground py-8">{t('expenses.noData')}</p>
               ) : (
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie data={categoryData} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={70} fill="#8884d8" dataKey="value">
-                      {categoryData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                <>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={categoryData} cx="50%" cy="50%" labelLine={false} outerRadius={70} fill="#8884d8" dataKey="value">
+                        {categoryData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => `€${value.toFixed(2)}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Legend with real amounts */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3">
+                    {categoryData.map((entry, index) => (
+                      <div key={entry.name} className="flex items-center gap-2 text-sm">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        <span className="truncate text-muted-foreground">{entry.name}</span>
+                        <span className="ml-auto font-medium text-foreground">€{entry.value.toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
