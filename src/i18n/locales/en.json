@@ -54,7 +54,9 @@
     "sleepGoal": "Sleep hours (goal: 8h)",
     "meditationGoal": "Meditation (goal: 20min)",
     "dailyCheckin": "Daily Check-in",
-    "wellnessSaved": "Data saved!"
+    "wellnessSaved": "Data saved!",
+    "viewAll": "View all ({{count}})",
+    "showLess": "Show less"
   },
   "calendar": {
     "title": "Calendar",
