@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TaskCard } from '@/components/TaskCard';
 import { AddTaskForm } from '@/components/AddTaskForm';
@@ -7,7 +8,7 @@ import { WellnessCard } from '@/components/WellnessCard';
 import { FinancialInsightCard } from '@/components/FinancialInsightCard';
 import { WeeklySummaryCard } from '@/components/WeeklySummaryCard';
 import { MonthlySummaryCard } from '@/components/MonthlySummaryCard';
-import { Plus, AlertCircle, CheckCircle2, Clock, Flag, TrendingUp, Wallet } from 'lucide-react';
+import { Plus, AlertCircle, CheckCircle2, Flag, ChevronRight } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useHomeData } from '@/hooks/useHomeData';
@@ -18,7 +19,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
@@ -29,12 +30,11 @@ export default function HomePage() {
   const { expenses } = useExpenses(userId);
   const { insights, financialInsight, weeklySummary, monthlySummary } = useHomeInsights(userId);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showAllTasks, setShowAllTasks] = useState(false);
 
   const todayTasks = tasks.filter((t) => !t.completed && t.priority === 'high');
   const completedToday = tasks.filter((t) => t.completed).length;
-  const upcomingTasks = tasks.filter((t) => !t.completed && t.priority === 'medium');
-  const lowPriorityTasks = tasks.filter((t) => !t.completed && t.priority === 'low');
-  const completedTasks = tasks.filter((t) => t.completed);
+  const upcomingTasks = tasks.filter((t) => !t.completed && t.priority !== 'high');
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 7);
@@ -130,11 +130,8 @@ export default function HomePage() {
         <div className="page-container">
           <Skeleton className="h-10 w-64 mb-2" />
           <Skeleton className="h-6 w-96 mb-8" />
-          <div className="grid gap-4 sm:grid-cols-3 mb-6">
-            <Skeleton className="h-24 rounded-[18px]" />
-            <Skeleton className="h-24 rounded-[18px]" />
-            <Skeleton className="h-24 rounded-[18px]" />
-          </div>
+          <Skeleton className="h-16 rounded-xl mb-6" />
+          <Skeleton className="h-64 rounded-xl" />
         </div>
       </main>
     );
@@ -144,7 +141,7 @@ export default function HomePage() {
     return (
       <main className="min-h-screen bg-background">
         <div className="page-container">
-          <Alert variant="destructive" className="max-w-2xl rounded-[18px]">
+          <Alert variant="destructive" className="max-w-2xl rounded-xl">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error.message || t('home.errorLoading')}</AlertDescription>
           </Alert>
@@ -153,9 +150,19 @@ export default function HomePage() {
     );
   }
 
+  // Insights cards for horizontal scroll
+  const insightCards = insights.filter(insight =>
+    (insight.type === "critical_risk" || insight.type === "soft_warning") && insight.financialInsight ||
+    insight.type === "weekly_summary" && insight.weeklySummary ||
+    insight.type === "monthly_summary" && insight.monthlySummary
+  );
+
+  const visibleTasks = showAllTasks ? [...todayTasks, ...upcomingTasks] : todayTasks.slice(0, 3);
+
   return (
     <main className="min-h-screen bg-background pb-20 sm:pb-0">
       <div className="page-container">
+        {/* Header */}
         <div className="page-header animate-fade-in">
           <h1 className="page-title">{t('home.greeting', { name: userName })}</h1>
           <p className="page-subtitle">
@@ -163,65 +170,75 @@ export default function HomePage() {
           </p>
         </div>
 
-        {userId && (
-          <div className="mb-4 animate-fade-in">
-            <DailyNudge userId={userId} />
-          </div>
-        )}
-
-        <div className="grid gap-4 sm:grid-cols-3 mb-6 animate-fade-in">
+        {/* Hero summary — single compact row */}
+        <div className="animate-fade-in mb-5">
           <Card className="bg-card border-border">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-success/10">
-                <CheckCircle2 className="h-5 w-5 text-success" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{completedToday}</p>
-                <p className="text-sm text-muted-foreground">{t('home.completedTasks')}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-primary/10">
-                <TrendingUp className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{todayTasks.length}</p>
-                <p className="text-sm text-muted-foreground">{t('home.highPriority')}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-warning/10">
-                <Wallet className="h-5 w-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">€{weekExpenses.toFixed(0)}</p>
-                <p className="text-sm text-muted-foreground">{t('home.weekExpenses')}</p>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+                  <span className="flex items-center gap-1.5 text-foreground">
+                    <CheckCircle2 className="h-4 w-4 text-success" />
+                    <span className="font-semibold">{completedToday}</span>
+                    <span className="text-muted-foreground">{t('home.completedTasks')}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 text-foreground">
+                    <Flag className="h-4 w-4 text-primary" />
+                    <span className="font-semibold">{todayTasks.length}</span>
+                    <span className="text-muted-foreground">{t('home.highPriority')}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 text-foreground">
+                    <span className="font-semibold">€{weekExpenses.toFixed(0)}</span>
+                    <span className="text-muted-foreground">{t('home.weekExpenses')}</span>
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {insights.length > 0 && (
-          <div className="space-y-4 mb-6 animate-fade-in">
-            {insights.map((insight, idx) => {
-              if ((insight.type === "critical_risk" || insight.type === "soft_warning") && insight.financialInsight && userId) {
-                return <FinancialInsightCard key={`fi-${idx}`} insight={insight.financialInsight} userId={userId} />;
-              }
-              if (insight.type === "weekly_summary" && insight.weeklySummary) {
-                return <WeeklySummaryCard key={`ws-${idx}`} summary={insight.weeklySummary} />;
-              }
-              if (insight.type === "monthly_summary" && insight.monthlySummary) {
-                return <MonthlySummaryCard key={`ms-${idx}`} summary={insight.monthlySummary} />;
-              }
-              return null;
-            })}
+        {/* Daily Nudge */}
+        {userId && (
+          <div className="mb-5 animate-fade-in">
+            <DailyNudge userId={userId} />
           </div>
         )}
 
+        {/* "For you" — insights horizontal scroll on mobile */}
+        {insightCards.length > 0 && (
+          <div className="mb-5 animate-fade-in">
+            <ScrollArea className="w-full">
+              <div className="flex gap-4 pb-2">
+                {insightCards.map((insight, idx) => {
+                  if ((insight.type === "critical_risk" || insight.type === "soft_warning") && insight.financialInsight && userId) {
+                    return (
+                      <div key={`fi-${idx}`} className="min-w-[300px] sm:min-w-0 sm:flex-1">
+                        <FinancialInsightCard insight={insight.financialInsight} userId={userId} />
+                      </div>
+                    );
+                  }
+                  if (insight.type === "weekly_summary" && insight.weeklySummary) {
+                    return (
+                      <div key={`ws-${idx}`} className="min-w-[300px] sm:min-w-0 sm:flex-1">
+                        <WeeklySummaryCard summary={insight.weeklySummary} />
+                      </div>
+                    );
+                  }
+                  if (insight.type === "monthly_summary" && insight.monthlySummary) {
+                    return (
+                      <div key={`ms-${idx}`} className="min-w-[300px] sm:min-w-0 sm:flex-1">
+                        <MonthlySummaryCard summary={insight.monthlySummary} />
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* Tasks + Wellness */}
         <div className="grid gap-5 sm:gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-5 sm:space-y-6">
             <Card>
@@ -243,60 +260,33 @@ export default function HomePage() {
                     <AddTaskForm onAdd={handleAddTask} onCancel={() => setShowAddForm(false)} />
                   </div>
                 )}
-                <Tabs defaultValue="today" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4 mb-4 h-auto p-1 bg-muted rounded-xl">
-                    <TabsTrigger value="today" className="gap-1.5 text-sm py-2">
-                      <Flag className="h-3.5 w-3.5 hidden sm:block" />
-                      <span className="truncate">{t('home.today')} ({todayTasks.length})</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="upcoming" className="gap-1.5 text-sm py-2">
-                      <Clock className="h-3.5 w-3.5 hidden sm:block" />
-                      <span className="truncate">{t('home.upcoming')} ({upcomingTasks.length})</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="low" className="gap-1.5 text-sm py-2">
-                      <span className="truncate">{t('home.lowPriority')} ({lowPriorityTasks.length})</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="completed" className="gap-1.5 text-sm py-2">
-                      <CheckCircle2 className="h-3.5 w-3.5 hidden sm:block" />
-                      <span className="truncate">{t('home.done')} ({completedTasks.length})</span>
-                    </TabsTrigger>
-                  </TabsList>
 
-                  <TabsContent value="today" className="space-y-2.5 max-h-[350px] overflow-y-auto">
-                    {todayTasks.length === 0 ? (
-                      <div className="text-center py-8">
-                        <Flag className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground mb-3">{t('home.noPriorityTasks')}</p>
-                        <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="gap-2">
-                          <Plus className="h-3.5 w-3.5" />{t('home.add')}
-                        </Button>
-                      </div>
-                    ) : todayTasks.map((task) => (
+                {visibleTasks.length === 0 && !showAllTasks ? (
+                  <div className="text-center py-8">
+                    <Flag className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground mb-3">{t('home.noPriorityTasks')}</p>
+                    <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="gap-2">
+                      <Plus className="h-3.5 w-3.5" />{t('home.add')}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {visibleTasks.map((task) => (
                       <TaskCard key={task.id} task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }} onToggle={handleToggleTask} onDelete={handleDeleteTask} />
                     ))}
-                  </TabsContent>
-                  <TabsContent value="upcoming" className="space-y-2.5 max-h-[350px] overflow-y-auto">
-                    {upcomingTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">{t('home.noUpcomingTasks')}</p>
-                    ) : upcomingTasks.map((task) => (
-                      <TaskCard key={task.id} task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }} onToggle={handleToggleTask} onDelete={handleDeleteTask} />
-                    ))}
-                  </TabsContent>
-                  <TabsContent value="low" className="space-y-2.5 max-h-[350px] overflow-y-auto">
-                    {lowPriorityTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">{t('home.noLowPriorityTasks')}</p>
-                    ) : lowPriorityTasks.map((task) => (
-                      <TaskCard key={task.id} task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }} onToggle={handleToggleTask} onDelete={handleDeleteTask} />
-                    ))}
-                  </TabsContent>
-                  <TabsContent value="completed" className="space-y-2.5 max-h-[350px] overflow-y-auto">
-                    {completedTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">{t('home.noCompletedTasks')}</p>
-                    ) : completedTasks.map((task) => (
-                      <TaskCard key={task.id} task={{ ...task, priority: task.priority as 'low' | 'medium' | 'high' }} onToggle={handleToggleTask} onDelete={handleDeleteTask} />
-                    ))}
-                  </TabsContent>
-                </Tabs>
+                  </div>
+                )}
+
+                {/* View all link */}
+                {(todayTasks.length > 3 || upcomingTasks.length > 0) && (
+                  <button
+                    onClick={() => setShowAllTasks(!showAllTasks)}
+                    className="flex items-center gap-1 mt-4 text-sm text-primary hover:underline"
+                  >
+                    {showAllTasks ? t('home.showLess') : t('home.viewAll', { count: todayTasks.length + upcomingTasks.length })}
+                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showAllTasks ? 'rotate-90' : ''}`} />
+                  </button>
+                )}
               </CardContent>
             </Card>
           </div>

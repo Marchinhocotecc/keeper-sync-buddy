@@ -255,13 +255,11 @@ export default function AssistantPanel() {
     setSuggestions([]);
 
     try {
-      // Build financial context in parallel with nothing blocking
       const [financialContext, activeStrategy] = await Promise.all([
         buildFinancialContext(rawText),
         userId ? getActiveStrategy(userId) : Promise.resolve(null),
       ]);
 
-      // Inject active strategy into financial context
       if (financialContext && activeStrategy) {
         (financialContext as any).activeStrategy = activeStrategy;
       }
@@ -293,7 +291,6 @@ export default function AssistantPanel() {
         return;
       }
       
-      // Check for structured financial response
       const structured = data.structured as StructuredResponse | undefined;
 
       const assistantMessage: Message = {
@@ -374,39 +371,16 @@ export default function AssistantPanel() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-center py-8"
+                className="flex gap-2.5 items-start pt-4"
               >
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Zap className="h-6 w-6 text-primary" />
+                <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
+                  <Zap className="h-4 w-4 text-primary-foreground" />
                 </div>
-                <h3 className="text-base font-medium mb-1.5 text-foreground">{t('assistant.welcome_title')}</h3>
-                <p className="text-muted-foreground mb-6 max-w-sm mx-auto text-sm">
-                  {t('assistant.welcome_subtitle')}
-                </p>
-                
-                {suggestions.length > 0 && (
-                  <div className="mt-6 space-y-2">
-                    <div className="flex items-center justify-center gap-1.5 mb-3">
-                      <Lightbulb className="h-3.5 w-3.5 text-primary" />
-                      <span className="text-xs font-medium text-muted-foreground">{t('assistant.try_asking')}</span>
-                    </div>
-                    {suggestions.map((sug, idx) => (
-                      <motion.button
-                        key={idx}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.08 }}
-                        onClick={() => sendMessage(sug.text)}
-                        disabled={isLoading}
-                        className="block w-full max-w-sm mx-auto text-left p-3 rounded-lg bg-muted/50 hover:bg-muted border border-border transition-colors disabled:opacity-50"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-foreground">{sug.text}</span>
-                        </div>
-                      </motion.button>
-                    ))}
-                  </div>
-                )}
+                <div>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    {t('assistant.welcome_subtitle')}
+                  </p>
+                </div>
               </motion.div>
             )}
 
@@ -484,17 +458,22 @@ export default function AssistantPanel() {
         </div>
       </div>
       
-      {messages.length > 0 && (
-        <div className="px-4 py-2 border-t border-border flex flex-wrap gap-1.5">
-          <Button variant="outline" size="sm" onClick={() => sendMessage(t('assistant.suggestion_tasks'))} disabled={isLoading} className="text-xs h-7 rounded-md">
-            📋 {t('assistant.quick_tasks')}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => sendMessage(t('assistant.suggestion_events'))} disabled={isLoading} className="text-xs h-7 rounded-md">
-            📅 {t('assistant.quick_events')}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => sendMessage(t('assistant.quick_new_task'))} disabled={isLoading} className="text-xs h-7 rounded-md">
-            ➕ {t('assistant.quick_add_task')}
-          </Button>
+      {suggestions.length > 0 && (
+        <div className="px-4 py-2 border-t border-border">
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((sug, idx) => (
+              <Button
+                key={idx}
+                variant="outline"
+                size="sm"
+                onClick={() => sendMessage(sug.text)}
+                disabled={isLoading}
+                className="text-xs h-7 rounded-full px-3 border-border"
+              >
+                {sug.text}
+              </Button>
+            ))}
+          </div>
         </div>
       )}
 
