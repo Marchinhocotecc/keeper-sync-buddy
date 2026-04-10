@@ -1,61 +1,100 @@
 
 
-## Stato Attuale: ~8.5/10
+## Piano: Semplificare e Rendere Intuitiva la UI/UX di Ayvro
 
-Il grosso del lavoro e' fatto. Restano **5 interventi puntuali** per il 9.5/10.
+### Problemi Identificati
 
----
-
-### 1. OnboardingPage — i18n completo
-**Problema**: Tutte le stringhe sono hardcoded in italiano: "Gestisci i tuoi Task", "Traccia le tue Spese", "Parla con Ayvro", "Avanti", "Inizia", "Salta tutorial", "Prova a dire:".
-
-**Azione**: Sostituire con `t()`, aggiungere chiavi `onboarding.*` a `en.json` e propagare ai locale.
-
-**File**: `OnboardingPage.tsx`, `en.json`
+Dopo analisi del codice e della struttura attuale, ecco le aree dove la UX puo migliorare significativamente:
 
 ---
 
-### 2. Navigation — stringa hardcoded
-**Problema**: Riga 22: `toast({ title: 'Error', description: 'Something went wrong. Try again.' })` — hardcoded in inglese.
+### 1. HomePage — Troppo densa, poca gerarchia visiva
 
-**Azione**: Sostituire con `t('common.error')` e `t('common.tryAgain')`.
+**Problema**: La home mostra 3 stat card + DailyNudge + insights (financial, weekly, monthly) + task list con 4 tab + WellnessCard. Tutto insieme, senza separazione chiara. L'utente non sa dove guardare.
 
-**File**: `Navigation.tsx`
+**Azione**:
+- Ridurre le stat card da 3 a un singolo "hero summary" compatto (es. riga unica: "3 task completati · 2 urgenti · €45 questa settimana")
+- Spostare le tab dei task (today/upcoming/low/completed) in una vista piu semplice: mostrare solo i task "today" di default con un link "Vedi tutti" che espande
+- Raggruppare DailyNudge + insights in una sezione "Per te" con scroll orizzontale su mobile
+
+**File**: `HomePage.tsx`
 
 ---
 
-### 3. AssistantPanel — UI_ACTION_MAP hardcoded
-**Problema**: Righe 157-170: "Mostra task", "Mostra eventi", "Aggiungi task" ecc. sono hardcoded in italiano E inglese. Non funzionano per le altre 20 lingue.
+### 2. AssistantPanel — Welcome screen troppo verbose
 
-**Azione**: Rimuovere le stringhe hardcoded e usare solo le chiavi `t()` gia' presenti (righe 154-156). Il map basato su traduzione dinamica copre gia' tutte le lingue.
+**Problema**: Lo schermo di benvenuto mostra icona + titolo + sottotitolo + 4 suggestion button impilati verticalmente. Occupa troppo spazio e sembra un tutorial, non un assistente pronto.
+
+**Azione**:
+- Ridurre il welcome a un singolo messaggio inline (come ChatGPT): avatar + "Ciao! Come posso aiutarti?"
+- Mostrare le suggestion come chip orizzontali sotto l'input, non nel centro dello schermo
+- Rimuovere la barra quick-actions (righe 487-498) quando ci sono gia suggestion nei messaggi — e' ridondante
 
 **File**: `AssistantPanel.tsx`
 
 ---
 
-### 4. ProtectedRoute — onboarding flag fix
-**Problema**: L'onboarding redirect funziona ma salva il flag con `localStorage.setItem('onboarding_completed_' + userId)` solo se trova dati. L'`OnboardingPage` invece usa `supabase.auth.updateUser({ data: { onboarding_completed: true } })`. Mismatch: il ProtectedRoute non controlla il metadata utente, e l'OnboardingPage non setta il localStorage.
+### 3. ExpensesPage — Form troppo nascosto, chart poco utile
 
-**Azione**: Allineare: in ProtectedRoute controllare anche `user.user_metadata.onboarding_completed`. In OnboardingPage settare anche il localStorage flag per evitare query ripetute.
+**Problema**: Il form per aggiungere spese e' in un Dialog modale — l'utente deve cliccare "Aggiungi", compilare, salvare. Troppi passaggi per un'azione frequente. Il pie chart mostra categorie ma non e' interattivo.
 
-**File**: `ProtectedRoute.tsx`, `OnboardingPage.tsx`
+**Azione**:
+- Aggiungere un "quick add" inline nella lista spese: campo importo + select categoria + bottone, tutto in una riga. Il Dialog resta per la versione completa (con data e note)
+- Aggiungere al pie chart una legenda con importi reali sotto, non solo percentuali
 
----
-
-### 5. Propagazione traduzioni nuove chiavi onboarding
-Aggiungere le chiavi `onboarding.*` a tutti i 21 file locale con traduzioni corrette per le lingue principali (it, de, fr, es, pt) e inglese come fallback per le altre.
-
-**File**: tutti i `src/i18n/locales/*.json`
+**File**: `ExpensesPage.tsx`
 
 ---
 
-### Ordine di implementazione
+### 4. Navigation — Icone senza contesto su mobile
 
-1. OnboardingPage i18n
-2. Navigation fix stringa
-3. AssistantPanel cleanup hardcoded
-4. ProtectedRoute + OnboardingPage flag alignment
-5. Propagazione traduzioni
+**Problema**: La bottom bar mostra 5 icone con label molto piccole. Su schermi stretti le label si troncano.
+
+**Azione**:
+- Rimuovere le label dalla bottom bar mobile, tenere solo le icone (come Instagram/TikTok)
+- Aggiungere un indicatore attivo piu evidente: dot sotto l'icona attiva invece del cambio colore testo
+- Aumentare leggermente il touch target (da h-14 a h-16)
+
+**File**: `Navigation.tsx`
+
+---
+
+### 5. Micro-interazioni mancanti
+
+**Problema**: Le azioni (completa task, elimina spesa, cambia tab) non danno feedback visivo immediato. Solo toast notification.
+
+**Azione**:
+- Aggiungere animazione di uscita quando un task viene completato (slide-out a sinistra)
+- Aggiungere haptic feedback pattern (vibrazione leggera) su toggle task e delete — gia supportato da Capacitor
+- Aggiungere skeleton loading nei singoli componenti invece del loading generico della pagina
+
+**File**: `TaskCard.tsx`, `ExpensesPage.tsx`
+
+---
+
+### 6. Contrasto e leggibilita
+
+**Problema**: Alcuni testi `text-muted-foreground` su `bg-muted` hanno contrasto basso, specialmente in dark mode. Le stat card usano `text-2xl font-bold` che e' pesante visivamente.
+
+**Azione**:
+- Ridurre il font-weight delle stat card da `font-bold` a `font-semibold`
+- Aumentare il contrasto di `muted-foreground` in dark mode (da 60% a 65%)
+- Uniformare il border-radius: attualmente mix di `rounded-xl`, `rounded-[18px]`, `rounded-lg`, `rounded-md`
+
+**File**: `index.css`, `HomePage.tsx`, `card.tsx`
+
+---
+
+### Ordine di implementazione consigliato
+
+1. **Navigation mobile** — impatto immediato, pochi cambi
+2. **AssistantPanel welcome** — riduce friction sulla pagina piu interattiva
+3. **HomePage semplificazione** — riorganizzazione principale
+4. **ExpensesPage quick-add** — velocizza l'azione piu frequente
+5. **Micro-interazioni** — polish finale
+6. **Contrasto e coerenza** — uniformita visiva
 
 ### Nessuna modifica al database
+
+Tutte le modifiche sono frontend/CSS.
 
