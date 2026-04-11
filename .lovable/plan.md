@@ -1,100 +1,89 @@
 
 
-## Piano: Semplificare e Rendere Intuitiva la UI/UX di Ayvro
+## Stato Attuale: ~8.7/10
 
-### Problemi Identificati
+L'app e' solida: i18n quasi completo, navigazione pulita, UX semplificata, delete confirmations, empty states, animazioni task. Manca il polish finale che fa dire "questo vale i miei soldi".
 
-Dopo analisi del codice e della struttura attuale, ecco le aree dove la UX puo migliorare significativamente:
-
----
-
-### 1. HomePage — Troppo densa, poca gerarchia visiva
-
-**Problema**: La home mostra 3 stat card + DailyNudge + insights (financial, weekly, monthly) + task list con 4 tab + WellnessCard. Tutto insieme, senza separazione chiara. L'utente non sa dove guardare.
-
-**Azione**:
-- Ridurre le stat card da 3 a un singolo "hero summary" compatto (es. riga unica: "3 task completati · 2 urgenti · €45 questa settimana")
-- Spostare le tab dei task (today/upcoming/low/completed) in una vista piu semplice: mostrare solo i task "today" di default con un link "Vedi tutti" che espande
-- Raggruppare DailyNudge + insights in una sezione "Per te" con scroll orizzontale su mobile
-
-**File**: `HomePage.tsx`
+Per un utente che paga, servono 3 cose: **percezione di valore**, **fluidita senza frizioni**, e **dettagli curati**.
 
 ---
 
-### 2. AssistantPanel — Welcome screen troppo verbose
+## Piano: Ayvro 8.7 → 9.5/10
 
-**Problema**: Lo schermo di benvenuto mostra icona + titolo + sottotitolo + 4 suggestion button impilati verticalmente. Occupa troppo spazio e sembra un tutorial, non un assistente pronto.
+### 1. Greeting personalizzato e ora del giorno
+**Problema**: Il saluto in HomePage e' generico (`t('home.greeting', { name })`). Non cambia mai.
 
-**Azione**:
-- Ridurre il welcome a un singolo messaggio inline (come ChatGPT): avatar + "Ciao! Come posso aiutarti?"
-- Mostrare le suggestion come chip orizzontali sotto l'input, non nel centro dello schermo
-- Rimuovere la barra quick-actions (righe 487-498) quando ci sono gia suggestion nei messaggi — e' ridondante
+**Azione**: Variare il saluto in base all'ora: "Buongiorno Marco", "Buon pomeriggio", "Buonasera". Aggiungere chiavi `home.greetingMorning`, `home.greetingAfternoon`, `home.greetingEvening` ai locale.
 
-**File**: `AssistantPanel.tsx`
+**File**: `HomePage.tsx`, tutti i `locales/*.json`
 
 ---
 
-### 3. ExpensesPage — Form troppo nascosto, chart poco utile
+### 2. Valuta dinamica (non hardcoded €)
+**Problema**: L'app usa `€` hardcoded ovunque (HomePage hero, ExpensesPage, pie chart). Un utente non-europeo vede l'euro anche se usa dollari.
 
-**Problema**: Il form per aggiungere spese e' in un Dialog modale — l'utente deve cliccare "Aggiungi", compilare, salvare. Troppi passaggi per un'azione frequente. Il pie chart mostra categorie ma non e' interattivo.
+**Azione**: Leggere la valuta dalle settings utente (o default da locale). Usare `Intl.NumberFormat` con la valuta corretta. Aggiungere un campo `currency` nelle settings se non esiste.
 
-**Azione**:
-- Aggiungere un "quick add" inline nella lista spese: campo importo + select categoria + bottone, tutto in una riga. Il Dialog resta per la versione completa (con data e note)
-- Aggiungere al pie chart una legenda con importi reali sotto, non solo percentuali
-
-**File**: `ExpensesPage.tsx`
+**File**: `HomePage.tsx`, `ExpensesPage.tsx`, `SettingsPage.tsx`, `en.json`
 
 ---
 
-### 4. Navigation — Icone senza contesto su mobile
+### 3. Pull-to-refresh su mobile
+**Problema**: Non c'e' modo di ricaricare i dati senza navigare via e tornare. In un'app mobile-first e' frustrante.
 
-**Problema**: La bottom bar mostra 5 icone con label molto piccole. Su schermi stretti le label si troncano.
+**Azione**: Aggiungere pull-to-refresh sulla HomePage e ExpensesPage usando un componente custom leggero (touch events + invalidateQueries).
 
-**Azione**:
-- Rimuovere le label dalla bottom bar mobile, tenere solo le icone (come Instagram/TikTok)
-- Aggiungere un indicatore attivo piu evidente: dot sotto l'icona attiva invece del cambio colore testo
-- Aumentare leggermente il touch target (da h-14 a h-16)
-
-**File**: `Navigation.tsx`
+**File**: nuovo `src/components/PullToRefresh.tsx`, `HomePage.tsx`, `ExpensesPage.tsx`
 
 ---
 
-### 5. Micro-interazioni mancanti
+### 4. Swipe-to-delete su task e spese
+**Problema**: Per eliminare un task/spesa bisogna trovare il bottoncino cestino, cliccare, confermare. Troppi tap per un'azione comune su mobile.
 
-**Problema**: Le azioni (completa task, elimina spesa, cambia tab) non danno feedback visivo immediato. Solo toast notification.
-
-**Azione**:
-- Aggiungere animazione di uscita quando un task viene completato (slide-out a sinistra)
-- Aggiungere haptic feedback pattern (vibrazione leggera) su toggle task e delete — gia supportato da Capacitor
-- Aggiungere skeleton loading nei singoli componenti invece del loading generico della pagina
+**Azione**: Aggiungere swipe-left per rivelare il bottone delete su `TaskCard` e sulle righe spese. Il gesto e' naturale su mobile e riduce l'attrito.
 
 **File**: `TaskCard.tsx`, `ExpensesPage.tsx`
 
 ---
 
-### 6. Contrasto e leggibilita
+### 5. Toast di conferma spesa con "Annulla"
+**Problema**: Dopo aver aggiunto una spesa con quick-add, il toast dice solo "Aggiunto". L'utente non puo' annullare se ha sbagliato importo.
 
-**Problema**: Alcuni testi `text-muted-foreground` su `bg-muted` hanno contrasto basso, specialmente in dark mode. Le stat card usano `text-2xl font-bold` che e' pesante visivamente.
+**Azione**: Aggiungere un bottone "Annulla" nel toast che elimina l'ultima spesa aggiunta entro 5 secondi. Pattern undo familiare (Gmail, Google Keep).
 
-**Azione**:
-- Ridurre il font-weight delle stat card da `font-bold` a `font-semibold`
-- Aumentare il contrasto di `muted-foreground` in dark mode (da 60% a 65%)
-- Uniformare il border-radius: attualmente mix di `rounded-xl`, `rounded-[18px]`, `rounded-lg`, `rounded-md`
-
-**File**: `index.css`, `HomePage.tsx`, `card.tsx`
+**File**: `ExpensesPage.tsx`
 
 ---
 
-### Ordine di implementazione consigliato
+### 6. Streak/progresso visivo in HomePage
+**Problema**: L'utente non ha un senso di progresso giornaliero. Nessun motivo per tornare ogni giorno.
 
-1. **Navigation mobile** — impatto immediato, pochi cambi
-2. **AssistantPanel welcome** — riduce friction sulla pagina piu interattiva
-3. **HomePage semplificazione** — riorganizzazione principale
-4. **ExpensesPage quick-add** — velocizza l'azione piu frequente
-5. **Micro-interazioni** — polish finale
-6. **Contrasto e coerenza** — uniformita visiva
+**Azione**: Aggiungere un indicatore di streak ("3 giorni consecutivi di task completati") o una barra di progresso giornaliera ("2/5 task di oggi completati") nell'hero summary.
 
-### Nessuna modifica al database
+**File**: `HomePage.tsx`
 
-Tutte le modifiche sono frontend/CSS.
+---
+
+### 7. Transizioni tra pagine
+**Problema**: Le pagine appaiono istantaneamente senza transizione. Sembra un sito web, non un'app.
+
+**Azione**: Aggiungere fade-in leggero (150ms) al mount di ogni pagina principale usando framer-motion `AnimatePresence` nel router.
+
+**File**: `App.tsx` o wrapper component
+
+---
+
+## Ordine di implementazione
+
+1. Greeting personalizzato (rapido, impatto emotivo)
+2. Streak/progresso (retention)
+3. Transizioni pagine (percezione qualita')
+4. Valuta dinamica (internazionalizzazione reale)
+5. Pull-to-refresh (mobile-first)
+6. Swipe-to-delete (mobile UX)
+7. Undo toast spese (riduzione errori)
+
+## Nessuna modifica al database
+
+Tutto frontend. La valuta si salva nelle settings gia' esistenti.
 
