@@ -3,8 +3,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
+import { AnimatePresence } from "framer-motion";
 import { Navigation } from "@/components/Navigation";
 import { NotificationInitializer } from "@/components/NotificationInitializer";
 import { suppressAnalyticsErrors } from "@/utils/analytics";
@@ -29,6 +30,69 @@ const queryClient = new QueryClient();
 // Suppress Plausible analytics errors in dev/preview
 suppressAnalyticsErrors();
 
+function AnimatedRoutes() {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route path="/auth" element={<AuthPage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Navigation />
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calendar"
+          element={
+            <ProtectedRoute>
+              <Navigation />
+              <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/expenses"
+          element={
+            <ProtectedRoute>
+              <Navigation />
+              <ExpensesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/assistant"
+          element={
+            <ProtectedRoute>
+              <Navigation />
+              <AssistantPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Navigation />
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
+        <Route path="/accept-terms" element={<AcceptTermsPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AnimatePresence>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -37,61 +101,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<AuthPage />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Navigation />
-                  <HomePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/calendar"
-              element={
-                <ProtectedRoute>
-                  <Navigation />
-                  <CalendarPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/expenses"
-              element={
-                <ProtectedRoute>
-                  <Navigation />
-                  <ExpensesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/assistant"
-              element={
-                <ProtectedRoute>
-                  <Navigation />
-                  <AssistantPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute>
-                  <Navigation />
-                  <SettingsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/onboarding" element={<OnboardingPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/terms" element={<TermsPage />} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
-            <Route path="/accept-terms" element={<AcceptTermsPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AnimatedRoutes />
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>

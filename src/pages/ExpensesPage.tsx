@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FinancialInsightCard } from '@/components/FinancialInsightCard';
 import { useFinancialInsights } from '@/hooks/useFinancialInsights';
@@ -8,19 +8,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Trash2, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, TrendingDown, Wallet, Undo2 } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BudgetCard } from '@/components/BudgetCard';
 import { BudgetEditModal } from '@/components/BudgetEditModal';
 import { getMonthlyBudget, upsertMonthlyBudget } from '@/services/budgetService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PageTransition } from '@/components/PageTransition';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { formatCurrency, getCurrencySymbol } from '@/utils/currency';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast as sonnerToast } from 'sonner';
 
 const COLORS = ['#0F3D3E', '#145A5B', '#1E6F70', '#2E7D32', '#E6A23C', '#D64545', '#6B7280'];
 
@@ -37,6 +42,7 @@ function FinancialInsightSection({ userId }: { userId: string }) {
 export default function ExpensesPage() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | undefined>();
   const { expenses, isLoading, addExpense, deleteExpense } = useExpenses(userId);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -46,12 +52,18 @@ export default function ExpensesPage() {
   const [budget, setBudget] = useState(0);
   const [budgetNote, setBudgetNote] = useState('');
 
-  // Quick add state
   const [quickAmount, setQuickAmount] = useState('');
   const [quickCategory, setQuickCategory] = useState('food');
 
+  // Swipe state for expense rows
+  const [swipedId, setSwipedId] = useState<string | null>(null);
+  const touchStartX = useRef(0);
+
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
+
+  const currencySymbol = getCurrencySymbol(i18n.language);
+  const lang = i18n.language;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data?.user?.id));
@@ -110,10 +122,26 @@ export default function ExpensesPage() {
     const amount = parseFloat(quickAmount);
     if (isNaN(amount) || amount <= 0) return;
     const today = new Date().toISOString().split('T')[0];
-    await addExpense.mutateAsync({ amount, category: quickCategory, description: '', date: today });
+    const result = await addExpense.mutateAsync({ amount, category: quickCategory, description: '', date: today });
     setQuickAmount('');
-    toast({ title: t('home.taskAdded') });
+
+    // Undo toast with sonner
+    const expenseId = (result as any)?.id;
+    sonnerToast(t('home.taskAdded'), {
+      description: `${formatCurrency(amount, lang, 2)} — ${t(`expenses.${quickCategory}`)}`,
+      action: expenseId ? {
+        label: t('expenses.undo'),
+        onClick: () => {
+          deleteExpense.mutate(expenseId);
+        },
+      } : undefined,
+      duration: 5000,
+    });
   };
+
+  const handleRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['expenses'] });
+  }, [queryClient]);
 
   const filteredExpenses = Array.isArray(expenses) ? expenses : [];
   
@@ -162,206 +190,235 @@ export default function ExpensesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background pb-20 sm:pb-0">
-      <div className="page-container">
-        <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="page-title">{t('expenses.title')}</h1>
-            <p className="page-subtitle">{t('expenses.manageExpenses')}</p>
-          </div>
-          <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2 shadow-sm w-full sm:w-auto">
-            <Plus className="h-4 w-4" />
-            <span>{t('expenses.addExpense')}</span>
-          </Button>
-        </div>
-
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3 mb-6">
-          <Card className="app-card">
-            <CardHeader className="app-card-header">
-              <div className="flex items-center justify-between">
-                <CardTitle className="app-card-title">{t('expenses.totalExpenses')}</CardTitle>
-                <TrendingUp className="h-4 w-4 text-primary" />
+    <PageTransition>
+      <main className="min-h-screen bg-background pb-20 sm:pb-0">
+        <PullToRefresh onRefresh={handleRefresh}>
+          <div className="page-container">
+            <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="page-title">{t('expenses.title')}</h1>
+                <p className="page-subtitle">{t('expenses.manageExpenses')}</p>
               </div>
-            </CardHeader>
-            <CardContent><div className="app-card-value">€{totalExpenses.toFixed(2)}</div></CardContent>
-          </Card>
-          <BudgetCard budget={budget} onEditClick={() => setShowBudgetModal(true)} />
-          <Card className={`app-card ${remaining < 0 ? 'border-destructive/50' : ''}`}>
-            <CardHeader className="app-card-header">
-              <div className="flex items-center justify-between">
-                <CardTitle className="app-card-title">{t('expenses.remaining')}</CardTitle>
-                <TrendingDown className={`h-4 w-4 ${remaining < 0 ? 'text-destructive' : 'text-success'}`} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className={`app-card-value ${remaining < 0 ? 'text-destructive' : 'text-success'}`}>€{remaining.toFixed(2)}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Quick add inline */}
-        <Card className="app-card mb-6 animate-fade-in">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="€"
-                value={quickAmount}
-                onChange={(e) => setQuickAmount(e.target.value)}
-                className="w-24 h-9 text-sm"
-                onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
-              />
-              <Select value={quickCategory} onValueChange={setQuickCategory}>
-                <SelectTrigger className="w-32 h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="food">{t('expenses.food')}</SelectItem>
-                  <SelectItem value="transport">{t('expenses.transport')}</SelectItem>
-                  <SelectItem value="entertainment">{t('expenses.entertainment')}</SelectItem>
-                  <SelectItem value="shopping">{t('expenses.shopping')}</SelectItem>
-                  <SelectItem value="health">{t('expenses.health')}</SelectItem>
-                  <SelectItem value="bills">{t('expenses.bills')}</SelectItem>
-                  <SelectItem value="other">{t('expenses.other')}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button size="sm" onClick={handleQuickAdd} disabled={!quickAmount || parseFloat(quickAmount) <= 0} className="h-9 px-4">
+              <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2 shadow-sm w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
+                <span>{t('expenses.addExpense')}</span>
               </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        <FinancialInsightSection userId={userId} />
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3 mb-6">
+              <Card className="app-card">
+                <CardHeader className="app-card-header">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="app-card-title">{t('expenses.totalExpenses')}</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                  </div>
+                </CardHeader>
+                <CardContent><div className="app-card-value">{formatCurrency(totalExpenses, lang)}</div></CardContent>
+              </Card>
+              <BudgetCard budget={budget} onEditClick={() => setShowBudgetModal(true)} />
+              <Card className={`app-card ${remaining < 0 ? 'border-destructive/50' : ''}`}>
+                <CardHeader className="app-card-header">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="app-card-title">{t('expenses.remaining')}</CardTitle>
+                    <TrendingDown className={`h-4 w-4 ${remaining < 0 ? 'text-destructive' : 'text-success'}`} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className={`app-card-value ${remaining < 0 ? 'text-destructive' : 'text-success'}`}>{formatCurrency(remaining, lang)}</div>
+                </CardContent>
+              </Card>
+            </div>
 
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-          <Card className="app-card">
-            <CardHeader className="border-b border-border/50 px-4 sm:px-6 py-4">
-              <CardTitle className="text-base sm:text-lg font-semibold">{t('expenses.recentExpenses')}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              {filteredExpenses.length === 0 ? (
-                <div className="text-center py-10">
-                  <Wallet className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground mb-4">{t('expenses.noExpenses')}</p>
-                  <Button variant="outline" onClick={() => setShowAddForm(true)} className="gap-2 text-sm">
-                    <Plus className="h-4 w-4" />{t('expenses.addExpense')}
+            {/* Quick add inline */}
+            <Card className="app-card mb-6 animate-fade-in">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder={currencySymbol}
+                    value={quickAmount}
+                    onChange={(e) => setQuickAmount(e.target.value)}
+                    className="w-24 h-9 text-sm"
+                    onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+                  />
+                  <Select value={quickCategory} onValueChange={setQuickCategory}>
+                    <SelectTrigger className="w-32 h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="food">{t('expenses.food')}</SelectItem>
+                      <SelectItem value="transport">{t('expenses.transport')}</SelectItem>
+                      <SelectItem value="entertainment">{t('expenses.entertainment')}</SelectItem>
+                      <SelectItem value="shopping">{t('expenses.shopping')}</SelectItem>
+                      <SelectItem value="health">{t('expenses.health')}</SelectItem>
+                      <SelectItem value="bills">{t('expenses.bills')}</SelectItem>
+                      <SelectItem value="other">{t('expenses.other')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" onClick={handleQuickAdd} disabled={!quickAmount || parseFloat(quickAmount) <= 0} className="h-9 px-4">
+                    <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-              ) : (
-                <div className="space-y-2 sm:space-y-3 max-h-[400px] overflow-y-auto">
-                  {filteredExpenses.slice(0, 10).map((expense) => (
-                    <div key={expense.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card hover:bg-muted/50 transition-colors">
-                      <div className="flex-1 min-w-0 mr-3">
-                        <p className="text-sm font-medium truncate">{expense.description || t('expenses.noDescription')}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(expense.date + 'T00:00:00').toLocaleDateString(dateLocale, { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                        <span className="text-sm font-semibold">€{parseFloat(String(expense.amount)).toFixed(2)}</span>
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(expense.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+              </CardContent>
+            </Card>
+
+            <FinancialInsightSection userId={userId} />
+
+            <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+              <Card className="app-card">
+                <CardHeader className="border-b border-border/50 px-4 sm:px-6 py-4">
+                  <CardTitle className="text-base sm:text-lg font-semibold">{t('expenses.recentExpenses')}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 sm:p-6">
+                  {filteredExpenses.length === 0 ? (
+                    <div className="text-center py-10">
+                      <Wallet className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground mb-4">{t('expenses.noExpenses')}</p>
+                      <Button variant="outline" onClick={() => setShowAddForm(true)} className="gap-2 text-sm">
+                        <Plus className="h-4 w-4" />{t('expenses.addExpense')}
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  ) : (
+                    <div className="space-y-2 sm:space-y-3 max-h-[400px] overflow-y-auto">
+                      {filteredExpenses.slice(0, 10).map((expense) => (
+                        <div
+                          key={expense.id}
+                          className="relative overflow-hidden rounded-lg"
+                        >
+                          {/* Swipe delete background */}
+                          <div className="absolute inset-y-0 right-0 flex items-center justify-center w-16 bg-destructive">
+                            <button onClick={() => setDeleteTarget(expense.id)} className="text-destructive-foreground p-2">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div
+                            className="relative flex items-center justify-between p-3 border border-border/50 bg-card hover:bg-muted/50 transition-colors"
+                            style={{
+                              transform: swipedId === expense.id ? 'translateX(-64px)' : 'translateX(0)',
+                              transition: 'transform 0.2s ease-out'
+                            }}
+                            onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+                            onTouchMove={(e) => {
+                              const diff = e.touches[0].clientX - touchStartX.current;
+                              if (diff < -30) setSwipedId(expense.id);
+                            }}
+                            onTouchEnd={() => {
+                              // keep swiped if already set
+                            }}
+                            onClick={() => swipedId === expense.id && setSwipedId(null)}
+                          >
+                            <div className="flex-1 min-w-0 mr-3">
+                              <p className="text-sm font-medium truncate">{expense.description || t('expenses.noDescription')}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(expense.date + 'T00:00:00').toLocaleDateString(dateLocale, { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                              <span className="text-sm font-semibold">{formatCurrency(parseFloat(String(expense.amount)), lang)}</span>
+                              <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(expense.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0 hidden sm:flex">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-          <Card className="app-card">
-            <CardHeader className="border-b border-border/50 px-4 sm:px-6 py-4">
-              <CardTitle className="text-base sm:text-lg font-semibold">{t('expenses.byCategory')}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              {categoryData.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-8">{t('expenses.noData')}</p>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={categoryData} cx="50%" cy="50%" labelLine={false} outerRadius={70} fill="#8884d8" dataKey="value">
-                        {categoryData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => `€${value.toFixed(2)}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  {/* Legend with real amounts */}
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3">
-                    {categoryData.map((entry, index) => (
-                      <div key={entry.name} className="flex items-center gap-2 text-sm">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                        <span className="truncate text-muted-foreground">{entry.name}</span>
-                        <span className="ml-auto font-medium text-foreground">€{entry.value.toFixed(0)}</span>
+              <Card className="app-card">
+                <CardHeader className="border-b border-border/50 px-4 sm:px-6 py-4">
+                  <CardTitle className="text-base sm:text-lg font-semibold">{t('expenses.byCategory')}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 sm:p-6">
+                  {categoryData.length === 0 ? (
+                    <p className="text-center text-sm text-muted-foreground py-8">{t('expenses.noData')}</p>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie data={categoryData} cx="50%" cy="50%" labelLine={false} outerRadius={70} fill="#8884d8" dataKey="value">
+                            {categoryData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => formatCurrency(value, lang)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3">
+                        {categoryData.map((entry, index) => (
+                          <div key={entry.name} className="flex items-center gap-2 text-sm">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                            <span className="truncate text-muted-foreground">{entry.name}</span>
+                            <span className="ml-auto font-medium text-foreground">{formatCurrency(entry.value, lang, 0)}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </PullToRefresh>
 
-      <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{t('expenses.addExpense')}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="amount">{t('expenses.amountRequired')}</Label>
-              <Input id="amount" type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} required min="0.01" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">{t('expenses.categoryRequired')}</Label>
-              <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                <SelectTrigger id="category"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="food">{t('expenses.food')}</SelectItem>
-                  <SelectItem value="transport">{t('expenses.transport')}</SelectItem>
-                  <SelectItem value="entertainment">{t('expenses.entertainment')}</SelectItem>
-                  <SelectItem value="shopping">{t('expenses.shopping')}</SelectItem>
-                  <SelectItem value="health">{t('expenses.health')}</SelectItem>
-                  <SelectItem value="bills">{t('expenses.bills')}</SelectItem>
-                  <SelectItem value="other">{t('expenses.other')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="date">{t('expenses.dateRequired')}</Label>
-              <Input id="date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">{t('expenses.notes')}</Label>
-              <Input id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} maxLength={200} />
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" className="flex-1">{t('common.save')}</Button>
-              <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} className="flex-1">{t('common.cancel')}</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+        <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>{t('expenses.addExpense')}</DialogTitle></DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="amount">{t('expenses.amountRequired')}</Label>
+                <Input id="amount" type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} required min="0.01" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="category">{t('expenses.categoryRequired')}</Label>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger id="category"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="food">{t('expenses.food')}</SelectItem>
+                    <SelectItem value="transport">{t('expenses.transport')}</SelectItem>
+                    <SelectItem value="entertainment">{t('expenses.entertainment')}</SelectItem>
+                    <SelectItem value="shopping">{t('expenses.shopping')}</SelectItem>
+                    <SelectItem value="health">{t('expenses.health')}</SelectItem>
+                    <SelectItem value="bills">{t('expenses.bills')}</SelectItem>
+                    <SelectItem value="other">{t('expenses.other')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="date">{t('expenses.dateRequired')}</Label>
+                <Input id="date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">{t('expenses.notes')}</Label>
+                <Input id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} maxLength={200} />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1">{t('common.save')}</Button>
+                <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} className="flex-1">{t('common.cancel')}</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-      <BudgetEditModal open={showBudgetModal} onOpenChange={setShowBudgetModal} currentBudget={budget} currentNote={budgetNote} onSave={handleSaveBudget} isSaving={isSavingBudget} />
+        <BudgetEditModal open={showBudgetModal} onOpenChange={setShowBudgetModal} currentBudget={budget} currentNote={budgetNote} onSave={handleSaveBudget} isSaving={isSavingBudget} />
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('common.confirm')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('common.deleteConfirmGeneric')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteTarget) { deleteExpense.mutate(deleteTarget); setDeleteTarget(null); } }}>
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </main>
+        <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('common.confirm')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('common.deleteConfirmGeneric')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteTarget) { deleteExpense.mutate(deleteTarget); setDeleteTarget(null); setSwipedId(null); } }}>
+                {t('common.delete')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </main>
+    </PageTransition>
   );
 }
