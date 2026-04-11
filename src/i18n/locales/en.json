@@ -5,6 +5,9 @@
     "title": "Ayvro",
     "subtitle": "Decision Engine for Your Money",
     "greeting": "Hello {{name}}! ✨",
+    "greetingMorning": "Good morning, {{name}}! ☀️",
+    "greetingAfternoon": "Good afternoon, {{name}}! 👋",
+    "greetingEvening": "Good evening, {{name}}! 🌙",
     "dailyActivities": "Daily Activities",
     "todayActivities": "Today's Activities",
     "tasks": "Tasks",
@@ -144,7 +147,8 @@
     "budgetLabel": "Monthly Budget (€)",
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
-    "positiveValueError": "Enter a positive value"
+    "positiveValueError": "Enter a positive value",
+    "undo": "Undo"
   },
   "assistant": {
     "title": "Ayvro Assistant",

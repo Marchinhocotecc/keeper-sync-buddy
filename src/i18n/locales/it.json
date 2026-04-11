@@ -29,6 +29,9 @@
     "title": "Ayvro",
     "subtitle": "Il tuo motore decisionale finanziario",
     "greeting": "Ciao {{name}}! ✨",
+    "greetingMorning": "Buongiorno, {{name}}! ☀️",
+    "greetingAfternoon": "Buon pomeriggio, {{name}}! 👋",
+    "greetingEvening": "Buonasera, {{name}}! 🌙",
     "dailyActivities": "Attività Quotidiane",
     "todayActivities": "Attività di Oggi",
     "tasks": "Task",
@@ -168,7 +171,8 @@
     "budgetLabel": "Budget Mensile (€)",
     "budgetNotePlaceholder": "Aggiungi una nota...",
     "budgetNoteLabel": "Nota (opzionale)",
-    "positiveValueError": "Inserisci un valore positivo"
+    "positiveValueError": "Inserisci un valore positivo",
+    "undo": "Annulla"
   },
   "assistant": {
     "title": "Assistente Ayvro",
