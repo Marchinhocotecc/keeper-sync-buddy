@@ -80,7 +80,10 @@
     "dailyCheckin": "Daily Check-in",
     "wellnessSaved": "Data saved!",
     "viewAll": "Ver tudo ({{count}})",
-    "showLess": "Ver menos"
+    "showLess": "Ver menos",
+    "greetingMorning": "Bom dia, {{name}}! ☀️",
+    "greetingAfternoon": "Boa tarde, {{name}}! 👋",
+    "greetingEvening": "Boa noite, {{name}}! 🌙"
   },
   "calendar": {
     "title": "Calendário",
@@ -168,7 +171,8 @@
     "budgetLabel": "Monthly Budget (€)",
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
-    "positiveValueError": "Enter a positive value"
+    "positiveValueError": "Enter a positive value",
+    "undo": "Desfazer"
   },
   "assistant": {
     "title": "Assistente Ayvro",

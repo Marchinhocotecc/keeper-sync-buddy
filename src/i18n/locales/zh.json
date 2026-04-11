@@ -80,7 +80,10 @@
     "dailyCheckin": "Daily Check-in",
     "wellnessSaved": "Data saved!",
     "viewAll": "View all ({{count}})",
-    "showLess": "Show less"
+    "showLess": "Show less",
+    "greetingMorning": "早上好，{{name}}！☀️",
+    "greetingAfternoon": "下午好，{{name}}！👋",
+    "greetingEvening": "晚上好，{{name}}！🌙"
   },
   "calendar": {
     "title": "日历",
@@ -168,7 +171,8 @@
     "budgetLabel": "Monthly Budget (€)",
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
-    "positiveValueError": "Enter a positive value"
+    "positiveValueError": "Enter a positive value",
+    "undo": "撤销"
   },
   "assistant": {
     "title": "Ayvro 助手",
