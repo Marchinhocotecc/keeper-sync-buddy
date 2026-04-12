@@ -266,7 +266,7 @@ export default function AssistantPanel() {
       });
       
       if (error) {
-        console.error("[AssistantPanel] Edge function error:", error);
+        if (import.meta.env.DEV) console.error("[AssistantPanel] Edge function error:", error);
         
         const fallbackMessage: Message = {
           role: "assistant",
@@ -299,7 +299,7 @@ export default function AssistantPanel() {
         setSuggestions(data.suggestions.map((s: string) => ({ text: s, priority: 'medium' })));
       }
     } catch (error: any) {
-      console.error("[AssistantPanel] Unexpected error:", error);
+      if (import.meta.env.DEV) console.error("[AssistantPanel] Unexpected error:", error);
       
       const fallbackMessage: Message = {
         role: "assistant",
