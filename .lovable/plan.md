@@ -1,89 +1,95 @@
 
 
-## Stato Attuale: ~8.7/10
+## Valutazione: Ayvro — Product Readiness Score
 
-L'app e' solida: i18n quasi completo, navigazione pulita, UX semplificata, delete confirmations, empty states, animazioni task. Manca il polish finale che fa dire "questo vale i miei soldi".
+### Punteggio attuale: **82/100**
 
-Per un utente che paga, servono 3 cose: **percezione di valore**, **fluidita senza frizioni**, e **dettagli curati**.
-
----
-
-## Piano: Ayvro 8.7 → 9.5/10
-
-### 1. Greeting personalizzato e ora del giorno
-**Problema**: Il saluto in HomePage e' generico (`t('home.greeting', { name })`). Non cambia mai.
-
-**Azione**: Variare il saluto in base all'ora: "Buongiorno Marco", "Buon pomeriggio", "Buonasera". Aggiungere chiavi `home.greetingMorning`, `home.greetingAfternoon`, `home.greetingEvening` ai locale.
-
-**File**: `HomePage.tsx`, tutti i `locales/*.json`
+L'app ha una base solida ma ci sono diverse aree che impediscono di raggiungere il livello "product ready" premium.
 
 ---
 
-### 2. Valuta dinamica (non hardcoded €)
-**Problema**: L'app usa `€` hardcoded ovunque (HomePage hero, ExpensesPage, pie chart). Un utente non-europeo vede l'euro anche se usa dollari.
+### Cosa funziona bene (punti forti)
 
-**Azione**: Leggere la valuta dalle settings utente (o default da locale). Usare `Intl.NumberFormat` con la valuta corretta. Aggiungere un campo `currency` nelle settings se non esiste.
-
-**File**: `HomePage.tsx`, `ExpensesPage.tsx`, `SettingsPage.tsx`, `en.json`
-
----
-
-### 3. Pull-to-refresh su mobile
-**Problema**: Non c'e' modo di ricaricare i dati senza navigare via e tornare. In un'app mobile-first e' frustrante.
-
-**Azione**: Aggiungere pull-to-refresh sulla HomePage e ExpensesPage usando un componente custom leggero (touch events + invalidateQueries).
-
-**File**: nuovo `src/components/PullToRefresh.tsx`, `HomePage.tsx`, `ExpensesPage.tsx`
+- **i18n completo**: 22 lingue, chiavi tradotte, onboarding localizzato
+- **Design system coerente**: palette Ayvro (teal), dark mode, variabili CSS ben organizzate
+- **Mobile-first UX**: bottom nav icon-only, pull-to-refresh, swipe-to-delete, page transitions
+- **Funzionalita core complete**: task, spese, calendario, assistente AI, wellness, budget
+- **Valuta dinamica**: `formatCurrency` basato su locale
+- **Delete confirmations + empty states**: presenti ovunque
+- **Auth flow**: sign in/up, forgot password, terms acceptance, onboarding
 
 ---
 
-### 4. Swipe-to-delete su task e spese
-**Problema**: Per eliminare un task/spesa bisogna trovare il bottoncino cestino, cliccare, confermare. Troppi tap per un'azione comune su mobile.
+### Cosa manca per essere product-ready (problemi)
 
-**Azione**: Aggiungere swipe-left per rivelare il bottone delete su `TaskCard` e sulle righe spese. Il gesto e' naturale su mobile e riduce l'attrito.
+#### A. Qualita del codice (-5 punti)
+1. **~190 console.log in produzione**: `dataService.ts`, `useTasks.ts`, `planRouter.ts`, `aiFreeOrchestrator.ts` — stampano dati utente in console. Inaccettabile per un prodotto a pagamento.
+2. **Nessun error boundary**: se un componente crasha, l'intera app diventa bianca. Servono error boundaries React per catturare errori e mostrare un fallback.
 
-**File**: `TaskCard.tsx`, `ExpensesPage.tsx`
+#### B. Coerenza UX (-4 punti)
+3. **AssistantPanel `detectIntentType`** (riga 48-54): regex solo in italiano (`posso permettermi`, `come sto`, `pianifica`). Non funziona per 21 delle 22 lingue supportate. Un utente tedesco o francese non attivera mai queste funzioni.
+4. **`formatTime` hardcoded** in AssistantPanel (riga 40-46): usa `'en-US'` con `hour12: false`. Dovrebbe usare il locale dell'utente.
+5. **Date locale mapping manuale** in ExpensesPage e HomePage: catena `if/else` per 5 lingue, le altre 17 fallback su `en-US`. Usare `i18n.language` direttamente con `Intl.DateTimeFormat`.
 
----
+#### C. Performance e affidabilita (-4 punti)
+6. **Nessun React.memo/useMemo sui componenti lista**: `TaskCard`, expense rows, insight cards vengono ri-renderizzati ad ogni cambio di stato. Su liste lunghe crea lag percepibile.
+7. **`supabase.auth.getUser()` chiamato in ogni pagina separatamente**: `ExpensesPage`, `CalendarPage`, `WellnessCard`, `SettingsPage` — ognuno fa la sua chiamata. Serve un AuthContext centralizzato.
+8. **QueryClient senza configurazione**: nessun `staleTime`, `gcTime`, o `retry` configurato. Le query ripartono ad ogni focus di finestra.
 
-### 5. Toast di conferma spesa con "Annulla"
-**Problema**: Dopo aver aggiunto una spesa con quick-add, il toast dice solo "Aggiunto". L'utente non puo' annullare se ha sbagliato importo.
-
-**Azione**: Aggiungere un bottone "Annulla" nel toast che elimina l'ultima spesa aggiunta entro 5 secondi. Pattern undo familiare (Gmail, Google Keep).
-
-**File**: `ExpensesPage.tsx`
-
----
-
-### 6. Streak/progresso visivo in HomePage
-**Problema**: L'utente non ha un senso di progresso giornaliero. Nessun motivo per tornare ogni giorno.
-
-**Azione**: Aggiungere un indicatore di streak ("3 giorni consecutivi di task completati") o una barra di progresso giornaliera ("2/5 task di oggi completati") nell'hero summary.
-
-**File**: `HomePage.tsx`
+#### D. Polish mancante (-5 punti)
+9. **Nessun loading state per le azioni**: quando si aggiunge un task/spesa, il bottone non mostra uno spinner. L'utente non sa se il click e' stato registrato.
+10. **Nessun feedback tattile**: swipe-to-delete esiste ma manca `navigator.vibrate()` o Capacitor Haptics per dare sensazione nativa.
+11. **PullToRefresh non refresha tutto**: HomePage refresha solo tasks/expenses/home-data. Non refresha wellness, insights, calendar events.
+12. **Nessuna gestione offline**: se l'utente perde connessione, nessun banner o fallback. Le azioni falliscono silenziosamente.
 
 ---
 
-### 7. Transizioni tra pagine
-**Problema**: Le pagine appaiono istantaneamente senza transizione. Sembra un sito web, non un'app.
+### Piano per arrivare a 95/100
 
-**Azione**: Aggiungere fade-in leggero (150ms) al mount di ogni pagina principale usando framer-motion `AnimatePresence` nel router.
+#### Priorita 1: Pulizia produzione (impatto immediato)
+- **Rimuovere tutti i console.log** da `src/services/`, `src/hooks/`, `src/assistant/` — sostituire con un logger condizionale (`if (import.meta.env.DEV)`)
+- **Aggiungere ErrorBoundary** globale con fallback UI ("Qualcosa e' andato storto, ricarica")
 
-**File**: `App.tsx` o wrapper component
+#### Priorita 2: AuthContext centralizzato
+- Creare `src/contexts/AuthContext.tsx` con `useAuth()` hook
+- Eliminare i 5+ `supabase.auth.getUser()` sparsi nelle pagine
+- Riduce chiamate di rete e rende l'app piu reattiva
+
+#### Priorita 3: Coerenza internazionale
+- Rimuovere `detectIntentType` regex italiano dall'AssistantPanel (lasciare la classificazione al backend AI)
+- Sostituire i mapping `dateLocale` manuali con `i18n.language` diretto
+- Usare `Intl.DateTimeFormat(i18n.language)` ovunque
+
+#### Priorita 4: QueryClient ottimizzato
+- Configurare `staleTime: 5 * 60 * 1000` per ridurre refetch inutili
+- Aggiungere `retry: 2` con backoff
+- Aggiungere `refetchOnWindowFocus: false` per evitare flash di loading
+
+#### Priorita 5: Feedback utente premium
+- Spinner sui bottoni durante le mutazioni (task add, expense add, budget save)
+- Banner offline con `navigator.onLine` + listener
+- PullToRefresh che invalida TUTTE le query
+
+#### Priorita 6: Performance
+- `React.memo` su `TaskCard`, expense rows
+- `useMemo` per `categoryData`, `filteredExpenses` (gia presente in parte, verificare coerenza)
 
 ---
 
-## Ordine di implementazione
+### Riepilogo impatto
 
-1. Greeting personalizzato (rapido, impatto emotivo)
-2. Streak/progresso (retention)
-3. Transizioni pagine (percezione qualita')
-4. Valuta dinamica (internazionalizzazione reale)
-5. Pull-to-refresh (mobile-first)
-6. Swipe-to-delete (mobile UX)
-7. Undo toast spese (riduzione errori)
+| Area | Ora | Dopo | Punti |
+|------|-----|------|-------|
+| Console.log in prod | 190 log | 0 | +2 |
+| Error boundary | Assente | Presente | +2 |
+| Auth centralizzato | 5 chiamate duplicate | 1 context | +2 |
+| i18n coerente | 5/22 lingue per date | 22/22 | +2 |
+| QueryClient config | Default | Ottimizzato | +1 |
+| Loading states azioni | Assenti | Spinner | +2 |
+| Offline handling | Assente | Banner | +1 |
+| Performance memo | Assente | Presente | +1 |
+| **Totale** | **82** | **95** | **+13** |
 
-## Nessuna modifica al database
-
-Tutto frontend. La valuta si salva nelle settings gia' esistenti.
+### Nessuna modifica al database
+Tutto frontend.
 
