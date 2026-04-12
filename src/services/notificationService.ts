@@ -57,7 +57,7 @@ export async function initNotificationService(): Promise<boolean> {
 
   // Check if notifications are supported
   if (!('Notification' in window)) {
-    console.warn('Notifications not supported in this browser');
+    // console.warn('Notifications not supported in this browser');
     return false;
   }
 
@@ -116,12 +116,12 @@ export function showNotification(title: string, body: string, options?: {
   // Check daily limit
   checkDailyLimit();
   if (dailyNotificationCount >= MAX_NOTIFICATIONS_PER_DAY) {
-    console.log('Daily notification limit reached');
+    // console.log('Daily notification limit reached');
     return false;
   }
 
   if (!canShowNotifications()) {
-    console.warn('Cannot show notifications - permission not granted');
+    // console.warn('Cannot show notifications - permission not granted');
     return false;
   }
 

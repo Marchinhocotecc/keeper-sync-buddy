@@ -48,7 +48,7 @@ const DEFAULT_SETTINGS: Omit<UserSettings, 'user_id' | 'id' | 'created_at' | 'up
  */
 export async function ensureUserSettings(userId: string): Promise<UserSettings> {
   if (!userId) {
-    console.warn('[SettingsService] ensureUserSettings chiamato senza userId');
+    // console.warn('[SettingsService] ensureUserSettings chiamato senza userId');
     return { user_id: '', ...DEFAULT_SETTINGS };
   }
 
@@ -72,7 +72,7 @@ export async function ensureUserSettings(userId: string): Promise<UserSettings> 
     }
 
     // Step 3: Se non esiste, creala con UPSERT (evita duplicati)
-    console.log('[SettingsService] Creo settings per utente:', userId);
+    // console.log('[SettingsService] Creo settings per utente:', userId);
     
     const newSettings = {
       user_id: userId,
