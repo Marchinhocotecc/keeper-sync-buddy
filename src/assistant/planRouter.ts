@@ -20,8 +20,8 @@ export type UserPlan = 'FREE' | 'PREMIUM';
 export async function getUserPlan(userId: string): Promise<UserPlan> {
   // TODO: Check profiles.is_premium when available
   // For now, always return FREE
-  console.log('[PlanRouter] getUserPlan for:', userId);
-  console.log('[PlanRouter] Returning: FREE (premium not implemented)');
+  // console.log('[PlanRouter] getUserPlan for:', userId);
+  // console.log('[PlanRouter] Returning: FREE (premium not implemented)');
   return 'FREE';
 }
 

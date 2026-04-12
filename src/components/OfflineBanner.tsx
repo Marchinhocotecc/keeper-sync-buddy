@@ -1,0 +1,36 @@
+import React, { useEffect, useState } from 'react';
+import { WifiOff } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+export function OfflineBanner() {
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  return (
+    <AnimatePresence>
+      {isOffline && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          className="bg-warning text-warning-foreground text-center text-xs font-medium py-1.5 px-4 flex items-center justify-center gap-2 z-50"
+        >
+          <WifiOff className="h-3.5 w-3.5" />
+          <span>You're offline — changes won't be saved</span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

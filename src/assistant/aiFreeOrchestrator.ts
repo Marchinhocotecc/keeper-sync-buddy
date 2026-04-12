@@ -183,7 +183,7 @@ function mapActionToData(action: any): AIFreeData {
     result.priority = action.priority;
   }
   
-  console.log('[aiFreeOrchestrator] mapActionToData:', { input: action, output: result });
+  // console.log('[aiFreeOrchestrator] mapActionToData:', { input: action, output: result });
   
   return result;
 }
@@ -191,7 +191,7 @@ function mapActionToData(action: any): AIFreeData {
 // ========== CALL AI FREE (via Edge Function - SECURE) ==========
 
 async function callAIFree(userMessage: string, userId: string, financialContext?: any): Promise<AIFreeOutput> {
-  console.log('[AIFree] Calling ai-free-chat edge function');
+  // console.log('[AIFree] Calling ai-free-chat edge function');
   
   // Get current language from i18n
   let currentLocale = 'en';
@@ -214,7 +214,7 @@ async function callAIFree(userMessage: string, userId: string, financialContext?
       return getDefaultOutput('⚠️ Errore temporaneo. Riprova.');
     }
     
-    console.log('[aiFreeOrchestrator] Edge function raw response:', data);
+    // console.log('[aiFreeOrchestrator] Edge function raw response:', data);
     
     // Edge function returns the structured response
     if (data && data.reply) {
@@ -288,7 +288,7 @@ async function executeAction(
   intent: AIFreeIntent,
   data: AIFreeData
 ): Promise<{ success: boolean; message: string; result?: any }> {
-  console.log('[AIFree] Executing action:', intent, data);
+  // console.log('[AIFree] Executing action:', intent, data);
   
   switch (intent) {
     case 'CREATE_TASK': {
@@ -399,15 +399,15 @@ export async function processAIFreeMessage(
   userId: string,
   message: string
 ): Promise<AIFreeResponse> {
-  console.log('=== AI FREE Orchestrator ===');
-  console.log('[AIFree] User:', userId);
-  console.log('[AIFree] Message:', message);
+  // console.log('=== AI FREE Orchestrator ===');
+  // console.log('[AIFree] User:', userId);
+  // console.log('[AIFree] Message:', message);
   
   const trimmed = message.trim();
   
   // ========== PHASE 1: CANCEL ALWAYS FIRST ==========
   if (isCancel(trimmed)) {
-    console.log('[AIFree] Cancel detected');
+    // console.log('[AIFree] Cancel detected');
     await clearPendingAction(userId);
     return {
       message: 'Ok, annullato 🙂 Dimmi pure cosa vuoi fare.',
@@ -420,10 +420,10 @@ export async function processAIFreeMessage(
   const pendingAction = await getPendingAction(userId);
   
   if (pendingAction) {
-    console.log('[AIFree] Pending action found:', pendingAction.intent);
+    // console.log('[AIFree] Pending action found:', pendingAction.intent);
     
     if (isConfirm(trimmed)) {
-      console.log('[AIFree] User confirmed - executing');
+      // console.log('[AIFree] User confirmed - executing');
       
       // Validate one more time
       const validation = validateActionData(pendingAction.intent, pendingAction.data);
@@ -449,7 +449,7 @@ export async function processAIFreeMessage(
     }
     
     // Any other response cancels
-    console.log('[AIFree] User did not confirm - cancelling');
+    // console.log('[AIFree] User did not confirm - cancelling');
     await clearPendingAction(userId);
     return {
       message: 'Ok, annullato 🙂 Dimmi pure cosa vuoi fare.',
@@ -461,7 +461,7 @@ export async function processAIFreeMessage(
   // ========== PHASE 3: UI ACTIONS (DIRECT EXECUTION) ==========
   if (isUIAction(trimmed)) {
     const uiIntent = parseUIAction(trimmed);
-    console.log('[AIFree] UI Action:', uiIntent);
+    // console.log('[AIFree] UI Action:', uiIntent);
     
     if (uiIntent && !isWriteAction(uiIntent)) {
       // Read actions - execute directly
@@ -495,7 +495,7 @@ export async function processAIFreeMessage(
   
   // ========== PHASE 4: CALL AI FREE ==========
   const aiOutput = await callAIFree(trimmed, userId);
-  console.log('[AIFree] AI output:', aiOutput);
+  // console.log('[AIFree] AI output:', aiOutput);
   
   // ========== PHASE 5: VALIDATE OUTPUT ==========
   
@@ -522,7 +522,7 @@ export async function processAIFreeMessage(
   
   // If validation fails, ask for missing data
   if (!validation.valid) {
-    console.log('[AIFree] Validation failed:', validation.missingFields);
+    // console.log('[AIFree] Validation failed:', validation.missingFields);
     
     // AI already asked for missing data in reply
     return {
@@ -534,7 +534,7 @@ export async function processAIFreeMessage(
   
   // ========== PHASE 6: HANDLE WRITE ACTIONS (REQUIRE CONFIRMATION) ==========
   if (isWriteAction(aiOutput.intent)) {
-    console.log('[AIFree] Write action - requiring confirmation');
+    // console.log('[AIFree] Write action - requiring confirmation');
     
     // Block forbidden titles
     if (aiOutput.data.title && isForbiddenTitle(aiOutput.data.title)) {

@@ -41,11 +41,11 @@ export function getSmartGreeting(): string {
  * Reset conversation state for user
  */
 export async function resetConversation(userId: string): Promise<void> {
-  console.log('[AIEngine] Resetting conversation for:', userId);
+  // console.log('[AIEngine] Resetting conversation for:', userId);
   
   try {
     await clearActiveIntent(userId);
-    console.log('[AIEngine] Conversation reset complete');
+    // console.log('[AIEngine] Conversation reset complete');
   } catch (error) {
     console.error('[AIEngine] Error resetting conversation:', error);
   }
@@ -67,17 +67,17 @@ export async function processMessage(
   userId: string,
   message: string
 ): Promise<AIEngineResult> {
-  console.log('=== AI Engine v2 ===');
-  console.log('User:', userId);
-  console.log('Message:', message);
+  // console.log('=== AI Engine v2 ===');
+  // console.log('User:', userId);
+  // console.log('Message:', message);
   
   // Determine user plan
   const isFree = await isFreeUser(userId);
-  console.log('[AIEngine] User plan:', isFree ? 'FREE' : 'PREMIUM');
+  // console.log('[AIEngine] User plan:', isFree ? 'FREE' : 'PREMIUM');
   
   // ========== FREE PLAN: AI FREE ONLY ==========
   if (isFree) {
-    console.log('[AIEngine] Routing to AI FREE Orchestrator (ONLY brain for FREE)');
+    // console.log('[AIEngine] Routing to AI FREE Orchestrator (ONLY brain for FREE)');
     
     try {
       const response = await processAIFreeMessage(userId, message);
@@ -103,7 +103,7 @@ export async function processMessage(
   }
   
   // ========== PREMIUM PLAN: Premium Coach (stub) ==========
-  console.log('[AIEngine] Premium path - not implemented');
+  // console.log('[AIEngine] Premium path - not implemented');
   
   // For now, premium users also use AI FREE
   try {

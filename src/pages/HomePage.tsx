@@ -94,7 +94,7 @@ export default function HomePage() {
         await deleteEvent.mutateAsync(task.calendar_event_id);
       }
     } catch (err) {
-      console.error('Error syncing task with calendar:', err);
+      if (import.meta.env.DEV) console.error('Error syncing task with calendar:', err);
     }
   }, [userId, addEvent, updateEvent, deleteEvent, t]);
 
@@ -139,12 +139,10 @@ export default function HomePage() {
   }, [tasks, deleteTask, syncTaskToCalendar, toast, t]);
 
   const handleRefresh = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    await queryClient.invalidateQueries({ queryKey: ['expenses'] });
-    await queryClient.invalidateQueries({ queryKey: ['home-data'] });
+    await queryClient.invalidateQueries();
   }, [queryClient]);
 
-  const dateLocale = i18n.language === 'it' ? 'it-IT' : i18n.language === 'de' ? 'de-DE' : i18n.language === 'fr' ? 'fr-FR' : i18n.language === 'es' ? 'es-ES' : i18n.language === 'pt' ? 'pt-PT' : 'en-US';
+  const dateLocale = `${i18n.language}-${i18n.language.toUpperCase()}`;
 
   if (isLoading) {
     return (

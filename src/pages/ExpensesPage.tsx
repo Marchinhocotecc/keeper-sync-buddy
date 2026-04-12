@@ -140,7 +140,7 @@ export default function ExpensesPage() {
   };
 
   const handleRefresh = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    await queryClient.invalidateQueries();
   }, [queryClient]);
 
   const filteredExpenses = Array.isArray(expenses) ? expenses : [];
@@ -170,7 +170,7 @@ export default function ExpensesPage() {
   const totalExpenses = currentMonthExpenses.reduce((sum, exp) => sum + parseFloat(String(exp.amount)), 0);
   const remaining = budget - totalExpenses;
 
-  const dateLocale = i18n.language === 'it' ? 'it-IT' : i18n.language === 'de' ? 'de-DE' : i18n.language === 'fr' ? 'fr-FR' : i18n.language === 'es' ? 'es-ES' : 'en-US';
+  const dateLocale = `${i18n.language}-${i18n.language.toUpperCase()}`;
 
   if (isLoading || isLoadingBudget) {
     return (
