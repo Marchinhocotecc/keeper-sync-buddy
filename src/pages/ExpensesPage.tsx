@@ -140,7 +140,7 @@ export default function ExpensesPage() {
   };
 
   const handleRefresh = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    await queryClient.invalidateQueries();
   }, [queryClient]);
 
   const filteredExpenses = Array.isArray(expenses) ? expenses : [];

@@ -25,7 +25,7 @@ interface TaskCardProps {
   onDelete: (id: string) => void;
 }
 
-export function TaskCard({ task, onToggle, onDelete }: TaskCardProps) {
+export const TaskCard = React.memo(function TaskCard({ task, onToggle, onDelete }: TaskCardProps) {
   const { t } = useTranslation();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
@@ -149,4 +149,4 @@ export function TaskCard({ task, onToggle, onDelete }: TaskCardProps) {
       </AlertDialog>
     </>
   );
-}
+});

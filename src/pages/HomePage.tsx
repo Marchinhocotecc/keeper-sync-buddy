@@ -139,9 +139,7 @@ export default function HomePage() {
   }, [tasks, deleteTask, syncTaskToCalendar, toast, t]);
 
   const handleRefresh = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    await queryClient.invalidateQueries({ queryKey: ['expenses'] });
-    await queryClient.invalidateQueries({ queryKey: ['home-data'] });
+    await queryClient.invalidateQueries();
   }, [queryClient]);
 
   const dateLocale = `${i18n.language}-${i18n.language.toUpperCase()}`;
