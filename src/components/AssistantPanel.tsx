@@ -37,21 +37,13 @@ interface Message {
   structured?: StructuredResponse;
 }
 
-const formatTime = (date: Date): string => {
-  return date.toLocaleTimeString('en-US', { 
+const formatTime = (date: Date, locale: string): string => {
+  return date.toLocaleTimeString(locale, { 
     hour: '2-digit', 
     minute: '2-digit',
     hour12: false
   });
 };
-
-function detectIntentType(message: string): string {
-  const lower = message.toLowerCase();
-  if (/posso permettermi|posso spendere|quanto posso/.test(lower)) return "spending_check";
-  if (/come sto|sto andando|situazione/.test(lower)) return "performance_check";
-  if (/pianifica|prossim|futuro|obiettivo/.test(lower)) return "planning";
-  return "analysis";
-}
 
 function StructuredResponseView({ structured }: { structured: StructuredResponse }) {
   const { t } = useTranslation();
@@ -215,7 +207,7 @@ export default function AssistantPanel() {
         },
         risk: { riskLevel: risk.riskLevel, flags: risk.flags },
         timeframe: "month" as const,
-        userIntentType: detectIntentType(userMessage),
+        userIntentType: "analysis",
         lastWeeklySummary: lastWeekly,
         lastMonthlySummary: lastMonthly,
       };
@@ -416,7 +408,7 @@ export default function AssistantPanel() {
                   )}
                 </div>
                 <div className={`text-[10px] text-muted-foreground ${msg.role === "user" ? "text-right pr-10" : "pl-10"}`}>
-                  {formatTime(msg.timestamp)}
+                  {formatTime(msg.timestamp, i18n.language)}
                 </div>
                 
                 {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && (
