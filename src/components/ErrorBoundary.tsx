@@ -39,16 +39,21 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="mx-auto w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
               <AlertCircle className="h-7 w-7 text-destructive" />
             </div>
-            <h1 className="text-xl font-semibold text-foreground mb-2">
-              Something went wrong
-            </h1>
-            <p className="text-sm text-muted-foreground mb-6">
-              An unexpected error occurred. Please reload the page.
-            </p>
-            <Button onClick={this.handleReload} className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Reload
-            </Button>
+             <h1 className="text-xl font-semibold text-foreground mb-2">
+               Something went wrong
+             </h1>
+             <p className="text-sm text-muted-foreground mb-6">
+               An unexpected error occurred. Please reload the page.
+             </p>
+             <Button onClick={this.handleReload} className="gap-2">
+               <RefreshCw className="h-4 w-4" />
+               Reload
+             </Button>
+             {import.meta.env.DEV && this.state.error && (
+               <p className="text-xs text-muted-foreground mt-4 font-mono break-all">
+                 {this.state.error.message}
+               </p>
+             )}
           </div>
         </div>
       );

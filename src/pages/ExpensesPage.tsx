@@ -8,14 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Trash2, TrendingUp, TrendingDown, Wallet, Undo2 } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, TrendingDown, Wallet, Undo2, Loader2 } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { BudgetCard } from '@/components/BudgetCard';
 import { BudgetEditModal } from '@/components/BudgetEditModal';
@@ -26,7 +26,6 @@ import { PullToRefresh } from '@/components/PullToRefresh';
 import { formatCurrency, getCurrencySymbol } from '@/utils/currency';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast as sonnerToast } from 'sonner';
-
 const COLORS = ['#0F3D3E', '#145A5B', '#1E6F70', '#2E7D32', '#E6A23C', '#D64545', '#6B7280'];
 
 function FinancialInsightSection({ userId }: { userId: string }) {
@@ -64,10 +63,6 @@ export default function ExpensesPage() {
 
   const currencySymbol = getCurrencySymbol(i18n.language);
   const lang = i18n.language;
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data?.user?.id));
-  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -127,7 +122,7 @@ export default function ExpensesPage() {
 
     // Undo toast with sonner
     const expenseId = (result as any)?.id;
-    sonnerToast(t('home.taskAdded'), {
+    sonnerToast(t('expenses.expenseAdded'), {
       description: `${formatCurrency(amount, lang, 2)} — ${t(`expenses.${quickCategory}`)}`,
       action: expenseId ? {
         label: t('expenses.undo'),
