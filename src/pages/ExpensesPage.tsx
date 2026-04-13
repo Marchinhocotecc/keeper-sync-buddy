@@ -253,8 +253,8 @@ export default function ExpensesPage() {
                       <SelectItem value="other">{t('expenses.other')}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button size="sm" onClick={handleQuickAdd} disabled={!quickAmount || parseFloat(quickAmount) <= 0} className="h-9 px-4">
-                    <Plus className="h-4 w-4" />
+                  <Button size="sm" onClick={handleQuickAdd} disabled={!quickAmount || parseFloat(quickAmount) <= 0 || addExpense.isPending} className="h-9 px-4">
+                    {addExpense.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   </Button>
                 </div>
               </CardContent>

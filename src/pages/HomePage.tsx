@@ -8,7 +8,7 @@ import { WellnessCard } from '@/components/WellnessCard';
 import { FinancialInsightCard } from '@/components/FinancialInsightCard';
 import { WeeklySummaryCard } from '@/components/WeeklySummaryCard';
 import { MonthlySummaryCard } from '@/components/MonthlySummaryCard';
-import { Plus, AlertCircle, CheckCircle2, Flag, ChevronRight, Flame } from 'lucide-react';
+import { Plus, AlertCircle, CheckCircle2, Flag, ChevronRight, Flame, Loader2 } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useHomeData } from '@/hooks/useHomeData';
@@ -278,8 +278,8 @@ export default function HomePage() {
                         <CheckCircle2 className="h-5 w-5 text-primary" />
                         {t('home.myTasks')}
                       </CardTitle>
-                      <Button onClick={() => setShowAddForm(true)} size="sm" className="gap-2 h-9 text-sm">
-                        <Plus className="h-4 w-4" />
+                      <Button onClick={() => setShowAddForm(true)} size="sm" className="gap-2 h-9 text-sm" disabled={addTask.isPending}>
+                        {addTask.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                         <span className="hidden sm:inline">{t('home.add')}</span>
                       </Button>
                     </div>
