@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { WellnessCard } from '@/components/WellnessCard';
 import { FinancialInsightCard } from '@/components/FinancialInsightCard';
 import { WeeklySummaryCard } from '@/components/WeeklySummaryCard';
 import { MonthlySummaryCard } from '@/components/MonthlySummaryCard';
-import { Plus, AlertCircle, CheckCircle2, Flag, ChevronRight, Flame } from 'lucide-react';
+import { Plus, AlertCircle, CheckCircle2, Flag, ChevronRight, Flame, Loader2 } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useHomeData } from '@/hooks/useHomeData';
@@ -49,6 +49,33 @@ export default function HomePage() {
   const completedToday = tasks.filter((t) => t.completed).length;
   const totalTodayTasks = tasks.filter((t) => t.priority === 'high').length;
   const upcomingTasks = tasks.filter((t) => !t.completed && t.priority !== 'high');
+
+  // Calculate streak: consecutive days with at least 1 completed task
+  const streak = useMemo(() => {
+    const completedTasks = tasks.filter(t => t.completed && t.due_date);
+    if (completedTasks.length === 0 && completedToday === 0) return 0;
+    
+    const datesWithCompletions = new Set<string>();
+    completedTasks.forEach(t => {
+      if (t.due_date) datesWithCompletions.add(t.due_date.split('T')[0]);
+    });
+    // Add today if any task completed today
+    if (completedToday > 0) datesWithCompletions.add(new Date().toISOString().split('T')[0]);
+    
+    let count = 0;
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      if (datesWithCompletions.has(key)) {
+        count++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+    return count;
+  }, [tasks, completedToday]);
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 7);
@@ -212,6 +239,12 @@ export default function HomePage() {
                         <span className="text-muted-foreground">{t('home.weekExpenses')}</span>
                       </span>
                     </div>
+                    {streak > 1 && (
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold animate-fade-in">
+                        <Flame className="h-3.5 w-3.5" />
+                        {streak} {t('home.streakDays')}
+                      </span>
+                    )}
                   </div>
                   {/* Daily progress */}
                   {tasks.length > 0 && (
@@ -278,8 +311,8 @@ export default function HomePage() {
                         <CheckCircle2 className="h-5 w-5 text-primary" />
                         {t('home.myTasks')}
                       </CardTitle>
-                      <Button onClick={() => setShowAddForm(true)} size="sm" className="gap-2 h-9 text-sm">
-                        <Plus className="h-4 w-4" />
+                      <Button onClick={() => setShowAddForm(true)} size="sm" className="gap-2 h-9 text-sm" disabled={addTask.isPending}>
+                        {addTask.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                         <span className="hidden sm:inline">{t('home.add')}</span>
                       </Button>
                     </div>

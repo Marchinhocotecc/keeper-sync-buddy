@@ -297,7 +297,7 @@ export async function runDecisionEngine(
   const decisionType = detectDecisionType(userMessage);
 
   if (!apiKey || !apiKey.startsWith("sk-or-")) {
-    console.log("[DECISION-ENGINE] No API key, using deterministic");
+    // console.log("[DECISION-ENGINE] No API key, using deterministic");
     return buildDeterministicDecision(userMessage, signals, risk);
   }
 
@@ -372,14 +372,14 @@ Rispondi in ${userLang}.`;
       if (validated) {
         // Post-validation: ensure at least 1 real action
         if (validated.actions.length === 0 || validated.actions.every(a => a.type === 'none')) {
-          console.log("[DECISION-ENGINE] LLM returned no real actions, adding fallback micro-action");
+          // console.log("[DECISION-ENGINE] LLM returned no real actions, adding fallback micro-action");
           validated.actions = [{
             type: 'review_budget',
             title: 'Rivedi obiettivi',
             description: 'Verifica se il tuo budget attuale riflette le tue priorità reali.'
           }];
         }
-        console.log(`[DECISION-ENGINE] Success (model=${model}, type=${validated.decision_type})`);
+        // console.log(`[DECISION-ENGINE] Success (model=${model}, type=${validated.decision_type})`);
         return validated;
       }
 
@@ -396,6 +396,6 @@ Rispondi in ${userLang}.`;
     }
   }
 
-  console.log("[DECISION-ENGINE] All models failed, using deterministic");
+  // console.log("[DECISION-ENGINE] All models failed, using deterministic");
   return buildDeterministicDecision(userMessage, signals, risk);
 }

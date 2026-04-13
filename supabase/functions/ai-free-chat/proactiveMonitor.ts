@@ -122,7 +122,7 @@ Daily safe limit: €${Math.round(data.dailySafeLimit || 0)}`;
 
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.message && parsed.micro_action) {
-        console.log(`[PROACTIVE] Success (model=${model})`);
+        // console.log(`[PROACTIVE] Success (model=${model})`);
         return {
           trigger: parsed.trigger === 'risk_decrease' ? 'risk_decrease' : 'risk_increase',
           message: parsed.message,

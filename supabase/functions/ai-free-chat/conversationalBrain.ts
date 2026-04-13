@@ -155,7 +155,7 @@ export async function conversationalReply(
       content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
       if (content) {
-        console.log(`[BRAIN] Success (model=${model})`);
+        // console.log(`[BRAIN] Success (model=${model})`);
         return content;
       }
 
@@ -328,7 +328,7 @@ ${JSON.stringify(decision, null, 2)}`;
       content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
       if (content) {
-        console.log(`[TRANSLATOR] Success (model=${model})`);
+        // console.log(`[TRANSLATOR] Success (model=${model})`);
         return content;
       }
       continue;

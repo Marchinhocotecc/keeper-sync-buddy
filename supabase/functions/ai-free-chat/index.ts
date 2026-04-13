@@ -58,7 +58,7 @@ function createResponse(partial: Partial<AIResponse>, structured?: any): AIRespo
 }
 
 function json(data: AIResponse): Response {
-  console.log(`[Ayvro] → intent=${data.intent}, mode=${data.mode}, action=${data.action.type}`);
+  // console.log(`[Ayvro] → intent=${data.intent}, mode=${data.mode}, action=${data.action.type}`);
   return new Response(JSON.stringify(data), {
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
   });
@@ -160,11 +160,11 @@ serve(async (req) => {
     const userId = user.id;
 
     const message = userMessage.trim();
-    console.log(`[Ayvro] User=${userId}, Msg="${message.substring(0, 100)}"`);
+    // console.log(`[Ayvro] User=${userId}, Msg="${message.substring(0, 100)}"`);
 
     // === FINANCIAL ADVICE INTENT (bypass normal pipeline) ===
     if (message === "__FINANCIAL_ADVICE__" && body.financialContext) {
-      console.log("[Ayvro] === FINANCIAL_ADVICE intent ===");
+      // console.log("[Ayvro] === FINANCIAL_ADVICE intent ===");
       const userLang = await loadPreferredLanguage(supabase, userId, locale);
       const ctx = body.financialContext;
       const advice = await getFinancialAdvice({
@@ -212,7 +212,7 @@ serve(async (req) => {
 
     // --- CANCEL ---
     if (input.isCancel) {
-      console.log(`[Ayvro] Cancel detected, continuation: ${input.cancelContinuation}`);
+      // console.log(`[Ayvro] Cancel detected, continuation: ${input.cancelContinuation}`);
       await clearAssistantState(supabase, userId);
       await setPendingAction(supabase, userId, null);
 
@@ -238,7 +238,7 @@ serve(async (req) => {
     const pendingAction = await getPendingAction(supabase, userId);
 
     if (pendingAction) {
-      console.log(`[Ayvro] Pending: ${pendingAction.type}`);
+      // console.log(`[Ayvro] Pending: ${pendingAction.type}`);
 
       if (pendingAction.type.startsWith("CONFIRM_") && input.isConfirm) {
         const actionTypeStr = pendingAction.type.replace("CONFIRM_", "");
@@ -352,7 +352,7 @@ serve(async (req) => {
     if (state.active_intent && state.active_intent !== 'NONE') {
       const slotResult = handleSlotFilling(message, state);
       if (slotResult && slotResult.matched) {
-        console.log(`[Ayvro] Slot filled: ${slotResult.intent}`);
+        // console.log(`[Ayvro] Slot filled: ${slotResult.intent}`);
         if (slotResult.action && slotResult.action.type !== 'NONE') {
           await setPendingAction(supabase, userId, {
             type: `CONFIRM_${slotResult.action.type}`,
@@ -390,7 +390,7 @@ serve(async (req) => {
     // ================================================================
     const rateLimit = await checkRateLimit(supabase, userId);
     if (!rateLimit.allowed) {
-      console.log(`[Ayvro] Rate limit exceeded for user ${userId}`);
+      // console.log(`[Ayvro] Rate limit exceeded for user ${userId}`);
       return json(createResponse({
         intent: "ERROR",
         reply: `Hai raggiunto il limite giornaliero di ${rateLimit.limit} messaggi AI. Riprova domani! 🕐`,
@@ -409,7 +409,7 @@ serve(async (req) => {
     const textToAnalyze = input.isCancel && input.cancelContinuation ? input.cancelContinuation : input.normalizedText;
     
     if (isFollowUp(textToAnalyze) && memory.lastAssistantResponse) {
-      console.log("[Ayvro] === FOLLOW-UP DETECTED → CONVERSATIONAL BRAIN ===");
+      // console.log("[Ayvro] === FOLLOW-UP DETECTED → CONVERSATIONAL BRAIN ===");
       await logAIRequest(supabase, userId);
       const context = await fetchUserContext(supabase, userId);
       const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
@@ -432,9 +432,9 @@ serve(async (req) => {
     // === MODULE 1: INTENT CLASSIFIER ===
     // ================================================================
     await logAIRequest(supabase, userId);
-    console.log(`[Ayvro] INPUT: "${textToAnalyze.substring(0, 100)}"`);
+    // console.log(`[Ayvro] INPUT: "${textToAnalyze.substring(0, 100)}"`);
     const intentLabel = await classifyIntent(textToAnalyze);
-    console.log(`[Ayvro] INTENT: ${intentLabel}`);
+    // console.log(`[Ayvro] INTENT: ${intentLabel}`);
 
     // ================================================================
     // === ROUTE BY INTENT LABEL ===
@@ -442,12 +442,12 @@ serve(async (req) => {
 
     // --- FINANCIAL_DECISION / FINANCIAL_QUERY → Decision Engine + Translator ---
     if (intentLabel === 'FINANCIAL_DECISION' || intentLabel === 'FINANCIAL_QUERY') {
-      console.log("[Ayvro] ROUTED_TO: DECISION_ENGINE");
+      // console.log("[Ayvro] ROUTED_TO: DECISION_ENGINE");
       const signals = financialContext?.signals || {};
       const risk = financialContext?.risk || { riskLevel: 'unknown', flags: [] };
       
       const decision = await runDecisionEngine(textToAnalyze, signals, risk, userLang.code);
-      console.log("[Ayvro] === M4: TRANSLATOR ===");
+      // console.log("[Ayvro] === M4: TRANSLATOR ===");
       const naturalReply = await translateDecision(decision, userLang.code);
 
       await saveConversationMemory(supabase, userId, intentLabel, message, naturalReply);
@@ -459,7 +459,7 @@ serve(async (req) => {
 
     // --- TASK_QUERY → Deterministic ---
     if (intentLabel === 'TASK_QUERY') {
-      console.log("[Ayvro] ROUTED_TO: DB_QUERY (tasks)");
+      // console.log("[Ayvro] ROUTED_TO: DB_QUERY (tasks)");
       const context = await fetchUserContext(supabase, userId);
       const reply = formatTaskList(context.todos);
       await saveConversationMemory(supabase, userId, 'TASK_QUERY', message, reply);
@@ -468,7 +468,7 @@ serve(async (req) => {
 
     // --- EVENT_QUERY → Deterministic ---
     if (intentLabel === 'EVENT_QUERY') {
-      console.log("[Ayvro] ROUTED_TO: DB_QUERY (events)");
+      // console.log("[Ayvro] ROUTED_TO: DB_QUERY (events)");
       const context = await fetchUserContext(supabase, userId);
       const reply = formatEventList(context.events);
       await saveConversationMemory(supabase, userId, 'EVENT_QUERY', message, reply);
@@ -477,7 +477,7 @@ serve(async (req) => {
 
     // --- PLANNING / GENERAL_CHAT → Conversational Brain ---
     if (intentLabel === 'PLANNING' || intentLabel === 'GENERAL_CHAT') {
-      console.log(`[Ayvro] ROUTED_TO: CONVERSATIONAL_BRAIN (${intentLabel})`);
+      // console.log(`[Ayvro] ROUTED_TO: CONVERSATIONAL_BRAIN (${intentLabel})`);
       const context = await fetchUserContext(supabase, userId);
       const brainReply = await conversationalReply(textToAnalyze, userLang.code, {
         todos: context.todos,
@@ -496,7 +496,7 @@ serve(async (req) => {
     }
 
     // --- UNKNOWN → Try deterministic router for CREATION patterns only, then Brain ---
-    console.log("[Ayvro] === UNKNOWN INTENT: trying deterministic router for creation ===");
+    // console.log("[Ayvro] === UNKNOWN INTENT: trying deterministic router for creation ===");
     
     // Only use deterministic router if message looks like a creation command
     const isCreationPattern = CREATION_PATTERN.test(message);
@@ -549,7 +549,7 @@ serve(async (req) => {
     }
 
     // --- UNKNOWN with no creation pattern → Conversational Brain (PRIMARY fallback) ---
-    console.log("[Ayvro] === UNKNOWN → CONVERSATIONAL BRAIN (primary fallback) ===");
+    // console.log("[Ayvro] === UNKNOWN → CONVERSATIONAL BRAIN (primary fallback) ===");
     {
       const context = await fetchUserContext(supabase, userId);
       const brainReply = await conversationalReply(textToAnalyze, userLang.code, {

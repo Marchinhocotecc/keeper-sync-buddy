@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "Ești offline — modificările nu vor fi salvate"
   },
   "nav": {
     "home": "Acasă",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "Bună dimineața, {{name}}! ☀️",
     "greetingAfternoon": "Bună ziua, {{name}}! 👋",
-    "greetingEvening": "Bună seara, {{name}}! 🌙"
+    "greetingEvening": "Bună seara, {{name}}! 🌙",
+    "streakDays": "zile consecutive"
   },
   "calendar": {
     "title": "Calendar",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "Anulează"
+    "undo": "Anulează",
+    "expenseAdded": "Cheltuială adăugată! ✨"
   },
   "assistant": {
     "title": "Asistentul Ayvro",

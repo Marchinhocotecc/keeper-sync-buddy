@@ -103,7 +103,7 @@ export async function generateMonthlySummary(data: {
 
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.summary && parsed.strategic_action) {
-        console.log(`[MONTHLY-SUMMARY] Success (model=${model})`);
+        // console.log(`[MONTHLY-SUMMARY] Success (model=${model})`);
         return {
           summary: parsed.summary,
           budget_respected: typeof parsed.budget_respected === 'boolean' ? parsed.budget_respected : deterministic.budget_respected,

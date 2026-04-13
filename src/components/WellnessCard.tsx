@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Footprints, Moon, Brain, Heart, ChevronDown, ChevronUp } from "lucide-react";
 import { useWellness } from "@/hooks/useWellness";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
 export function WellnessCard() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
   const { wellnessData, isLoading, updateWellness } = useWellness(user?.id);
   const todayData = wellnessData[0];
   const [isOpen, setIsOpen] = useState(false);
@@ -24,10 +24,6 @@ export function WellnessCard() {
   const [sleep, setSleep] = useState("");
   const [meditation, setMeditation] = useState("");
   const [heartRate, setHeartRate] = useState("");
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data?.user));
-  }, []);
 
   useEffect(() => {
     if (todayData) {

@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "您已离线 — 更改将不会保存"
   },
   "nav": {
     "home": "首页",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "早上好，{{name}}！☀️",
     "greetingAfternoon": "下午好，{{name}}！👋",
-    "greetingEvening": "晚上好，{{name}}！🌙"
+    "greetingEvening": "晚上好，{{name}}！🌙",
+    "streakDays": "天连续"
   },
   "calendar": {
     "title": "日历",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "撤销"
+    "undo": "撤销",
+    "expenseAdded": "支出已添加！✨"
   },
   "assistant": {
     "title": "Ayvro 助手",

@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "Niste povezani — promjene neće biti spremljene"
   },
   "nav": {
     "home": "Početna",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "Dobro jutro, {{name}}! ☀️",
     "greetingAfternoon": "Dobar dan, {{name}}! 👋",
-    "greetingEvening": "Dobra večer, {{name}}! 🌙"
+    "greetingEvening": "Dobra večer, {{name}}! 🌙",
+    "streakDays": "dana zaredom"
   },
   "calendar": {
     "title": "Kalendar",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "Poništi"
+    "undo": "Poništi",
+    "expenseAdded": "Trošak dodan! ✨"
   },
   "assistant": {
     "title": "Ayvro Asistent",

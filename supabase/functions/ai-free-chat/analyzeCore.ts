@@ -141,11 +141,11 @@ export async function analyzeMessage(userMessage: string, userLang?: string): Pr
   const dayOfWeek = getDayOfWeek(currentDate);
   const systemPrompt = buildAnalyzePrompt(currentDate, dayOfWeek, userLang);
   
-  console.log(`[ANALYZE-CORE] Fallback processing: "${userMessage.substring(0, 100)}", today=${currentDate} (${dayOfWeek})`);
+  // console.log(`[ANALYZE-CORE] Fallback processing: "${userMessage.substring(0, 100)}", today=${currentDate} (${dayOfWeek})`);
   
   for (const model of modelsToTry) {
     try {
-      console.log(`[ANALYZE-CORE] Trying model: ${model}`);
+      // console.log(`[ANALYZE-CORE] Trying model: ${model}`);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 25000);
@@ -181,7 +181,7 @@ export async function analyzeMessage(userMessage: string, userLang?: string): Pr
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || "";
       
-      console.log(`[ANALYZE-CORE] Raw response (model=${model}):`, content.substring(0, 800));
+      // console.log(`[ANALYZE-CORE] Raw response (model=${model}):`, content.substring(0, 800));
       
       // Parse JSON - handle <think> tags and code blocks
       let cleanContent = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
@@ -214,7 +214,7 @@ export async function analyzeMessage(userMessage: string, userLang?: string): Pr
         confidence: typeof item.confidence === 'number' ? item.confidence : 0.5
       }));
       
-      console.log(`[ANALYZE-CORE] Success (model=${model}): ${parsed.items.length} items`);
+      // console.log(`[ANALYZE-CORE] Success (model=${model}): ${parsed.items.length} items`);
       
       return parsed;
       

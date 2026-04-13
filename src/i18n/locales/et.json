@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "Olete võrguühenduseta — muudatusi ei salvestata"
   },
   "nav": {
     "home": "Avaleht",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "Tere hommikust, {{name}}! ☀️",
     "greetingAfternoon": "Tere päevast, {{name}}! 👋",
-    "greetingEvening": "Tere õhtust, {{name}}! 🌙"
+    "greetingEvening": "Tere õhtust, {{name}}! 🌙",
+    "streakDays": "päeva järjest"
   },
   "calendar": {
     "title": "Kalender",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "Võta tagasi"
+    "undo": "Võta tagasi",
+    "expenseAdded": "Kulu lisatud! ✨"
   },
   "assistant": {
     "title": "Ayvro Assistent",

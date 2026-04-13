@@ -143,7 +143,7 @@ export async function checkRateLimit(
 
   const used = count || 0;
   const remaining = Math.max(0, limit - used);
-  console.log(`[STATE] Rate limit: ${used}/${limit} used, ${remaining} remaining`);
+  // console.log(`[STATE] Rate limit: ${used}/${limit} used, ${remaining} remaining`);
 
   return { allowed: used < limit, remaining, limit };
 }
@@ -189,7 +189,7 @@ export async function getCachedAnalysis(supabase: any, message: string): Promise
 
     if (error || !data?.result) return null;
 
-    console.log("[STATE] Cache HIT for:", message.substring(0, 50));
+    // console.log("[STATE] Cache HIT for:", message.substring(0, 50));
     return data.result;
   } catch (e) {
     console.error("[STATE] Cache read error:", e);
@@ -203,7 +203,7 @@ export async function setCachedAnalysis(supabase: any, userId: string, message: 
     await supabase
       .from("ai_cache")
       .insert({ user_id: userId, prompt_hash: hash, result });
-    console.log("[STATE] Cache SET for:", message.substring(0, 50));
+    // console.log("[STATE] Cache SET for:", message.substring(0, 50));
   } catch (e) {
     console.error("[STATE] Cache write error:", e);
   }

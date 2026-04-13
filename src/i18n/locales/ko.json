@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "오프라인입니다 — 변경 사항이 저장되지 않습니다"
   },
   "nav": {
     "home": "홈",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "좋은 아침이에요, {{name}}! ☀️",
     "greetingAfternoon": "안녕하세요, {{name}}! 👋",
-    "greetingEvening": "좋은 저녁이에요, {{name}}! 🌙"
+    "greetingEvening": "좋은 저녁이에요, {{name}}! 🌙",
+    "streakDays": "일 연속"
   },
   "calendar": {
     "title": "캘린더",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "실행 취소"
+    "undo": "실행 취소",
+    "expenseAdded": "지출이 추가되었습니다! ✨"
   },
   "assistant": {
     "title": "Ayvro 어시스턴트",

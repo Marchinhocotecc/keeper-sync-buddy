@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "Esate neprisijungę — pakeitimai nebus išsaugoti"
   },
   "nav": {
     "home": "Pradžia",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "Labas rytas, {{name}}! ☀️",
     "greetingAfternoon": "Laba diena, {{name}}! 👋",
-    "greetingEvening": "Labas vakaras, {{name}}! 🌙"
+    "greetingEvening": "Labas vakaras, {{name}}! 🌙",
+    "streakDays": "dienos iš eilės"
   },
   "calendar": {
     "title": "Kalendorius",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "Anuliuoti"
+    "undo": "Anuliuoti",
+    "expenseAdded": "Išlaidos pridėtos! ✨"
   },
   "assistant": {
     "title": "Ayvro Asistentas",

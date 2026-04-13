@@ -28,6 +28,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
 import { useNavigate } from 'react-router-dom';
 import NotificationSettings from '@/components/NotificationSettings';
@@ -60,15 +61,14 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   // User state
-  const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile>({
     email: '',
     name: '',
     avatarUrl: ''
   });
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
 
   // Settings from hook
   const { settings, isLoading: isLoadingSettings, updateSettings } = useSettings(user?.id);
@@ -86,24 +86,18 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isResettingMemory, setIsResettingMemory] = useState(false);
 
-  // Load user on mount
+  // Sync user profile from auth context
   useEffect(() => {
-    const loadUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUser(user);
-        setUserProfile({
-          email: user.email || '',
-          name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-          avatarUrl: user.user_metadata?.avatar_url || ''
-        });
-        setProfileName(user.user_metadata?.full_name || user.user_metadata?.name || '');
-        setProfileEmail(user.email || '');
-      }
-      setIsLoadingUser(false);
-    };
-    loadUser();
-  }, []);
+    if (user) {
+      setUserProfile({
+        email: user.email || '',
+        name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+        avatarUrl: user.user_metadata?.avatar_url || ''
+      });
+      setProfileName(user.user_metadata?.full_name || user.user_metadata?.name || '');
+      setProfileEmail(user.email || '');
+    }
+  }, [user]);
 
   // Sync settings to local state (for assistant memory)
   useEffect(() => {
@@ -233,7 +227,7 @@ export default function SettingsPage() {
     return email.slice(0, 2).toUpperCase();
   };
 
-  if (isLoadingUser) {
+  if (isAuthLoading) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

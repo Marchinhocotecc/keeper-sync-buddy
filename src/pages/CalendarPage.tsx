@@ -14,7 +14,7 @@ import { Plus, Calendar as CalendarIcon, Clock, Tag, Edit, Trash2, AlertCircle }
 import { format, isValid, parseISO } from 'date-fns';
 import { getDateLocale } from '@/utils/dateLocale';
 import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -25,8 +25,9 @@ import {
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [date, setDate] = useState<Date>(new Date());
-  const [userId, setUserId] = useState<string | undefined>();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -53,11 +54,6 @@ export default function CalendarPage() {
     isAllDay: false
   });
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data?.user?.id);
-    });
-  }, []);
 
   const daysWithEvents = getDaysWithEvents();
   const dayEvents = getEventsForDate(date);

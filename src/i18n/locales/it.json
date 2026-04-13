@@ -15,7 +15,8 @@
     "user": "Utente",
     "deleteConfirm": "Sei sicuro di voler eliminare \"{{item}}\"? Questa azione non può essere annullata.",
     "deleteConfirmGeneric": "Sei sicuro di voler eliminare questo elemento? Questa azione non può essere annullata.",
-    "tryAgain": "Qualcosa è andato storto. Riprova."
+    "tryAgain": "Qualcosa è andato storto. Riprova.",
+    "offline": "Sei offline — le modifiche non saranno salvate"
   },
   "nav": {
     "home": "Home",
@@ -83,7 +84,8 @@
     "dailyCheckin": "Check-in Giornaliero",
     "wellnessSaved": "Dati salvati!",
     "viewAll": "Vedi tutti ({{count}})",
-    "showLess": "Mostra meno"
+    "showLess": "Mostra meno",
+    "streakDays": "giorni consecutivi"
   },
   "calendar": {
     "title": "Calendario",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Aggiungi una nota...",
     "budgetNoteLabel": "Nota (opzionale)",
     "positiveValueError": "Inserisci un valore positivo",
-    "undo": "Annulla"
+    "undo": "Annulla",
+    "expenseAdded": "Spesa aggiunta! ✨"
   },
   "assistant": {
     "title": "Assistente Ayvro",
