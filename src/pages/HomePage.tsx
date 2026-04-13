@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,33 @@ export default function HomePage() {
   const completedToday = tasks.filter((t) => t.completed).length;
   const totalTodayTasks = tasks.filter((t) => t.priority === 'high').length;
   const upcomingTasks = tasks.filter((t) => !t.completed && t.priority !== 'high');
+
+  // Calculate streak: consecutive days with at least 1 completed task
+  const streak = useMemo(() => {
+    const completedTasks = tasks.filter(t => t.completed && t.due_date);
+    if (completedTasks.length === 0 && completedToday === 0) return 0;
+    
+    const datesWithCompletions = new Set<string>();
+    completedTasks.forEach(t => {
+      if (t.due_date) datesWithCompletions.add(t.due_date.split('T')[0]);
+    });
+    // Add today if any task completed today
+    if (completedToday > 0) datesWithCompletions.add(new Date().toISOString().split('T')[0]);
+    
+    let count = 0;
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      if (datesWithCompletions.has(key)) {
+        count++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+    return count;
+  }, [tasks, completedToday]);
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 7);
