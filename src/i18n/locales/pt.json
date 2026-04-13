@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Algo deu errado. Tente novamente."
+    "tryAgain": "Algo deu errado. Tente novamente.",
+    "offline": "Você está offline — as alterações não serão salvas"
   },
   "nav": {
     "home": "Início",
@@ -83,7 +84,8 @@
     "showLess": "Ver menos",
     "greetingMorning": "Bom dia, {{name}}! ☀️",
     "greetingAfternoon": "Boa tarde, {{name}}! 👋",
-    "greetingEvening": "Boa noite, {{name}}! 🌙"
+    "greetingEvening": "Boa noite, {{name}}! 🌙",
+    "streakDays": "dias consecutivos"
   },
   "calendar": {
     "title": "Calendário",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "Desfazer"
+    "undo": "Desfazer",
+    "expenseAdded": "Despesa adicionada! ✨"
   },
   "assistant": {
     "title": "Assistente Ayvro",

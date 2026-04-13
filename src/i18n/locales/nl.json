@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "Je bent offline — wijzigingen worden niet opgeslagen"
   },
   "nav": {
     "home": "Home",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "Goedemorgen, {{name}}! ☀️",
     "greetingAfternoon": "Goedemiddag, {{name}}! 👋",
-    "greetingEvening": "Goedenavond, {{name}}! 🌙"
+    "greetingEvening": "Goedenavond, {{name}}! 🌙",
+    "streakDays": "dagen op rij"
   },
   "calendar": {
     "title": "Kalender",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "Ongedaan maken"
+    "undo": "Ongedaan maken",
+    "expenseAdded": "Uitgave toegevoegd! ✨"
   },
   "assistant": {
     "title": "Ayvro Assistent",

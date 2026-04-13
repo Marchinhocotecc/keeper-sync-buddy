@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "आप ऑफलाइन हैं — परिवर्तन सहेजे नहीं जाएंगे"
   },
   "nav": {
     "home": "होम",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "सुप्रभात, {{name}}! ☀️",
     "greetingAfternoon": "नमस्ते, {{name}}! 👋",
-    "greetingEvening": "शुभ संध्या, {{name}}! 🌙"
+    "greetingEvening": "शुभ संध्या, {{name}}! 🌙",
+    "streakDays": "दिन लगातार"
   },
   "calendar": {
     "title": "कैलेंडर",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "पूर्ववत करें"
+    "undo": "पूर्ववत करें",
+    "expenseAdded": "खर्च जोड़ा गया! ✨"
   },
   "assistant": {
     "title": "Ayvro सहायक",

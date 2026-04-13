@@ -107,7 +107,7 @@ export async function generateWeeklySummary(data: {
 
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.summary && parsed.strategic_action) {
-        console.log(`[WEEKLY-SUMMARY] Success (model=${model})`);
+        // console.log(`[WEEKLY-SUMMARY] Success (model=${model})`);
         return {
           summary: parsed.summary,
           variation: parsed.variation || deterministic.variation,

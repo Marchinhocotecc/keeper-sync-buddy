@@ -398,7 +398,7 @@ export function handleSlotFilling(message: string, state: any): RouterResult | n
     return null;
   }
   
-  console.log(`[AI-FREE] Slot filling: intent=${activeIntent}, message="${message}", payload=${JSON.stringify(payload)}`);
+  // console.log(`[AI-FREE] Slot filling: intent=${activeIntent}, message="${message}", payload=${JSON.stringify(payload)}`);
   
   // === CREATE_TASK: aspettiamo solo il titolo ===
   if (activeIntent === 'CREATE_TASK') {

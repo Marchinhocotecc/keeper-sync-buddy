@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "Jeni jashtë linje — ndryshimet nuk do të ruhen"
   },
   "nav": {
     "home": "Kryefaqja",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "Mirëmëngjes, {{name}}! ☀️",
     "greetingAfternoon": "Mirëdita, {{name}}! 👋",
-    "greetingEvening": "Mirëmbrëmje, {{name}}! 🌙"
+    "greetingEvening": "Mirëmbrëmje, {{name}}! 🌙",
+    "streakDays": "ditë radhazi"
   },
   "calendar": {
     "title": "Kalendari",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "Zhbëj"
+    "undo": "Zhbëj",
+    "expenseAdded": "Shpenzimi u shtua! ✨"
   },
   "assistant": {
     "title": "Asistenti Ayvro",

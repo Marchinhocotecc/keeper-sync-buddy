@@ -153,14 +153,14 @@ function classifyDeterministic(message: string): IntentLabel {
 export async function classifyIntent(message: string): Promise<IntentLabel> {
   // Fast path: follow-ups are ALWAYS GENERAL_CHAT, skip LLM
   if (isFollowUp(message)) {
-    console.log("[INTENT-CLASSIFIER] Follow-up detected, forcing GENERAL_CHAT");
+    // console.log("[INTENT-CLASSIFIER] Follow-up detected, forcing GENERAL_CHAT");
     return 'GENERAL_CHAT';
   }
 
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
 
   if (!apiKey || !apiKey.startsWith("sk-or-")) {
-    console.log("[INTENT-CLASSIFIER] No API key, using deterministic fallback");
+    // console.log("[INTENT-CLASSIFIER] No API key, using deterministic fallback");
     return classifyDeterministic(message);
   }
 
@@ -209,14 +209,14 @@ export async function classifyIntent(message: string): Promise<IntentLabel> {
       content = content.toUpperCase().replace(/[^A-Z_]/g, "");
 
       if (VALID_LABELS.includes(content as IntentLabel)) {
-        console.log(`[INTENT-CLASSIFIER] Result: ${content} (model=${model})`);
+        // console.log(`[INTENT-CLASSIFIER] Result: ${content} (model=${model})`);
         return content as IntentLabel;
       }
 
       // Try partial match
       const found = VALID_LABELS.find(l => content.includes(l));
       if (found) {
-        console.log(`[INTENT-CLASSIFIER] Partial match: ${found} (model=${model})`);
+        // console.log(`[INTENT-CLASSIFIER] Partial match: ${found} (model=${model})`);
         return found;
       }
 
@@ -233,6 +233,6 @@ export async function classifyIntent(message: string): Promise<IntentLabel> {
     }
   }
 
-  console.log("[INTENT-CLASSIFIER] All models failed, using deterministic");
+  // console.log("[INTENT-CLASSIFIER] All models failed, using deterministic");
   return classifyDeterministic(message);
 }

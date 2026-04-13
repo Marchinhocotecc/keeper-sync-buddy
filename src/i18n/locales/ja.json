@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "オフラインです — 変更は保存されません"
   },
   "nav": {
     "home": "ホーム",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "おはようございます、{{name}}！☀️",
     "greetingAfternoon": "こんにちは、{{name}}！👋",
-    "greetingEvening": "こんばんは、{{name}}！🌙"
+    "greetingEvening": "こんばんは、{{name}}！🌙",
+    "streakDays": "日連続"
   },
   "calendar": {
     "title": "カレンダー",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "元に戻す"
+    "undo": "元に戻す",
+    "expenseAdded": "支出を追加しました！✨"
   },
   "assistant": {
     "title": "Ayvro アシスタント",

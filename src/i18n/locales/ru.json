@@ -15,7 +15,8 @@
     "user": "User",
     "deleteConfirm": "Are you sure you want to delete \"{{item}}\"? This action cannot be undone.",
     "deleteConfirmGeneric": "Are you sure you want to delete this item? This action cannot be undone.",
-    "tryAgain": "Something went wrong. Try again."
+    "tryAgain": "Something went wrong. Try again.",
+    "offline": "Вы офлайн — изменения не будут сохранены"
   },
   "nav": {
     "home": "Главная",
@@ -83,7 +84,8 @@
     "showLess": "Show less",
     "greetingMorning": "Доброе утро, {{name}}! ☀️",
     "greetingAfternoon": "Добрый день, {{name}}! 👋",
-    "greetingEvening": "Добрый вечер, {{name}}! 🌙"
+    "greetingEvening": "Добрый вечер, {{name}}! 🌙",
+    "streakDays": "дней подряд"
   },
   "calendar": {
     "title": "Календарь",
@@ -172,7 +174,8 @@
     "budgetNotePlaceholder": "Add a note...",
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
-    "undo": "Отменить"
+    "undo": "Отменить",
+    "expenseAdded": "Расход добавлен! ✨"
   },
   "assistant": {
     "title": "Помощник Ayvro",
