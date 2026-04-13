@@ -54,11 +54,6 @@ export default function CalendarPage() {
     isAllDay: false
   });
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data?.user?.id);
-    });
-  }, []);
 
   const daysWithEvents = getDaysWithEvents();
   const dayEvents = getEventsForDate(date);

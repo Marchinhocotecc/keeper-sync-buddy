@@ -42,7 +42,8 @@ export default function ExpensesPage() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [userId, setUserId] = useState<string | undefined>();
+  const { user } = useAuth();
+  const userId = user?.id;
   const { expenses, isLoading, addExpense, deleteExpense } = useExpenses(userId);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
