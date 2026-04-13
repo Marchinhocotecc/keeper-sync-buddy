@@ -239,6 +239,12 @@ export default function HomePage() {
                         <span className="text-muted-foreground">{t('home.weekExpenses')}</span>
                       </span>
                     </div>
+                    {streak > 1 && (
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold animate-fade-in">
+                        <Flame className="h-3.5 w-3.5" />
+                        {streak} {t('home.streakDays')}
+                      </span>
+                    )}
                   </div>
                   {/* Daily progress */}
                   {tasks.length > 0 && (
