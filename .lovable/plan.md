@@ -1,65 +1,100 @@
 
 
-## Stato attuale: ~88/100
+## Ayvro: Da App a Prodotto Vendibile
 
-Molte cose sono state fatte bene: ErrorBoundary, OfflineBanner, QueryClient ottimizzato, PullToRefresh, PageTransitions, formatCurrency dinamico, greeting personalizzato, swipe-to-delete. Ma ci sono ancora lacune concrete che impediscono il "product ready".
+### Punteggio attuale: ~90/100 come app. ~65/100 come prodotto vendibile.
 
----
-
-### Cosa manca (7 interventi)
-
-#### 1. Pagine non usano `useAuth()` — AuthContext inutilizzato
-Il context esiste ma **nessuna pagina lo usa**. Queste pagine chiamano ancora `supabase.auth.getUser()` direttamente:
-- `ExpensesPage.tsx` (riga 69)
-- `CalendarPage.tsx` (riga 57)
-- `SettingsPage.tsx` (riga 92)
-- `WellnessCard.tsx` (riga 29)
-
-**Azione**: Sostituire tutte le chiamate con `const { user } = useAuth()` e rimuovere gli `useEffect` relativi.
-
-#### 2. ErrorBoundary — testo hardcoded in inglese
-"Something went wrong", "Reload" non sono tradotti.
-
-**Azione**: Usare chiavi i18n (con fallback inglese, dato che ErrorBoundary potrebbe non avere accesso al provider i18n).
-
-#### 3. OfflineBanner — testo hardcoded in inglese
-"You're offline — changes won't be saved" non e' tradotto.
-
-**Azione**: Usare `useTranslation()` con chiave `common.offline`.
-
-#### 4. Nessun spinner sui bottoni di azione
-- "Add task" in HomePage non mostra loading durante `mutateAsync`
-- "Quick add" expense non mostra loading
-- Budget save ha lo spinner, ma gli altri no
-
-**Azione**: Aggiungere `disabled={addTask.isPending}` e spinner icon sui bottoni di add task e quick-add expense.
-
-#### 5. Undo toast spese usa chiave sbagliata
-Riga 130 di ExpensesPage: `t('home.taskAdded')` — mostra "Task aggiunto" invece di "Spesa aggiunta".
-
-**Azione**: Usare `t('expenses.expenseAdded')` con chiave dedicata.
-
-#### 6. console.log residui nelle Supabase Edge Functions
-`intentClassifier.ts` e altri file in `supabase/functions/` hanno ancora `console.log` attivi. In produzione questi riempiono i log inutilmente.
-
-**Azione**: Rimuovere o ridurre a `console.warn`/`console.error` solo per errori reali nelle edge functions.
-
-#### 7. Streak visuale mancante
-Il piano prevedeva una streak ("3 giorni consecutivi") ma e' stata implementata solo la progress bar. La streak e' un driver di retention.
-
-**Azione**: Aggiungere un indicatore streak nell'hero summary (icona fiamma + numero giorni consecutivi con almeno 1 task completato). Calcolo client-side basato sulle date di completamento task.
+L'app funziona bene tecnicamente. Ma per **vendere** servono cose che non sono codice: monetizzazione, landing page, legal compliance, e strategia di acquisizione.
 
 ---
 
-### Ordine di implementazione
+## Cosa Manca per Vendere (5 interventi)
 
-1. Migrare pagine a `useAuth()` (impatto architetturale)
-2. Spinner su bottoni di azione (UX immediata)
-3. Fix undo toast chiave sbagliata
-4. i18n ErrorBoundary + OfflineBanner
-5. Streak visuale
-6. Pulizia console.log edge functions
-7. Propagazione chiavi i18n nuove ai 22 locale
+### 1. Landing Page pubblica (pre-login)
+**Problema**: Chi arriva su Ayvro vede direttamente la schermata di login. Nessuna spiegazione di cosa fa l'app, nessun motivo per registrarsi.
 
-### Nessuna modifica al database
+**Azione**: Creare una landing page `/landing` con:
+- Hero: tagline + screenshot/mockup dell'app
+- 3 feature cards (Task, Expenses, AI Assistant)
+- CTA "Inizia gratis" che porta a `/auth`
+- Footer con link a Privacy, Terms, contatto
+
+Rotta `/` per utenti non autenticati mostra la landing; per autenticati mostra la home.
+
+**File**: nuovo `src/pages/LandingPage.tsx`, modifica `App.tsx` routing
+
+---
+
+### 2. Paywall / Piano Premium
+**Problema**: L'app ha gia il concetto FREE/PREMIUM nel codice (`planRouter.ts`, rate limit 10/200 messaggi) ma nessuna UI per upgradare. L'utente non sa che esiste un piano a pagamento.
+
+**Azione**: 
+- Abilitare i pagamenti tramite Lovable Payments (Paddle o Stripe)
+- Creare una pagina `/pricing` con piano Free vs Premium
+- Aggiungere un banner "Upgrade" quando l'utente raggiunge il limite messaggi AI
+- Collegare lo stato premium al profilo utente
+
+**File**: nuovo `src/pages/PricingPage.tsx`, modifica `planRouter.ts`, `AssistantPanel.tsx`
+
+---
+
+### 3. Delete Account (obbligatorio GDPR + App Store)
+**Problema**: Non esiste la possibilita di eliminare il proprio account. Apple e Google lo richiedono. Il GDPR lo impone.
+
+**Azione**: Aggiungere un bottone "Elimina account" in Settings con conferma a doppio step (scrivi "ELIMINA" per confermare). Chiama una edge function che cancella dati utente + auth account.
+
+**File**: modifica `SettingsPage.tsx`, nuova edge function `delete-account`
+
+---
+
+### 4. Onboarding migliorato per conversione
+**Problema**: L'onboarding attuale mostra 3 slide generiche. Non mostra il valore unico di Ayvro ne guida l'utente a completare la prima azione.
+
+**Azione**: Dopo l'onboarding, guidare l'utente a completare 1 azione concreta (aggiungere il primo task o la prima spesa). "First value" entro 60 secondi dalla registrazione.
+
+**File**: modifica `OnboardingPage.tsx`, `HomePage.tsx`
+
+---
+
+### 5. Analytics e tracking conversioni
+**Problema**: Plausible e configurato ma non traccia eventi chiave: signup, first_task, first_expense, upgrade. Senza dati non puoi ottimizzare.
+
+**Azione**: Aggiungere eventi custom Plausible nei punti critici del funnel.
+
+**File**: modifica `AuthPage.tsx`, `HomePage.tsx`, `ExpensesPage.tsx`
+
+---
+
+## Come Sponsorizzare Ayvro
+
+### Canali consigliati (budget-efficiente)
+
+1. **Product Hunt launch** — Gratuito. Ayvro ha il profilo perfetto: app finanziaria con AI, design pulito, nicchia chiara. Preparare screenshot, video demo 60s, tagline forte.
+
+2. **Content marketing (SEO)** — Blog su `ayvro.app/blog` con articoli tipo:
+   - "Come tracciare le spese senza impazzire"
+   - "5 segnali che stai spendendo troppo"
+   - Target: persone che cercano soluzioni finanziarie personali
+
+3. **Social media organico** — TikTok/Instagram Reels con demo veloci dell'app (15-30s). Il formato "guarda come gestisco i soldi con questa app" funziona bene nella nicchia fintech.
+
+4. **Micro-influencer finanza personale** — Collaborazioni con creator da 5-50K follower nella nicchia "personal finance". Costo basso, pubblico targettizzato.
+
+5. **App Store Optimization (ASO)** — Se pubblichi su Play Store/App Store: keywords "expense tracker", "budget app", "financial planner AI". Screenshot ottimizzate, video preview.
+
+6. **Reddit / community** — r/personalfinance, r/budgeting, r/fintech. Post genuini, non spam. Mostrare il prodotto risolvendo problemi reali.
+
+### Pricing suggerito
+- **Free**: Task illimitati, 10 messaggi AI/giorno, tracking spese base
+- **Premium** (4.99-7.99/mese): AI illimitata, insights avanzati, export dati, streak avanzate, wellness completo
+
+---
+
+## Ordine di implementazione
+
+1. Landing page (acquisizione)
+2. Delete account (compliance obbligatoria)
+3. Paywall + pagamenti (monetizzazione)
+4. Onboarding conversione (retention)
+5. Analytics eventi (ottimizzazione)
 
