@@ -376,6 +376,33 @@ async function scheduleNotification(notification: ScheduledNotification): Promis
       return false;
     }
 
+    // Native: also schedule a real OS-level notification so it fires even when the app is killed
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications');
+        const at = new Date(notification.scheduled_time);
+        if (at.getTime() > Date.now()) {
+          // Stable numeric id from string
+          const idStr = `${notification.type}-${notification.reference_id || 'g'}-${at.getTime()}`;
+          let h = 0;
+          for (let i = 0; i < idStr.length; i++) h = (h * 31 + idStr.charCodeAt(i)) | 0;
+          const nid = Math.abs(h) % 2147483647;
+          await LocalNotifications.schedule({
+            notifications: [{
+              id: nid,
+              title: notification.title,
+              body: notification.body,
+              schedule: { at },
+              smallIcon: 'ic_stat_icon_config_sample',
+              iconColor: '#0F3D3E',
+            }]
+          });
+        }
+      } catch (e) {
+        console.error('Native notification schedule failed:', e);
+      }
+    }
+
     return true;
   } catch (error) {
     console.error('Error scheduling notification:', error);
