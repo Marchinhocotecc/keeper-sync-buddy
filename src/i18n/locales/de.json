@@ -261,7 +261,13 @@
     "changePassword": "Change password",
     "changePasswordSoon": "Password change coming soon.",
     "profileUpdated": "Profile updated successfully",
-    "profileUpdateError": "Error updating profile"
+    "profileUpdateError": "Error updating profile",
+    "deleteAccount": "Konto loschen",
+    "deleteAccountTitle": "Konto endgultig loschen",
+    "deleteAccountDesc": "Dies loscht dauerhaft dein Konto und alle Daten. Nicht ruckgangig zu machen.",
+    "deleteAccountConfirmLabel": "Tippe ELIMINA oder DELETE zur Bestatigung",
+    "deleteAccountConfirm": "Endgultig loschen",
+    "deleteAccountSuccess": "Konto geloscht"
   },
   "auth": {
     "signIn": "Anmelden",

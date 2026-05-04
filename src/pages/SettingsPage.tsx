@@ -79,12 +79,15 @@ export default function SettingsPage() {
   // Modals
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showResetMemoryModal, setShowResetMemoryModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   
   // Form state
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isResettingMemory, setIsResettingMemory] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Sync user profile from auth context
   useEffect(() => {
@@ -218,6 +221,25 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/auth');
+  };
+
+  // Delete account permanently
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'ELIMINA' && deleteConfirmText !== 'DELETE') return;
+    setIsDeletingAccount(true);
+    try {
+      const { error } = await supabase.functions.invoke('delete-account');
+      if (error) throw error;
+      await supabase.auth.signOut();
+      toast({ title: t('settings.deleteAccountSuccess') });
+      navigate('/auth');
+    } catch (e: any) {
+      toast({ title: t('common.error'), description: e?.message ?? '', variant: 'destructive' });
+    } finally {
+      setIsDeletingAccount(false);
+      setShowDeleteAccountModal(false);
+      setDeleteConfirmText('');
+    }
   };
 
   const getInitials = (name: string, email: string) => {
@@ -462,6 +484,18 @@ export default function SettingsPage() {
               {t('nav.logout')}
             </Button>
           </motion.div>
+
+          {/* Delete Account (GDPR + App Store / Play Store compliance) */}
+          <motion.div variants={itemVariants}>
+            <Button
+              variant="ghost"
+              className="w-full h-10 sm:h-12 text-xs sm:text-sm text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setShowDeleteAccountModal(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-2" />
+              {t('settings.deleteAccount')}
+            </Button>
+          </motion.div>
         </motion.div>
 
         {/* Profile Edit Modal */}
@@ -526,6 +560,36 @@ export default function SettingsPage() {
                 disabled={isResettingMemory}
               >
                 {isResettingMemory ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('settings.resetting')}</>) : t('settings.resetConfirm')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Account Modal */}
+        <Dialog open={showDeleteAccountModal} onOpenChange={(o) => { setShowDeleteAccountModal(o); if (!o) setDeleteConfirmText(''); }}>
+          <DialogContent className="max-w-sm mx-4">
+            <DialogHeader>
+              <DialogTitle className="text-destructive">{t('settings.deleteAccountTitle')}</DialogTitle>
+              <DialogDescription>{t('settings.deleteAccountDesc')}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+              <Label htmlFor="del-confirm" className="text-xs">{t('settings.deleteAccountConfirmLabel')}</Label>
+              <Input
+                id="del-confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="ELIMINA"
+                autoComplete="off"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowDeleteAccountModal(false)}>{t('common.cancel')}</Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount || (deleteConfirmText !== 'ELIMINA' && deleteConfirmText !== 'DELETE')}
+              >
+                {isDeletingAccount ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('common.loading')}</>) : t('settings.deleteAccountConfirm')}
               </Button>
             </DialogFooter>
           </DialogContent>

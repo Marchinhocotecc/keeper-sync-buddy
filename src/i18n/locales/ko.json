@@ -261,7 +261,13 @@
     "changePassword": "Change password",
     "changePasswordSoon": "Password change coming soon.",
     "profileUpdated": "Profile updated successfully",
-    "profileUpdateError": "Error updating profile"
+    "profileUpdateError": "Error updating profile",
+    "deleteAccount": "계정 삭제",
+    "deleteAccountTitle": "계정 영구 삭제",
+    "deleteAccountDesc": "계정과 모든 데이터가 영구 삭제됩니다. 되돌릴 수 없습니다.",
+    "deleteAccountConfirmLabel": "ELIMINA 또는 DELETE 입력하여 확인",
+    "deleteAccountConfirm": "영구 삭제",
+    "deleteAccountSuccess": "계정 삭제됨"
   },
   "auth": {
     "signIn": "로그인",

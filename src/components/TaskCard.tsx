@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { hapticImpact, hapticSuccess } from "@/utils/haptics";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -41,9 +42,11 @@ export const TaskCard = React.memo(function TaskCard({ task, onToggle, onDelete 
 
   const handleToggle = () => {
     if (!task.completed) {
+      hapticSuccess();
       setIsExiting(true);
       setTimeout(() => onToggle(task.id), 300);
     } else {
+      hapticImpact('light');
       onToggle(task.id);
     }
   };
@@ -65,6 +68,7 @@ export const TaskCard = React.memo(function TaskCard({ task, onToggle, onDelete 
 
   const handleTouchEnd = () => {
     if (swipeX < -50) {
+      hapticImpact('medium');
       setSwipeX(-80);
     } else {
       setSwipeX(0);

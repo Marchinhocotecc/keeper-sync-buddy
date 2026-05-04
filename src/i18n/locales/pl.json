@@ -261,7 +261,13 @@
     "changePassword": "Change password",
     "changePasswordSoon": "Password change coming soon.",
     "profileUpdated": "Profile updated successfully",
-    "profileUpdateError": "Error updating profile"
+    "profileUpdateError": "Error updating profile",
+    "deleteAccount": "Usun konto",
+    "deleteAccountTitle": "Trwale usun konto",
+    "deleteAccountDesc": "Ta operacja trwale usunie konto i wszystkie dane. Nie mozna cofnac.",
+    "deleteAccountConfirmLabel": "Wpisz ELIMINA lub DELETE aby potwierdzic",
+    "deleteAccountConfirm": "Usun na zawsze",
+    "deleteAccountSuccess": "Konto usuniete"
   },
   "auth": {
     "signIn": "Zaloguj się",

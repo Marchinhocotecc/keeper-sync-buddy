@@ -261,7 +261,13 @@
     "changePassword": "Change password",
     "changePasswordSoon": "Password change coming soon.",
     "profileUpdated": "Profile updated successfully",
-    "profileUpdateError": "Error updating profile"
+    "profileUpdateError": "Error updating profile",
+    "deleteAccount": "Eliminar cuenta",
+    "deleteAccountTitle": "Eliminar cuenta permanentemente",
+    "deleteAccountDesc": "Esto eliminara permanentemente tu cuenta y todos tus datos. No se puede deshacer.",
+    "deleteAccountConfirmLabel": "Escribe ELIMINA o DELETE para confirmar",
+    "deleteAccountConfirm": "Eliminar para siempre",
+    "deleteAccountSuccess": "Cuenta eliminada"
   },
   "auth": {
     "signIn": "Iniciar sesión",

@@ -48,16 +48,22 @@ let lastCountResetDate = '';
  * Initialize the notification service
  */
 export async function initNotificationService(): Promise<boolean> {
-  // On native Android/iOS WebView the Web Notifications API is not available.
-  // Disable silently – no crash, no warning to the user.
+  // Native: use @capacitor/local-notifications
   if (Capacitor.isNativePlatform()) {
-    console.info('Native platform detected: Web Notifications disabled (use Push Notifications plugin instead)');
-    return false;
+    try {
+      const { LocalNotifications } = await import('@capacitor/local-notifications');
+      const perm = await LocalNotifications.checkPermissions();
+      notificationPermission = perm.display === 'granted' ? 'granted' : 'default';
+      loadState();
+      return notificationPermission === 'granted';
+    } catch (error) {
+      console.error('Native notifications init failed:', error);
+      return false;
+    }
   }
 
   // Check if notifications are supported
   if (!('Notification' in window)) {
-    // console.warn('Notifications not supported in this browser');
     return false;
   }
 
@@ -77,6 +83,19 @@ export async function initNotificationService(): Promise<boolean> {
  * Request notification permission (call only when user explicitly enables)
  */
 export async function requestNotificationPermission(): Promise<boolean> {
+  // Native flow
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { LocalNotifications } = await import('@capacitor/local-notifications');
+      const perm = await LocalNotifications.requestPermissions();
+      notificationPermission = perm.display === 'granted' ? 'granted' : 'denied';
+      return notificationPermission === 'granted';
+    } catch (error) {
+      console.error('Native notification permission error:', error);
+      return false;
+    }
+  }
+
   if (!('Notification' in window)) {
     return false;
   }
@@ -95,6 +114,9 @@ export async function requestNotificationPermission(): Promise<boolean> {
  * Check if notifications are available
  */
 export function canShowNotifications(): boolean {
+  if (Capacitor.isNativePlatform()) {
+    return notificationPermission === 'granted';
+  }
   return 'Notification' in window && notificationPermission === 'granted';
 }
 
@@ -352,6 +374,33 @@ async function scheduleNotification(notification: ScheduledNotification): Promis
     if (error) {
       console.error('Error scheduling notification:', error);
       return false;
+    }
+
+    // Native: also schedule a real OS-level notification so it fires even when the app is killed
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications');
+        const at = new Date(notification.scheduled_time);
+        if (at.getTime() > Date.now()) {
+          // Stable numeric id from string
+          const idStr = `${notification.type}-${notification.reference_id || 'g'}-${at.getTime()}`;
+          let h = 0;
+          for (let i = 0; i < idStr.length; i++) h = (h * 31 + idStr.charCodeAt(i)) | 0;
+          const nid = Math.abs(h) % 2147483647;
+          await LocalNotifications.schedule({
+            notifications: [{
+              id: nid,
+              title: notification.title,
+              body: notification.body,
+              schedule: { at },
+              smallIcon: 'ic_stat_icon_config_sample',
+              iconColor: '#0F3D3E',
+            }]
+          });
+        }
+      } catch (e) {
+        console.error('Native notification schedule failed:', e);
+      }
     }
 
     return true;

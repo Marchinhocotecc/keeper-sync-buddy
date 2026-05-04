@@ -261,7 +261,13 @@
     "changePassword": "Cambia password",
     "changePasswordSoon": "Cambio password disponibile a breve.",
     "profileUpdated": "Profilo aggiornato con successo",
-    "profileUpdateError": "Errore nell'aggiornamento del profilo"
+    "profileUpdateError": "Errore nell'aggiornamento del profilo",
+    "deleteAccount": "Elimina account",
+    "deleteAccountTitle": "Elimina account definitivamente",
+    "deleteAccountDesc": "Questa azione cancella permanentemente il tuo account e tutti i tuoi dati. Non e reversibile.",
+    "deleteAccountConfirmLabel": "Scrivi ELIMINA per confermare",
+    "deleteAccountConfirm": "Elimina per sempre",
+    "deleteAccountSuccess": "Account eliminato"
   },
   "nudge": {
     "avoidSpending": "Evita nuove spese oggi.",
