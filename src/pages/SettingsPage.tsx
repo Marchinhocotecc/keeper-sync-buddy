@@ -564,6 +564,36 @@ export default function SettingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Account Modal */}
+        <Dialog open={showDeleteAccountModal} onOpenChange={(o) => { setShowDeleteAccountModal(o); if (!o) setDeleteConfirmText(''); }}>
+          <DialogContent className="max-w-sm mx-4">
+            <DialogHeader>
+              <DialogTitle className="text-destructive">{t('settings.deleteAccountTitle')}</DialogTitle>
+              <DialogDescription>{t('settings.deleteAccountDesc')}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+              <Label htmlFor="del-confirm" className="text-xs">{t('settings.deleteAccountConfirmLabel')}</Label>
+              <Input
+                id="del-confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="ELIMINA"
+                autoComplete="off"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowDeleteAccountModal(false)}>{t('common.cancel')}</Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount || (deleteConfirmText !== 'ELIMINA' && deleteConfirmText !== 'DELETE')}
+              >
+                {isDeletingAccount ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('common.loading')}</>) : t('settings.deleteAccountConfirm')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </main>
   );
