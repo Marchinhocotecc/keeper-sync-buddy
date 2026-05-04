@@ -48,16 +48,22 @@ let lastCountResetDate = '';
  * Initialize the notification service
  */
 export async function initNotificationService(): Promise<boolean> {
-  // On native Android/iOS WebView the Web Notifications API is not available.
-  // Disable silently – no crash, no warning to the user.
+  // Native: use @capacitor/local-notifications
   if (Capacitor.isNativePlatform()) {
-    console.info('Native platform detected: Web Notifications disabled (use Push Notifications plugin instead)');
-    return false;
+    try {
+      const { LocalNotifications } = await import('@capacitor/local-notifications');
+      const perm = await LocalNotifications.checkPermissions();
+      notificationPermission = perm.display === 'granted' ? 'granted' : 'default';
+      loadState();
+      return notificationPermission === 'granted';
+    } catch (error) {
+      console.error('Native notifications init failed:', error);
+      return false;
+    }
   }
 
   // Check if notifications are supported
   if (!('Notification' in window)) {
-    // console.warn('Notifications not supported in this browser');
     return false;
   }
 
@@ -77,6 +83,19 @@ export async function initNotificationService(): Promise<boolean> {
  * Request notification permission (call only when user explicitly enables)
  */
 export async function requestNotificationPermission(): Promise<boolean> {
+  // Native flow
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { LocalNotifications } = await import('@capacitor/local-notifications');
+      const perm = await LocalNotifications.requestPermissions();
+      notificationPermission = perm.display === 'granted' ? 'granted' : 'denied';
+      return notificationPermission === 'granted';
+    } catch (error) {
+      console.error('Native notification permission error:', error);
+      return false;
+    }
+  }
+
   if (!('Notification' in window)) {
     return false;
   }
@@ -95,6 +114,9 @@ export async function requestNotificationPermission(): Promise<boolean> {
  * Check if notifications are available
  */
 export function canShowNotifications(): boolean {
+  if (Capacitor.isNativePlatform()) {
+    return notificationPermission === 'granted';
+  }
   return 'Notification' in window && notificationPermission === 'granted';
 }
 
