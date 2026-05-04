@@ -261,7 +261,13 @@
     "changePassword": "Change password",
     "changePasswordSoon": "Password change coming soon.",
     "profileUpdated": "Profile updated successfully",
-    "profileUpdateError": "Error updating profile"
+    "profileUpdateError": "Error updating profile",
+    "deleteAccount": "Fshi llogarine",
+    "deleteAccountTitle": "Fshi llogarine perfundimisht",
+    "deleteAccountDesc": "Kjo do te fshije perfundimisht llogarine dhe te dhenat. E pakthyeshme.",
+    "deleteAccountConfirmLabel": "Shkruaj ELIMINA ose DELETE per te konfirmuar",
+    "deleteAccountConfirm": "Fshi pergjithmone",
+    "deleteAccountSuccess": "Llogaria u fshi"
   },
   "auth": {
     "signIn": "Hyr",

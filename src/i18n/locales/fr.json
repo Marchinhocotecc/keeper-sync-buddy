@@ -261,7 +261,13 @@
     "changePassword": "Change password",
     "changePasswordSoon": "Password change coming soon.",
     "profileUpdated": "Profile updated successfully",
-    "profileUpdateError": "Error updating profile"
+    "profileUpdateError": "Error updating profile",
+    "deleteAccount": "Supprimer le compte",
+    "deleteAccountTitle": "Supprimer le compte definitivement",
+    "deleteAccountDesc": "Ceci supprimera definitivement votre compte et toutes vos donnees. Action irreversible.",
+    "deleteAccountConfirmLabel": "Tapez ELIMINA ou DELETE pour confirmer",
+    "deleteAccountConfirm": "Supprimer definitivement",
+    "deleteAccountSuccess": "Compte supprime"
   },
   "auth": {
     "signIn": "Se connecter",

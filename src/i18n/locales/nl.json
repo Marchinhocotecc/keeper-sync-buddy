@@ -261,7 +261,13 @@
     "changePassword": "Change password",
     "changePasswordSoon": "Password change coming soon.",
     "profileUpdated": "Profile updated successfully",
-    "profileUpdateError": "Error updating profile"
+    "profileUpdateError": "Error updating profile",
+    "deleteAccount": "Account verwijderen",
+    "deleteAccountTitle": "Account permanent verwijderen",
+    "deleteAccountDesc": "Dit verwijdert je account en alle gegevens permanent. Niet ongedaan te maken.",
+    "deleteAccountConfirmLabel": "Typ ELIMINA of DELETE om te bevestigen",
+    "deleteAccountConfirm": "Voor altijd verwijderen",
+    "deleteAccountSuccess": "Account verwijderd"
   },
   "auth": {
     "signIn": "Inloggen",
