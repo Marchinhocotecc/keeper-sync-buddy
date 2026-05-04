@@ -10,7 +10,7 @@ export async function hapticImpact(style: Style = 'light'): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   try {
     const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
-    const map: Record<Style, ImpactStyle> = {
+    const map: Record<Style, any> = {
       light: ImpactStyle.Light,
       medium: ImpactStyle.Medium,
       heavy: ImpactStyle.Heavy,
