@@ -2,3 +2,6 @@ project_id = "rqadcblvckfpgmhduemw"
 
 [functions.ai-free-chat]
 verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = false
