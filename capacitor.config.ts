@@ -7,6 +7,39 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
+  ios: {
+    contentInset: 'always',
+    backgroundColor: '#0F3D3E',
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 1500,
+      launchAutoHide: true,
+      backgroundColor: '#0F3D3E',
+      androidSplashResourceName: 'splash',
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: false,
+      splashFullScreen: true,
+      splashImmersive: true,
+    },
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#0F3D3E',
+      overlaysWebView: false,
+    },
+    Keyboard: {
+      resize: 'native',
+      style: 'DEFAULT',
+      resizeOnFullScreen: true,
+    },
+    LocalNotifications: {
+      smallIcon: 'ic_stat_icon_config_sample',
+      iconColor: '#0F3D3E',
+    },
+    App: {
+      launchUrl: 'com.ayvro.app://',
+    },
+  },
 };
 
 export default config;

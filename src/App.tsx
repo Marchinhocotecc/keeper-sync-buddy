@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AnimatePresence } from "framer-motion";
 import { Navigation } from "@/components/Navigation";
 import { NotificationInitializer } from "@/components/NotificationInitializer";
+import { useNativeApp } from "@/hooks/useNativeApp";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { OfflineBanner } from "@/components/OfflineBanner";
@@ -43,6 +44,7 @@ suppressAnalyticsErrors();
 
 function AnimatedRoutes() {
   const location = useLocation();
+  useNativeApp();
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
