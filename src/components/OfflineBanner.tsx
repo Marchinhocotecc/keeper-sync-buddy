@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Capacitor } from '@capacitor/core';
 
 export function OfflineBanner() {
   const { t } = useTranslation();
@@ -14,9 +15,22 @@ export function OfflineBanner() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Native: bootstrap from Network plugin
+    let cleanup: (() => void) | undefined;
+    if (Capacitor.isNativePlatform()) {
+      (async () => {
+        try {
+          const { Network } = await import('@capacitor/network');
+          const status = await Network.getStatus();
+          setIsOffline(!status.connected);
+        } catch {}
+      })();
+    }
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      cleanup?.();
     };
   }, []);
 
