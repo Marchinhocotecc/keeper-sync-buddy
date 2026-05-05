@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { hapticImpact } from '@/utils/haptics';
 
 export function Navigation() {
   const { t } = useTranslation();
@@ -38,12 +39,10 @@ export function Navigation() {
         <div className="container mx-auto px-4 sm:px-6 max-w-screen-xl h-full">
           <div className="flex items-center justify-between h-full">
             <Link to="/" className="flex items-center gap-2 shrink-0 group">
-              <img src={ayvroLogo} alt="Ayvro" className="w-8 h-8 rounded-lg shadow-ayvro group-hover:shadow-[0_4px_16px_rgba(15,61,62,0.3)] transition-shadow" />
-              <h1 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">
-                Ayvro
-              </h1>
+              <img src={ayvroLogo} alt="Ayvro" width={32} height={32} className="w-8 h-8 rounded-lg shadow-ayvro group-hover:shadow-[0_4px_16px_rgba(15,61,62,0.3)] transition-shadow" />
+              <h1 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">Ayvro</h1>
             </Link>
-            
+
             <div className="flex items-center gap-1">
               {links.map((link) => {
                 const Icon = link.icon;
@@ -53,7 +52,7 @@ export function Navigation() {
                     'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                     isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   )}>
-                    <Icon className={cn("h-4 w-4", isActive ? "text-primary-foreground" : "")} />
+                    <Icon className={cn('h-4 w-4', isActive ? 'text-primary-foreground' : '')} />
                     <span className="text-[13px]">{link.label}</span>
                   </Link>
                 );
@@ -66,9 +65,9 @@ export function Navigation() {
         </div>
       </nav>
 
-      {/* Mobile bottom tab bar — icon only, dot indicator */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border sm:hidden safe-area-bottom">
-        <div className="flex items-center justify-around h-16 px-2">
+      {/* Mobile bottom tab bar — native feel: blur, pill indicator, haptic */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden safe-area-bottom border-t border-border/60 bg-card/80 backdrop-blur-xl supports-[backdrop-filter]:bg-card/70 shadow-[0_-1px_8px_rgba(0,0,0,0.04)]">
+        <div className="flex items-stretch justify-around h-[60px] px-1">
           {links.map((link) => {
             const Icon = link.icon;
             const isActive = location.pathname === link.to;
@@ -76,15 +75,19 @@ export function Navigation() {
               <Link
                 key={link.to}
                 to={link.to}
+                onClick={() => { if (!isActive) hapticImpact('light'); }}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 flex-1 py-2 rounded-xl transition-colors min-w-0',
-                  isActive ? 'text-primary' : 'text-muted-foreground active:text-foreground'
+                  'relative flex flex-col items-center justify-center flex-1 min-w-0 transition-transform active:scale-[0.92]',
+                  isActive ? 'text-primary' : 'text-muted-foreground'
                 )}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <Icon className={cn("h-[22px] w-[22px]", isActive && "text-primary")} />
-                {isActive && (
-                  <span className="w-1 h-1 rounded-full bg-primary" />
-                )}
+                <span className={cn(
+                  'flex items-center justify-center rounded-full transition-all',
+                  isActive ? 'bg-primary/12 px-4 py-1.5' : 'px-3 py-1.5'
+                )}>
+                  <Icon className={cn('h-[22px] w-[22px]', isActive && 'text-primary')} strokeWidth={isActive ? 2.4 : 2} />
+                </span>
               </Link>
             );
           })}

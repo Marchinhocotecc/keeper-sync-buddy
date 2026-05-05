@@ -13,8 +13,9 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1500,
-      launchAutoHide: true,
+      // Manually hidden after first render in useNativeApp — no fixed delay
+      launchShowDuration: 0,
+      launchAutoHide: false,
       backgroundColor: '#0F3D3E',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
@@ -28,7 +29,7 @@ const config: CapacitorConfig = {
       overlaysWebView: false,
     },
     Keyboard: {
-      resize: 'native',
+      resize: 'body',
       style: 'DEFAULT',
       resizeOnFullScreen: true,
     },

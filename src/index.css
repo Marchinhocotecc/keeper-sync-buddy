@@ -315,13 +315,6 @@
   padding-right: env(safe-area-inset-right);
 }
 
-/* Apply top safe area globally to root container on native */
-@supports (padding-top: env(safe-area-inset-top)) {
-  body {
-    padding-top: env(safe-area-inset-top);
-  }
-}
-
 /* Avoid keyboard overlap on native */
 body.keyboard-open {
   padding-bottom: 0 !important;
@@ -332,5 +325,31 @@ body.keyboard-open {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* Touch-only devices: drop hover transforms (felt sticky on mobile) */
+@media (hover: none) and (pointer: coarse) {
+  .hover-scale:hover {
+    transform: none !important;
+  }
+  .ayvro-button:hover {
+    transform: none !important;
+  }
+}
+
+/* Mobile: tighter, full-bleed page container */
+@media (max-width: 640px) {
+  .page-container {
+    @apply px-4 py-4 pb-24;
+  }
+  .page-header {
+    @apply mb-4;
+  }
+}
+
+/* Better tap behavior on native */
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
 }
 

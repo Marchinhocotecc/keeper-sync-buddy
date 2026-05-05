@@ -36,9 +36,11 @@ export function useNativeApp() {
       } catch {}
 
       try {
-        // Splash screen
+        // Splash screen — hide as soon as React has mounted (no fixed delay)
         const { SplashScreen } = await import('@capacitor/splash-screen');
-        await SplashScreen.hide({ fadeOutDuration: 400 });
+        // Wait one frame so first paint is on screen before we drop the splash
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+        await SplashScreen.hide({ fadeOutDuration: 250 });
       } catch {}
 
       try {
