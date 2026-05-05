@@ -1,91 +1,117 @@
+# Piano: Da Webapp a Native Mobile-First, Performante e Flawless
 
-# Da WebApp ad App Nativa: Ayvro
+Obiettivo: l'app deve sembrare e comportarsi come un'app nativa (non una webapp incartata), essere veloce all'avvio e fluida nelle interazioni.
 
-## Stato di partenza
-Capacitor 8 gia configurato (`com.ayvro.app`), `@capacitor/preferences` per auth storage, deep link `com.ayvro.app://auth-callback`. Manca tutto il resto del livello nativo.
+## 1. Performance — bundle, avvio, runtime
 
----
+**Code splitting per route** (`src/App.tsx`)
+- Convertire tutte le pagine in `React.lazy(() => import(...))` con `<Suspense>` + skeleton globale.
+- Risultato: bundle iniziale -50/70%, time-to-interactive sotto 1s su mobile.
 
-## 1. Plugin Capacitor nativi
+**Vite build optimization** (`vite.config.ts`)
+- `build.target: 'es2020'`, `cssCodeSplit: true`, `chunkSizeWarningLimit: 600`.
+- `manualChunks`: separare `react/react-dom`, `@tanstack/react-query`, `framer-motion`, `recharts`, `@radix-ui/*`, `i18next`, `supabase` in chunk dedicati.
+- `build.minify: 'esbuild'`, drop `console`/`debugger` in produzione.
 
-Installare e integrare:
-- `@capacitor/splash-screen` — splash brandizzato
-- `@capacitor/status-bar` — colore coerente (#0F3D3E)
-- `@capacitor/app` — back button Android, lifecycle, deep link
-- `@capacitor/haptics` — feedback su task complete, swipe-delete, toggle
-- `@capacitor/keyboard` — gestione tastiera
-- `@capacitor/local-notifications` — notifiche native (sostituisce/affianca Web Notifications)
-- `@capacitor/network` — detection offline nativa
-- `@capacitor/share` — share nativo
-- `@capacitor/ios` — supporto iOS
+**Asset & font**
+- Comprimere/convertire `ayvro-logo.png` a WebP (o SVG inline se possibile) e dare width/height espliciti.
+- Precaricare solo Inter 400/500/600 (subset latin), `font-display: swap`.
 
-Aggiornare `capacitor.config.ts` con sezioni `plugins` (SplashScreen, LocalNotifications) e `ios`.
+**Query layer** (`src/App.tsx`)
+- Allineare `staleTime` per dato: tasks/expenses 60s, settings/profile 5min, summary 10min.
+- Aggiungere `placeholderData: keepPreviousData` su liste paginate per evitare flicker.
 
-## 2. Adattamenti UI nativi
+**Liste**
+- `TaskCard` → `React.memo` con comparatore su `id/completed/title/priority`.
+- Per liste lunghe (>30) introdurre `@tanstack/react-virtual` su Expenses/Calendar.
 
-- **Safe areas**: estendere `env(safe-area-inset-*)` in `Navigation`, `HomePage`, `SettingsPage`, `AssistantPanel` (top per notch iOS, bottom gia presente)
-- **Status bar**: in `App.tsx` impostare style `Light` su sfondo verde petrolio al boot
-- **Splash**: configurare fade-out 500ms, sfondo `#0F3D3E`
-- **Adaptive icon Android**: separare layer foreground/background
+## 2. Mobile-first UX (look & feel nativo)
 
-## 3. Lifecycle e back button
+**Layout globale**
+- Rimuovere `container max-w-screen-xl` dai page-container su mobile: usare full-bleed con padding 16px.
+- Header sticky per pagina con titolo grande in stile iOS Large Title (collassa allo scroll).
+- Aumentare touch target minimo a 44×44, spaziature verticali +20% su mobile.
 
-In `App.tsx` aggiungere listener `@capacitor/app`:
-- `backButton`: chiude modali aperti, naviga indietro, exit app sulla home
-- `appUrlOpen`: gestisce `com.ayvro.app://auth-callback`
-- `resume`: invalida le query react-query per refresh dati
+**Bottom Tab Bar** (`Navigation.tsx`)
+- Effetto blur (`backdrop-blur-xl bg-card/80`), bordo top sottile, ombra superiore leggera.
+- Indicatore attivo: pill colorata dietro l'icona invece del puntino sotto, label sotto opzionale.
+- Tap haptic (`hapticImpact('light')`) al cambio tab.
 
-## 4. Notifiche native
+**Transizioni native**
+- Page transitions in slide orizzontale (iOS push) invece di fade, con `framer-motion` `x: 100% → 0`.
+- Modali sempre come `Sheet` bottom su mobile (già presenti `drawer/sheet`): convertire dialog principali (Add Task, Budget Edit, Add Expense) in bottom sheet con drag handle.
 
-Refactor `src/services/notificationService.ts`:
-- Rilevare piattaforma via `Capacitor.isNativePlatform()`
-- Su nativo usare `LocalNotifications.schedule()` (affidabile anche con app chiusa)
-- Su web mantenere Web Notifications API esistente
-- Permission flow nativo (richiesto Play Store)
-- Action button "Completa" su notifiche task
+**Feedback tattile e visivo**
+- Haptic su: completamento task (già), tap pulsante primario, swipe-to-delete conferma, errore form.
+- Stati `active:scale-[0.97]` sui pulsanti (già su tab) → estendere a tutte le card cliccabili.
+- Rimuovere hover effects su `(pointer: coarse)` via media query.
 
-## 5. Haptic feedback
+**Pull-to-refresh & swipe**
+- Verificare presenza su tutte le pagine principali (Home OK, aggiungere su Calendar, Expenses).
+- Swipe-to-delete generalizzato anche su `ExpenseCard` e `EventCard`.
 
-In `TaskCard.tsx` e nei swipe-to-delete: `Haptics.impact({ style: ImpactStyle.Light })` su toggle, `Medium` su delete.
+**Gesture & navigazione**
+- Edge-swipe back su iOS: già gestito nativo, ma assicurarsi che Navigation non blocchi.
+- Tasto back Android: già gestito in `useNativeApp`.
 
-## 6. Network nativo
+## 3. Avvio nativo flawless
 
-In `OfflineBanner.tsx`: usare `Network.addListener('networkStatusChange', ...)` su nativo, fallback a `navigator.onLine` su web.
+**Splash & first paint**
+- `capacitor.config.ts`: `launchShowDuration: 0`, `launchAutoHide: false`, hide manuale dopo `App ready` (primo render utile) → niente flash bianco, niente attesa fissa di 1.5s.
+- Aggiungere fallback `<div id="boot-splash">` in `index.html` con sfondo `#0F3D3E` + logo, rimosso al mount di App.
 
-## 7. Delete account (compliance store)
+**Status bar & safe area**
+- `StatusBar.overlaysWebView: false` (già). Verificare colore dinamico chiaro/scuro con tema.
+- Top bar pagine: rimuovere il `padding-top: env(safe-area-inset-top)` su `body` perché Capacitor lo gestisce; usare `.safe-area-top` solo dove serve (header sticky) per evitare doppio padding.
 
-OBBLIGATORIO per Apple e Google:
-- Edge function `delete-account` che cancella riga `auth.users` + dati correlati (cascade)
-- UI in `SettingsPage`: bottone destructive con dialog conferma a doppio step (scrivi "ELIMINA")
-- Chiavi i18n nelle 22 lingue
+**Keyboard**
+- `Keyboard.resize: 'body'` (più affidabile per form lunghi) e padding-bottom dinamico su input attivo.
 
-## 8. Documentazione build
+## 4. Affidabilità & "flawless"
 
-Aggiornare README con:
-```bash
-npm run build
-npx cap sync android   # o ios
-npx cap open android   # apre Android Studio
+- **ErrorBoundary** già presente: aggiungere fallback con pulsante "Ricarica" che invalida cache e ricarica route.
+- **Offline**: `OfflineBanner` ok; aggiungere retry automatico con backoff sulle mutation in `useTasks/useExpenses`.
+- **Loading states**: sostituire spinner generici con skeleton specifici per ogni pagina (Home già ok, replicare su Expenses/Calendar/Assistant).
+- **Sentry-like logging**: già `logger.ts`; assicurare che in produzione non ci siano `console.log`.
+
+## 5. Build size — dipendenze pesanti
+
+Da rivalutare/rimuovere se non usate:
+- `recharts` (pesante): caricarlo lazy solo nelle pagine che mostrano grafici.
+- `next-themes`: ok ma piccolo.
+- Verificare che tutti i `@radix-ui/*` importati siano effettivamente usati.
+
+## 6. Dettagli tecnici (file principali toccati)
+
 ```
-Vincolo: AGP 8.11.1 (gia in memory).
-Per iOS: richiede Mac con Xcode, comando `npx cap add ios` da eseguire localmente.
+src/App.tsx                — lazy routes, Suspense, query tuning
+src/main.tsx               — rimozione boot splash
+index.html                 — boot splash inline + meta viewport-fit=cover
+vite.config.ts             — manualChunks, target, minify, drop console
+capacitor.config.ts        — splash duration 0, keyboard resize body
+src/index.css              — rimuovere padding-top body, hover su coarse
+src/components/Navigation.tsx        — blur tab bar, pill indicator, haptic
+src/components/PageTransition.tsx    — slide orizzontale
+src/components/AddTaskForm.tsx       — Sheet bottom su mobile
+src/components/BudgetEditModal.tsx   — Sheet bottom su mobile
+src/components/TaskCard.tsx          — React.memo
+src/pages/HomePage.tsx               — large-title header, full-bleed mobile
+src/pages/CalendarPage.tsx           — pull-to-refresh + swipe
+src/pages/ExpensesPage.tsx           — pull-to-refresh + swipe + virtual list
+src/hooks/useNativeApp.ts            — hide splash su app ready event
+```
 
----
+## 7. QA
 
-## Modifiche al database
-1 sola migration: edge function `delete-account` con permission `service_role` per cancellare utente da `auth.users` (cascade gestisce le altre tabelle se i FK sono configurati). Verifico prima i FK esistenti.
+- Verificare bundle iniziale con `vite build` (target < 250KB gz per chunk principale).
+- Test manuale su viewport 360×800 e 390×844.
+- Lighthouse mobile target: Performance ≥ 90.
 
-## Cosa non cambia
-- Codebase React unica per web/Android/iOS
-- Brand, i18n, AI, auth Supabase invariati
-- Le cartelle `android/` e `ios/` sono generate localmente dall'utente con `npx cap add` (non vivono nel repo Lovable)
+## Cosa NON faccio in questo piano
 
-## Ordine di implementazione
-1. Install plugin + config
-2. Lifecycle (back button, deep link, resume) + safe areas + status bar + splash
-3. Haptic feedback
-4. Notifiche native (refactor service)
-5. Network nativo
-6. Delete account (edge function + UI + i18n)
-7. README aggiornato
+- Non rimuovo feature esistenti.
+- Non tocco logica AI/Action Engine.
+- Non aggiungo nuove tabelle DB.
+- Non pubblico su store (resta passo manuale dell'utente).
 
+Procedo con l'implementazione?

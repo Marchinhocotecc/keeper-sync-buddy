@@ -28,7 +28,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReload = () => {
-    window.location.reload();
+    try {
+      // Clear React Query cache before reload to avoid loops on stale data
+      sessionStorage.clear();
+    } catch {}
+    window.location.href = '/';
   };
 
   render() {

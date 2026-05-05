@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()" />
     
     <!-- Ayvro App Info -->
@@ -36,9 +36,30 @@
     <meta name="twitter:title" content="Ayvro" />
     <meta name="twitter:description" content="Decision Engine for Your Money" />
     <meta name="twitter:image" content="/og-image.png" />
+
+    <style>
+      /* Boot splash — shown until React mounts. Avoids white flash on native cold start. */
+      #boot-splash {
+        position: fixed; inset: 0; z-index: 99999;
+        background: #0F3D3E;
+        display: flex; align-items: center; justify-content: center;
+        transition: opacity 250ms ease-out;
+      }
+      #boot-splash.hide { opacity: 0; pointer-events: none; }
+      #boot-splash .dot {
+        width: 10px; height: 10px; border-radius: 9999px;
+        background: rgba(255,255,255,0.85);
+        animation: bs-pulse 1s ease-in-out infinite;
+      }
+      @keyframes bs-pulse {
+        0%, 100% { transform: scale(0.6); opacity: 0.5; }
+        50%      { transform: scale(1);   opacity: 1;   }
+      }
+    </style>
   </head>
 
   <body>
+    <div id="boot-splash"><div class="dot"></div></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
