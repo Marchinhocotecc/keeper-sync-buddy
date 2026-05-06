@@ -1,21 +1,20 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Send, Zap, User, Lightbulb, Trash2, ArrowUp, ChevronDown, ChevronUp } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { motion, AnimatePresence } from "framer-motion";
-import { generateFinancialSignals } from "@/services/financialSignals";
-import { loadFinancialProfile } from "@/services/financialState";
-import { evaluateRisk } from "@/services/riskEngine";
-import { getLatestWeeklySummary } from "@/services/weeklySummaryService";
-import { getLatestMonthlySummary } from "@/services/monthlySummaryService";
-import { getActiveStrategy } from "@/services/actionTracker";
-import { useExpenseReaction } from "@/hooks/useExpenseReaction";
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Send, Sparkles, Trash2, ArrowUp, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { motion, AnimatePresence } from 'framer-motion';
+import { generateFinancialSignals } from '@/services/financialSignals';
+import { loadFinancialProfile } from '@/services/financialState';
+import { evaluateRisk } from '@/services/riskEngine';
+import { getLatestWeeklySummary } from '@/services/weeklySummaryService';
+import { getLatestMonthlySummary } from '@/services/monthlySummaryService';
+import { getActiveStrategy } from '@/services/actionTracker';
+import { useExpenseReaction } from '@/hooks/useExpenseReaction';
+import { hapticImpact } from '@/utils/haptics';
+import { cn } from '@/lib/utils';
 
 interface FinancialAction {
   type: string;
@@ -30,20 +29,15 @@ interface StructuredResponse {
 }
 
 interface Message {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   suggestions?: string[];
   structured?: StructuredResponse;
 }
 
-const formatTime = (date: Date, locale: string): string => {
-  return date.toLocaleTimeString(locale, { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: false
-  });
-};
+const formatTime = (date: Date, locale: string): string =>
+  date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
 
 function StructuredResponseView({ structured }: { structured: StructuredResponse }) {
   const { t } = useTranslation();
@@ -51,19 +45,19 @@ function StructuredResponseView({ structured }: { structured: StructuredResponse
 
   return (
     <div className="space-y-2">
-      <p className="text-sm whitespace-pre-wrap leading-relaxed">{structured.summary}</p>
-      
+      <p className="text-[15px] whitespace-pre-wrap leading-relaxed">{structured.summary}</p>
+
       {structured.reasoning && (
         <div>
           <button
             onClick={() => setShowReasoning(!showReasoning)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
           >
             {showReasoning ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             {t('assistant.reasoning')}
           </button>
           {showReasoning && (
-            <p className="text-xs text-muted-foreground mt-1 pl-4 border-l-2 border-border">
+            <p className="text-[12px] text-muted-foreground mt-1 pl-3 border-l-2 border-border">
               {structured.reasoning}
             </p>
           )}
@@ -75,15 +69,15 @@ function StructuredResponseView({ structured }: { structured: StructuredResponse
           {structured.actions.slice(0, 3).map((action, i) => (
             <div
               key={i}
-              className="flex items-start gap-2 bg-primary/5 border border-primary/10 rounded-lg p-2"
+              className="flex items-start gap-2 bg-primary/5 border border-primary/15 rounded-xl p-2.5"
             >
-              <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
-                {action.type === "create_task" ? "📝" : action.type === "adjust_budget" ? "💰" : "🔍"}
+              <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5 bg-card">
+                {action.type === 'create_task' ? '📝' : action.type === 'adjust_budget' ? '💰' : '🔍'}
               </Badge>
               <div>
-                <p className="text-xs font-medium text-foreground">{action.title}</p>
+                <p className="text-[13px] font-semibold text-foreground">{action.title}</p>
                 {action.description && (
-                  <p className="text-[10px] text-muted-foreground">{action.description}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{action.description}</p>
                 )}
               </div>
             </div>
@@ -97,65 +91,69 @@ function StructuredResponseView({ structured }: { structured: StructuredResponse
 export default function AssistantPanel() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Array<{ text: string; priority: string }>>([]);
-  
+
   const { reactToExpense } = useExpenseReaction();
   const lastCallRef = useRef<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isRequestingRef = useRef(false);
 
+  // Auto-scroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
-      setTimeout(() => {
-        scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
   }, [messages, isLoading]);
+
+  // Auto-grow textarea
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+  }, [input]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserId(session?.user?.id || null);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (userId && messages.length === 0) {
       setSuggestions([
-        { text: t('assistant.suggestion_focus'), priority: "high" },
-        { text: t('assistant.suggestion_tasks'), priority: "medium" },
-        { text: t('assistant.suggestion_events'), priority: "medium" },
-        { text: t('assistant.suggestion_expenses'), priority: "low" },
+        { text: t('assistant.suggestion_focus'), priority: 'high' },
+        { text: t('assistant.suggestion_tasks'), priority: 'medium' },
+        { text: t('assistant.suggestion_events'), priority: 'medium' },
+        { text: t('assistant.suggestion_expenses'), priority: 'low' },
       ]);
     }
-  }, [userId, messages.length, i18n.language]);
+  }, [userId, messages.length, i18n.language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const UI_ACTION_MAP: Record<string, string> = {
-    [t('assistant.suggestion_tasks')]: "__UI_ACTION__:SHOW_TASKS",
-    [t('assistant.suggestion_events')]: "__UI_ACTION__:SHOW_EVENTS",
-    [t('assistant.suggestion_expenses')]: "__UI_ACTION__:SHOW_EXPENSES",
-    [t('assistant.quick_new_task')]: "__UI_ACTION__:ADD_TASK",
-    [t('assistant.quick_add_task')]: "__UI_ACTION__:ADD_TASK",
+    [t('assistant.suggestion_tasks')]: '__UI_ACTION__:SHOW_TASKS',
+    [t('assistant.suggestion_events')]: '__UI_ACTION__:SHOW_EVENTS',
+    [t('assistant.suggestion_expenses')]: '__UI_ACTION__:SHOW_EXPENSES',
+    [t('assistant.quick_new_task')]: '__UI_ACTION__:ADD_TASK',
+    [t('assistant.quick_add_task')]: '__UI_ACTION__:ADD_TASK',
   };
 
   const handleClearHistory = async () => {
     if (!userId) return;
-    
+    hapticImpact('medium');
     try {
       setMessages([]);
-      
       await supabase
         .from('assistant_state')
         .upsert({
@@ -165,23 +163,15 @@ export default function AssistantPanel() {
           missing_fields: [],
           awaiting_confirmation: false,
           attempts: 0,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
-      
-      toast({
-        title: t('assistant.history_cleared'),
-        description: t('assistant.history_cleared_desc'),
-      });
-    } catch (error) {
-      toast({
-        title: t('assistant.error'),
-        description: t('assistant.error_clear'),
-        variant: "destructive",
-      });
+      toast({ title: t('assistant.history_cleared'), description: t('assistant.history_cleared_desc') });
+    } catch {
+      toast({ title: t('assistant.error'), description: t('assistant.error_clear'), variant: 'destructive' });
     }
   };
 
-  const buildFinancialContext = async (userMessage: string) => {
+  const buildFinancialContext = async () => {
     if (!userId) return undefined;
     try {
       const [signals, profile, lastWeekly, lastMonthly] = await Promise.all([
@@ -191,7 +181,6 @@ export default function AssistantPanel() {
         getLatestMonthlySummary(userId),
       ]);
       if (!signals) return undefined;
-
       const risk = evaluateRisk(signals, profile);
       return {
         signals: {
@@ -206,8 +195,8 @@ export default function AssistantPanel() {
           timeProgress: signals.timeProgress,
         },
         risk: { riskLevel: risk.riskLevel, flags: risk.flags },
-        timeframe: "month" as const,
-        userIntentType: "analysis",
+        timeframe: 'month' as const,
+        userIntentType: 'analysis',
         lastWeeklySummary: lastWeekly,
         lastMonthlySummary: lastMonthly,
       };
@@ -219,276 +208,260 @@ export default function AssistantPanel() {
   const sendMessage = useCallback(async (messageText?: string) => {
     const rawText = messageText || input.trim();
     if (!rawText || isLoading || !userId) return;
-    
+
     const textToSend = UI_ACTION_MAP[rawText] || rawText;
 
     if (isRequestingRef.current) return;
-
     const now = Date.now();
     if (now - lastCallRef.current < 1000) {
-      toast({
-        title: t('assistant.wait'),
-        description: t('assistant.wait_desc'),
-        variant: "default",
-      });
+      toast({ title: t('assistant.wait'), description: t('assistant.wait_desc') });
       return;
     }
     lastCallRef.current = now;
     isRequestingRef.current = true;
+    hapticImpact('light');
 
-    const userMessage: Message = { 
-      role: "user", 
-      content: rawText,
-      timestamp: new Date()
-    };
+    const userMessage: Message = { role: 'user', content: rawText, timestamp: new Date() };
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    setInput('');
     setIsLoading(true);
     setSuggestions([]);
 
     try {
       const [financialContext, activeStrategy] = await Promise.all([
-        buildFinancialContext(rawText),
+        buildFinancialContext(),
         userId ? getActiveStrategy(userId) : Promise.resolve(null),
       ]);
+      if (financialContext && activeStrategy) (financialContext as any).activeStrategy = activeStrategy;
 
-      if (financialContext && activeStrategy) {
-        (financialContext as any).activeStrategy = activeStrategy;
-      }
-
-      const { data, error } = await supabase.functions.invoke("ai-free-chat", {
-        body: {
-          userMessage: textToSend,
-          userId,
-          locale: i18n.language,
-          financialContext,
-        }
+      const { data, error } = await supabase.functions.invoke('ai-free-chat', {
+        body: { userMessage: textToSend, userId, locale: i18n.language, financialContext },
       });
-      
+
       if (error) {
-        if (import.meta.env.DEV) console.error("[AssistantPanel] Edge function error:", error);
-        
+        if (import.meta.env.DEV) console.error('[AssistantPanel] Edge function error:', error);
         const fallbackMessage: Message = {
-          role: "assistant",
+          role: 'assistant',
           content: t('assistant.connection_issue'),
           timestamp: new Date(),
-          suggestions: [t('assistant.retry'), t('assistant.suggestion_tasks'), t('assistant.suggestion_events')]
+          suggestions: [t('assistant.retry'), t('assistant.suggestion_tasks'), t('assistant.suggestion_events')],
         };
         setMessages((prev) => [...prev, fallbackMessage]);
         setSuggestions([
-          { text: t('assistant.retry'), priority: "high" },
-          { text: t('assistant.suggestion_tasks'), priority: "medium" },
-          { text: t('assistant.suggestion_events'), priority: "medium" },
+          { text: t('assistant.retry'), priority: 'high' },
+          { text: t('assistant.suggestion_tasks'), priority: 'medium' },
+          { text: t('assistant.suggestion_events'), priority: 'medium' },
         ]);
         return;
       }
-      
-      const structured = data.structured as StructuredResponse | undefined;
 
+      const structured = data.structured as StructuredResponse | undefined;
       const assistantMessage: Message = {
-        role: "assistant",
+        role: 'assistant',
         content: structured ? structured.summary : (data.reply || t('assistant.how_can_i_help')),
         timestamp: new Date(),
         suggestions: data.suggestions,
         structured,
       };
-      
       setMessages((prev) => [...prev, assistantMessage]);
-
       if (data.suggestions && data.suggestions.length > 0) {
         setSuggestions(data.suggestions.map((s: string) => ({ text: s, priority: 'medium' })));
       }
     } catch (error: any) {
-      if (import.meta.env.DEV) console.error("[AssistantPanel] Unexpected error:", error);
-      
+      if (import.meta.env.DEV) console.error('[AssistantPanel] Unexpected error:', error);
       const fallbackMessage: Message = {
-        role: "assistant",
+        role: 'assistant',
         content: t('assistant.something_wrong'),
         timestamp: new Date(),
-        suggestions: [t('assistant.suggestion_tasks'), t('assistant.suggestion_events'), t('assistant.quick_new_task')]
+        suggestions: [t('assistant.suggestion_tasks'), t('assistant.suggestion_events'), t('assistant.quick_new_task')],
       };
       setMessages((prev) => [...prev, fallbackMessage]);
       setSuggestions([
-        { text: t('assistant.suggestion_tasks'), priority: "high" },
-        { text: t('assistant.suggestion_events'), priority: "medium" },
-        { text: t('assistant.quick_new_task'), priority: "medium" },
+        { text: t('assistant.suggestion_tasks'), priority: 'high' },
+        { text: t('assistant.suggestion_events'), priority: 'medium' },
+        { text: t('assistant.quick_new_task'), priority: 'medium' },
       ]);
     } finally {
       setIsLoading(false);
       isRequestingRef.current = false;
     }
-  }, [input, isLoading, userId, toast, t, i18n.language]);
+  }, [input, isLoading, userId, toast, t, i18n.language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && !isLoading) {
+    if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
       e.preventDefault();
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => sendMessage(), 200);
     }
   }, [isLoading, sendMessage]);
 
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    };
+  useEffect(() => () => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
   }, []);
 
+  // Group consecutive same-author messages (for tighter spacing like iMessage)
   const messageVariants = {
-    hidden: { opacity: 0, y: 8 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" as const } }
+    hidden: { opacity: 0, y: 8, scale: 0.96 },
+    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.22, ease: [0.34, 1.56, 0.64, 1] as any } },
   };
 
   return (
-    <Card className="flex flex-col h-[calc(100vh-12rem)] bg-card border-border rounded-xl">
-      {messages.length > 0 && (
-        <div className="flex justify-end px-4 pt-3 border-b border-border pb-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClearHistory}
-            className="text-muted-foreground hover:text-destructive h-7 px-2 rounded-md"
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
-            <span className="text-xs">{t('assistant.clear')}</span>
-          </Button>
-        </div>
-      )}
-      
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-5">
-        <div className="space-y-4">
+    <div className="flex flex-col h-full">
+      {/* Messages area */}
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 pt-2 pb-4">
+        <div className="max-w-2xl mx-auto space-y-3">
           <AnimatePresence mode="popLayout">
             {messages.length === 0 && !isLoading && (
-              <motion.div 
+              <motion.div
                 key="welcome"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="flex gap-2.5 items-start pt-4"
+                className="flex flex-col items-center text-center pt-6 pb-2"
               >
-                <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                  <Zap className="h-4 w-4 text-primary-foreground" />
+                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shadow-[0_8px_24px_rgba(15,61,62,0.25)] mb-4">
+                  <Sparkles className="h-6 w-6 text-primary-foreground" />
                 </div>
-                <div>
-                  <p className="text-sm text-foreground leading-relaxed">
-                    {t('assistant.welcome_subtitle')}
-                  </p>
-                </div>
+                <h2 className="text-[19px] font-semibold tracking-tight mb-1.5">
+                  {t('assistant.title')}
+                </h2>
+                <p className="text-[14px] text-muted-foreground max-w-xs leading-relaxed">
+                  {t('assistant.welcome_subtitle')}
+                </p>
               </motion.div>
             )}
 
-            {messages.map((msg, idx) => (
-              <motion.div 
-                key={idx}
-                variants={messageVariants}
-                initial="hidden"
-                animate="visible"
-                className="space-y-1"
-              >
-                <div className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  {msg.role === "assistant" && (
-                    <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                      <Zap className="h-3.5 w-3.5 text-primary-foreground" />
+            {messages.map((msg, idx) => {
+              const prev = messages[idx - 1];
+              const isGrouped = prev && prev.role === msg.role;
+              return (
+                <motion.div
+                  key={idx}
+                  variants={messageVariants}
+                  initial="hidden"
+                  animate="visible"
+                  layout
+                  className={cn('space-y-1', isGrouped ? 'pt-0.5' : 'pt-2')}
+                >
+                  <div className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                    <div className={cn(
+                      'max-w-[82%] sm:max-w-[70%]',
+                      msg.role === 'user' ? 'bubble-user' : 'bubble-ai'
+                    )}>
+                      {msg.role === 'assistant' && msg.structured ? (
+                        <StructuredResponseView structured={msg.structured} />
+                      ) : (
+                        <p className="text-[15px] whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                      )}
+                    </div>
+                  </div>
+                  {!isGrouped && (
+                    <div className={cn(
+                      'text-[10px] text-muted-foreground/70 px-1',
+                      msg.role === 'user' ? 'text-right' : 'text-left'
+                    )}>
+                      {formatTime(msg.timestamp, i18n.language)}
                     </div>
                   )}
-                  <div className={`max-w-[80%] rounded-xl px-3 py-2.5 ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted border border-border"
-                  }`}>
-                    {msg.role === "assistant" && msg.structured ? (
-                      <StructuredResponseView structured={msg.structured} />
-                    ) : (
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                    )}
-                  </div>
-                  {msg.role === "user" && (
-                    <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                      <User className="h-3.5 w-3.5 text-muted-foreground" />
+
+                  {msg.role === 'assistant' && msg.suggestions && msg.suggestions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {msg.suggestions.map((sug, sugIdx) => (
+                        <button
+                          key={sugIdx}
+                          onClick={() => sendMessage(sug)}
+                          disabled={isLoading}
+                          className="text-[12px] h-7 rounded-full px-3 border border-border bg-card hover:bg-muted/80 transition-colors pressable"
+                        >
+                          {sug}
+                        </button>
+                      ))}
                     </div>
                   )}
-                </div>
-                <div className={`text-[10px] text-muted-foreground ${msg.role === "user" ? "text-right pr-10" : "pl-10"}`}>
-                  {formatTime(msg.timestamp, i18n.language)}
-                </div>
-                
-                {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && (
-                  <div className="pl-10 mt-2 flex flex-wrap gap-1.5">
-                    {msg.suggestions.map((sug, sugIdx) => (
-                      <Button
-                        key={sugIdx}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => sendMessage(sug)}
-                        disabled={isLoading}
-                        className="text-xs h-7 rounded-md px-2.5 border-border"
-                      >
-                        {sug}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
 
           {isLoading && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2 justify-start">
-              <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                <Zap className="h-3.5 w-3.5 text-primary-foreground" />
-              </div>
-              <div className="bg-muted border border-border rounded-xl px-4 py-3">
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary/50 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary/50 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start pt-2">
+              <div className="bubble-ai">
+                <div className="flex gap-1 py-0.5">
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             </motion.div>
           )}
-          
+
           <div ref={scrollRef} />
         </div>
       </div>
-      
-      {suggestions.length > 0 && (
-        <div className="px-4 py-2 border-t border-border">
-          <div className="flex flex-wrap gap-1.5">
+
+      {/* Suggestions horizontal scroll */}
+      {suggestions.length > 0 && messages.length === 0 && (
+        <div className="px-4 pb-2">
+          <div className="max-w-2xl mx-auto scroll-snap-x">
             {suggestions.map((sug, idx) => (
-              <Button
+              <button
                 key={idx}
-                variant="outline"
-                size="sm"
                 onClick={() => sendMessage(sug.text)}
                 disabled={isLoading}
-                className="text-xs h-7 rounded-full px-3 border-border"
+                className="text-[13px] h-9 rounded-full px-4 border border-border bg-card hover:bg-muted/80 transition-colors pressable whitespace-nowrap"
               >
                 {sug.text}
-              </Button>
+              </button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="p-3 border-t border-border">
-        <div className="flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder={t('assistant.placeholder')}
-            disabled={isLoading || !userId}
-            className="flex-1 h-10 rounded-lg bg-muted border-border text-sm"
-          />
-          <Button
+      {/* Composer (sticky bottom) */}
+      <div className="bg-glass border-t border-border/60 px-3 pt-2.5 pb-3 sm:rounded-b-2xl">
+        <div className="max-w-2xl mx-auto flex items-end gap-2">
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClearHistory}
+              className="h-11 w-11 rounded-full shrink-0 text-muted-foreground hover:text-destructive"
+              aria-label={t('assistant.clear')}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+          <div className="flex-1 flex items-end gap-1.5 bg-muted/70 rounded-3xl px-4 py-2 min-h-[44px] focus-within:bg-card focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder={t('assistant.placeholder')}
+              disabled={isLoading || !userId}
+              rows={1}
+              className="flex-1 bg-transparent border-0 outline-none resize-none text-[15px] leading-snug placeholder:text-muted-foreground/70 disabled:opacity-50 max-h-[120px] py-1.5"
+            />
+          </div>
+          <button
             onClick={() => sendMessage()}
             disabled={isLoading || !input.trim() || !userId}
-            size="icon"
-            className="h-10 w-10 rounded-lg shrink-0"
+            aria-label={t('assistant.send', { defaultValue: 'Invia' })}
+            className={cn(
+              'h-11 w-11 rounded-full flex items-center justify-center shrink-0 transition-all pressable',
+              input.trim() && !isLoading
+                ? 'bg-primary text-primary-foreground shadow-[0_4px_12px_rgba(15,61,62,0.3)]'
+                : 'bg-muted text-muted-foreground'
+            )}
           >
-            <ArrowUp className="h-4 w-4" />
-          </Button>
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowUp className="h-5 w-5" strokeWidth={2.5} />
+            )}
+          </button>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

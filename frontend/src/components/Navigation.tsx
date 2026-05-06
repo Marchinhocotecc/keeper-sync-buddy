@@ -66,7 +66,7 @@ export function Navigation() {
       </nav>
 
       {/* Mobile bottom tab bar — native feel: blur, pill indicator, haptic */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden safe-area-bottom border-t border-border/60 bg-card/80 backdrop-blur-xl supports-[backdrop-filter]:bg-card/70 shadow-[0_-1px_8px_rgba(0,0,0,0.04)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden safe-area-bottom border-t border-border/40 bg-glass-strong shadow-[0_-1px_8px_rgba(0,0,0,0.04)]">
         <div className="flex items-stretch justify-around h-[60px] px-1">
           {links.map((link) => {
             const Icon = link.icon;
@@ -77,16 +77,21 @@ export function Navigation() {
                 to={link.to}
                 onClick={() => { if (!isActive) hapticImpact('light'); }}
                 className={cn(
-                  'relative flex flex-col items-center justify-center flex-1 min-w-0 transition-transform active:scale-[0.92]',
+                  'relative flex flex-col items-center justify-center flex-1 min-w-0 transition-transform active:scale-[0.92] gap-0.5',
                   isActive ? 'text-primary' : 'text-muted-foreground'
                 )}
                 aria-current={isActive ? 'page' : undefined}
+                aria-label={link.label}
               >
+                <Icon
+                  className={cn('h-[22px] w-[22px] transition-all', isActive && 'text-primary')}
+                  strokeWidth={isActive ? 2.4 : 2}
+                />
                 <span className={cn(
-                  'flex items-center justify-center rounded-full transition-all',
-                  isActive ? 'bg-primary/12 px-4 py-1.5' : 'px-3 py-1.5'
+                  'text-[10px] font-medium tracking-tight transition-all leading-none',
+                  isActive ? 'opacity-100' : 'opacity-0 h-0'
                 )}>
-                  <Icon className={cn('h-[22px] w-[22px]', isActive && 'text-primary')} strokeWidth={isActive ? 2.4 : 2} />
+                  {link.label}
                 </span>
               </Link>
             );
