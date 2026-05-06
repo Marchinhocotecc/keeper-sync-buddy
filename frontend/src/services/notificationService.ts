@@ -20,12 +20,17 @@ export interface NotificationPreferences {
   focusTime: string; // HH:mm
   wellbeingTime: string; // HH:mm
   taskBeforeMinutes: number;
+  // Blocco B
+  eveningCheckin: boolean;
+  eveningCheckinTime: string; // HH:mm (default 21:00)
+  weeklyRecap: boolean;
+  weeklyRecapTime: string; // HH:mm (default 19:00)
 }
 
 export interface ScheduledNotification {
   id?: string;
   user_id: string;
-  type: 'task' | 'event' | 'daily_focus' | 'wellbeing';
+  type: 'task' | 'event' | 'daily_focus' | 'wellbeing' | 'evening_checkin' | 'weekly_recap';
   reference_id: string | null;
   scheduled_time: string;
   title: string;
@@ -304,6 +309,62 @@ export async function scheduleWellbeingNotification(
 }
 
 /**
+ * Schedule the evening check-in notification (Blocco B #3)
+ * Default time 21:00. Re-schedules for next day after firing.
+ */
+export async function scheduleEveningCheckinNotification(
+  userId: string,
+  checkinTime: string = '21:00'
+): Promise<boolean> {
+  const now = new Date();
+  const [hours, minutes] = checkinTime.split(':').map(Number);
+  let scheduledTime = setHours(setMinutes(now, minutes), hours);
+
+  if (isAfter(now, scheduledTime)) {
+    scheduledTime = addMinutes(scheduledTime, 24 * 60);
+  }
+
+  return scheduleNotification({
+    user_id: userId,
+    type: 'evening_checkin',
+    reference_id: null,
+    scheduled_time: scheduledTime.toISOString(),
+    title: '🌙 Chiudi la giornata',
+    body: '10 secondi per fare il check-in di oggi.',
+  });
+}
+
+/**
+ * Schedule the weekly recap notification (Blocco B #5)
+ * Default Sunday 19:00. Computes the next occurrence.
+ */
+export async function scheduleWeeklyRecapNotification(
+  userId: string,
+  recapTime: string = '19:00',
+  weekday: number = 0 // 0=Sun..6=Sat
+): Promise<boolean> {
+  const now = new Date();
+  const [hours, minutes] = recapTime.split(':').map(Number);
+  const target = new Date(now);
+  target.setHours(hours, minutes, 0, 0);
+  const diffDays = (weekday - now.getDay() + 7) % 7;
+  if (diffDays === 0 && isAfter(now, target)) {
+    target.setDate(target.getDate() + 7);
+  } else if (diffDays > 0) {
+    target.setDate(target.getDate() + diffDays);
+  }
+
+  return scheduleNotification({
+    user_id: userId,
+    type: 'weekly_recap',
+    reference_id: null,
+    scheduled_time: target.toISOString(),
+    title: '📊 Recap settimana pronto',
+    body: 'Scopri quanto hai speso e il consiglio di Ayvro per la prossima.',
+  });
+}
+
+/**
  * Cancel a scheduled notification
  */
 export async function cancelNotification(
@@ -540,6 +601,8 @@ export async function rescheduleDailyNotifications(
   // Cancel existing daily notifications
   await cancelNotification(userId, 'daily_focus', null);
   await cancelNotification(userId, 'wellbeing', null);
+  await cancelNotification(userId, 'evening_checkin', null);
+  await cancelNotification(userId, 'weekly_recap', null);
 
   // Schedule new ones if enabled
   if (preferences.enabled && preferences.dailyFocus) {
@@ -548,6 +611,14 @@ export async function rescheduleDailyNotifications(
 
   if (preferences.enabled && preferences.wellbeing) {
     await scheduleWellbeingNotification(userId, preferences.wellbeingTime);
+  }
+
+  if (preferences.enabled && preferences.eveningCheckin) {
+    await scheduleEveningCheckinNotification(userId, preferences.eveningCheckinTime);
+  }
+
+  if (preferences.enabled && preferences.weeklyRecap) {
+    await scheduleWeeklyRecapNotification(userId, preferences.weeklyRecapTime);
   }
 }
 
@@ -563,6 +634,10 @@ export function getNotificationPreferencesFromSettings(settings: any): Notificat
     wellbeing: settings?.notify_wellbeing ?? false,
     focusTime: settings?.notify_focus_time ?? '08:30',
     wellbeingTime: settings?.notify_wellbeing_time ?? '20:30',
-    taskBeforeMinutes: settings?.notify_task_before_minutes ?? 60
+    taskBeforeMinutes: settings?.notify_task_before_minutes ?? 60,
+    eveningCheckin: settings?.notify_evening_checkin ?? false,
+    eveningCheckinTime: settings?.notify_evening_checkin_time ?? '21:00',
+    weeklyRecap: settings?.notify_weekly_recap ?? false,
+    weeklyRecapTime: settings?.notify_weekly_recap_time ?? '19:00',
   };
 }

@@ -30,6 +30,7 @@ const TermsAndConditionsPage = lazy(() => import("./pages/TermsAndConditionsPage
 const AcceptTermsPage = lazy(() => import("./pages/AcceptTermsPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const WeeklyRecapPage = lazy(() => import("./pages/WeeklyRecapPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +78,7 @@ function AnimatedRoutes() {
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
           <Route path="/accept-terms" element={<AcceptTermsPage />} />
+          <Route path="/recap/weekly" element={<ProtectedRoute><WeeklyRecapPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

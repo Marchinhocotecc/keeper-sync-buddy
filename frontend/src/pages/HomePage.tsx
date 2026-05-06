@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,10 @@ import { PullToRefresh } from '@/components/PullToRefresh';
 import { formatCurrency } from '@/utils/currency';
 import { useQueryClient } from '@tanstack/react-query';
 import { DailyBudgetRing } from '@/components/DailyBudgetRing';
+import { HomeChatBar } from '@/components/HomeChatBar';
+import { CheckInSheet } from '@/components/CheckInSheet';
+import { useTodayCheckin, useRecentCheckinDates } from '@/hooks/useDailyCheckin';
+import { computeStreak } from '@/services/dailyCheckinService';
 
 function getTimeGreetingKey(): string {
   const h = new Date().getHours();
@@ -46,38 +50,43 @@ export default function HomePage() {
   const { insights, financialInsight, weeklySummary, monthlySummary } = useHomeInsights(userId);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  const [showCheckin, setShowCheckin] = useState(false);
+  const { data: todayCheckin } = useTodayCheckin(userId);
+  const { data: checkinDates } = useRecentCheckinDates(userId);
+
+  // Auto-open evening check-in: after 21:00 if not done today (only first time per session)
+  useEffect(() => {
+    if (!userId) return;
+    const seenKey = `checkin_seen_${new Date().toDateString()}`;
+    if (sessionStorage.getItem(seenKey)) return;
+    const now = new Date();
+    if (now.getHours() >= 21 && !todayCheckin) {
+      const t = setTimeout(() => {
+        setShowCheckin(true);
+        sessionStorage.setItem(seenKey, '1');
+      }, 1500); // wait until page settled
+      return () => clearTimeout(t);
+    }
+  }, [userId, todayCheckin]);
 
   const todayTasks = tasks.filter((t) => !t.completed && t.priority === 'high');
   const completedToday = tasks.filter((t) => t.completed).length;
   const totalTodayTasks = tasks.filter((t) => t.priority === 'high').length;
   const upcomingTasks = tasks.filter((t) => !t.completed && t.priority !== 'high');
 
-  // Calculate streak: consecutive days with at least 1 completed task
+  // Calculate streak: combines task completions + daily check-ins (Blocco B)
   const streak = useMemo(() => {
     const completedTasks = tasks.filter(t => t.completed && t.due_date);
-    if (completedTasks.length === 0 && completedToday === 0) return 0;
-    
     const datesWithCompletions = new Set<string>();
     completedTasks.forEach(t => {
       if (t.due_date) datesWithCompletions.add(t.due_date.split('T')[0]);
     });
-    // Add today if any task completed today
-    if (completedToday > 0) datesWithCompletions.add(new Date().toISOString().split('T')[0]);
-    
-    let count = 0;
-    const today = new Date();
-    for (let i = 0; i < 365; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      if (datesWithCompletions.has(key)) {
-        count++;
-      } else if (i > 0) {
-        break;
-      }
-    }
-    return count;
-  }, [tasks, completedToday]);
+    const todayKey = new Date().toISOString().split('T')[0];
+    if (completedToday > 0) datesWithCompletions.add(todayKey);
+    const checkins = checkinDates || new Set<string>();
+    const hasActivityToday = completedToday > 0 || !!todayCheckin;
+    return computeStreak(datesWithCompletions, checkins, hasActivityToday);
+  }, [tasks, completedToday, checkinDates, todayCheckin]);
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 7);
@@ -222,13 +231,21 @@ export default function HomePage() {
                   </p>
                 </div>
                 {streak >= 1 && (
-                  <div className="shrink-0 mt-1 flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[12px] font-semibold animate-pop-in">
+                  <button
+                    type="button"
+                    onClick={() => setShowCheckin(true)}
+                    className="shrink-0 mt-1 flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[12px] font-semibold animate-pop-in pressable"
+                    aria-label={t('checkin.open', { defaultValue: 'Apri check-in' })}
+                  >
                     <Flame className="h-3.5 w-3.5" />
                     <span className="tabular-nums">{streak}</span>
-                  </div>
+                  </button>
                 )}
               </div>
             </div>
+
+            {/* Sticky chat bar (Blocco B #6) */}
+            <HomeChatBar />
 
             {/* Daily Budget Ring — answers "posso spendere oggi?" in 1 second */}
             <div className="mb-4">
@@ -374,6 +391,13 @@ export default function HomePage() {
             </div>
           </div>
         </PullToRefresh>
+
+        {/* Evening check-in sheet (Blocco B #3) — auto-opens after 21:00 if not done */}
+        <CheckInSheet
+          open={showCheckin}
+          onOpenChange={setShowCheckin}
+          currentStreak={streak}
+        />
       </main>
     </PageTransition>
   );
