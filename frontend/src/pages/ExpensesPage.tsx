@@ -28,9 +28,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast as sonnerToast } from 'sonner';
 import { MobilePageHeader } from '@/components/MobilePageHeader';
 import { BottomSheet } from '@/components/BottomSheet';
-import { FAB } from '@/components/FAB';
 import { hapticImpact } from '@/utils/haptics';
 import { cn } from '@/lib/utils';
+import { CategoryChips } from '@/components/CategoryChips';
+import { useTopCategories } from '@/hooks/useTopCategories';
 
 const COLORS = ['#0F3D3E', '#145A5B', '#1E6F70', '#2E7D32', '#E6A23C', '#D64545', '#6B7280'];
 
@@ -122,6 +123,7 @@ export default function ExpensesPage() {
   const { user } = useAuth();
   const userId = user?.id;
   const { expenses, isLoading, addExpense, deleteExpense } = useExpenses(userId);
+  const { data: topCategories = [] } = useTopCategories(userId);
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [isSavingBudget, setIsSavingBudget] = useState(false);
@@ -257,16 +259,6 @@ export default function ExpensesPage() {
             <MobilePageHeader
               title={t('expenses.title')}
               subtitle={t('expenses.manageExpenses')}
-              action={
-                <Button
-                  onClick={() => setShowAddSheet(true)}
-                  size="sm"
-                  className="hidden sm:flex gap-2 rounded-xl h-9 px-4"
-                >
-                  <Plus className="h-4 w-4" />
-                  {t('expenses.addExpense')}
-                </Button>
-              }
             />
 
             {/* Hero budget card */}
@@ -325,83 +317,83 @@ export default function ExpensesPage() {
               )}
             </motion.div>
 
-            {/* Quick add inline pill */}
+            {/* Quick add inline — chip rail above, amount + send below */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.05 }}
-              className="card-ios mb-5 p-3 flex items-center gap-2"
+              className="card-ios mb-5 p-3 space-y-3"
             >
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder={currencySymbol}
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                className="w-24 h-11 text-[15px] rounded-xl border-transparent bg-muted/60"
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter' && formData.amount && parseFloat(formData.amount) > 0) {
-                    e.preventDefault();
-                    const amount = parseFloat(formData.amount);
+              <CategoryChips
+                value={formData.category}
+                onChange={(c) => setFormData({ ...formData, category: c })}
+                topCategories={topCategories}
+              />
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 flex-1 bg-muted/60 rounded-xl px-3 h-11">
+                  <span className="text-[16px] text-muted-foreground font-medium shrink-0">{currencySymbol}</span>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*[.,]?[0-9]*"
+                    placeholder="0,00"
+                    value={formData.amount}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9.,]/g, '');
+                      setFormData({ ...formData, amount: v });
+                    }}
+                    className="flex-1 border-0 bg-transparent text-[16px] font-semibold p-0 h-auto focus-visible:ring-0 placeholder:text-muted-foreground/50 tabular-nums"
+                    onKeyDown={async (e) => {
+                      const num = parseFloat(formData.amount.replace(',', '.'));
+                      if (e.key === 'Enter' && !isNaN(num) && num > 0) {
+                        e.preventDefault();
+                        const today = new Date().toISOString().split('T')[0];
+                        hapticImpact('light');
+                        const result = await addExpense.mutateAsync({
+                          amount: num, category: formData.category, description: '', date: today,
+                        });
+                        setFormData({ ...formData, amount: '' });
+                        const expenseId = (result as any)?.id;
+                        sonnerToast(t('expenses.expenseAdded'), {
+                          description: `${formatCurrency(num, lang, 2)} — ${t(`expenses.${formData.category}`)}`,
+                          action: expenseId ? {
+                            label: t('expenses.undo'),
+                            onClick: () => deleteExpense.mutate(expenseId),
+                          } : undefined,
+                          duration: 5000,
+                        });
+                      }
+                    }}
+                  />
+                </div>
+                <Button
+                  size="icon"
+                  onClick={async () => {
+                    const num = parseFloat(formData.amount.replace(',', '.'));
+                    if (isNaN(num) || num <= 0) return;
                     const today = new Date().toISOString().split('T')[0];
                     hapticImpact('light');
                     const result = await addExpense.mutateAsync({
-                      amount, category: formData.category, description: '', date: today,
+                      amount: num, category: formData.category, description: '', date: today,
                     });
                     setFormData({ ...formData, amount: '' });
                     const expenseId = (result as any)?.id;
                     sonnerToast(t('expenses.expenseAdded'), {
-                      description: `${formatCurrency(amount, lang, 2)} — ${t(`expenses.${formData.category}`)}`,
+                      description: `${formatCurrency(num, lang, 2)} — ${t(`expenses.${formData.category}`)}`,
                       action: expenseId ? {
                         label: t('expenses.undo'),
                         onClick: () => deleteExpense.mutate(expenseId),
                       } : undefined,
                       duration: 5000,
                     });
-                  }
-                }}
-              />
-              <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
-                <SelectTrigger className="flex-1 h-11 text-[14px] rounded-xl border-transparent bg-muted/60">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="food">{t('expenses.food')}</SelectItem>
-                  <SelectItem value="transport">{t('expenses.transport')}</SelectItem>
-                  <SelectItem value="entertainment">{t('expenses.entertainment')}</SelectItem>
-                  <SelectItem value="shopping">{t('expenses.shopping')}</SelectItem>
-                  <SelectItem value="health">{t('expenses.health')}</SelectItem>
-                  <SelectItem value="bills">{t('expenses.bills')}</SelectItem>
-                  <SelectItem value="other">{t('expenses.other')}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                size="icon"
-                onClick={async () => {
-                  if (!formData.amount || parseFloat(formData.amount) <= 0) return;
-                  const amount = parseFloat(formData.amount);
-                  const today = new Date().toISOString().split('T')[0];
-                  hapticImpact('light');
-                  const result = await addExpense.mutateAsync({
-                    amount, category: formData.category, description: '', date: today,
-                  });
-                  setFormData({ ...formData, amount: '' });
-                  const expenseId = (result as any)?.id;
-                  sonnerToast(t('expenses.expenseAdded'), {
-                    description: `${formatCurrency(amount, lang, 2)} — ${t(`expenses.${formData.category}`)}`,
-                    action: expenseId ? {
-                      label: t('expenses.undo'),
-                      onClick: () => deleteExpense.mutate(expenseId),
-                    } : undefined,
-                    duration: 5000,
-                  });
-                }}
-                disabled={!formData.amount || parseFloat(formData.amount) <= 0 || addExpense.isPending}
-                className="h-11 w-11 rounded-xl shrink-0"
-              >
-                {addExpense.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-5 w-5" />}
-              </Button>
+                  }}
+                  disabled={!formData.amount || parseFloat(formData.amount.replace(',', '.')) <= 0 || addExpense.isPending}
+                  className="h-11 w-11 rounded-xl shrink-0"
+                  aria-label={t('expenses.addExpense')}
+                >
+                  {addExpense.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-5 w-5" />}
+                </Button>
+              </div>
             </motion.div>
 
             <FinancialInsightSection userId={userId} />
@@ -533,13 +525,6 @@ export default function ExpensesPage() {
           </div>
         </PullToRefresh>
 
-        {/* Floating Action Button (mobile) */}
-        <FAB
-          icon={<Plus className="h-6 w-6" />}
-          ariaLabel={t('expenses.addExpense')}
-          onClick={() => setShowAddSheet(true)}
-        />
-
         {/* Add expense bottom sheet */}
         <BottomSheet
           open={showAddSheet}
@@ -564,20 +549,11 @@ export default function ExpensesPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="category" className="text-[13px] font-medium">{t('expenses.categoryRequired')}</Label>
-              <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
-                <SelectTrigger id="category" className="h-12 text-[15px] rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="food">{t('expenses.food')}</SelectItem>
-                  <SelectItem value="transport">{t('expenses.transport')}</SelectItem>
-                  <SelectItem value="entertainment">{t('expenses.entertainment')}</SelectItem>
-                  <SelectItem value="shopping">{t('expenses.shopping')}</SelectItem>
-                  <SelectItem value="health">{t('expenses.health')}</SelectItem>
-                  <SelectItem value="bills">{t('expenses.bills')}</SelectItem>
-                  <SelectItem value="other">{t('expenses.other')}</SelectItem>
-                </SelectContent>
-              </Select>
+              <CategoryChips
+                value={formData.category}
+                onChange={(c) => setFormData({ ...formData, category: c })}
+                topCategories={topCategories}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="date" className="text-[13px] font-medium">{t('expenses.dateRequired')}</Label>

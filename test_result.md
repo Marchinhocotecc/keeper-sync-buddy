@@ -105,6 +105,18 @@
 user_problem_statement: "Trasforma l'app Ayvro (finanza personale + AI assistant + tasks/wellness) in mobile-first con UI ottimizzata. Stile iOS-style moderno, pattern nativi (collapsing header, FAB, bottom sheets, swipe-to-delete, pull-to-refresh). Pagine prioritarie: Expenses, Assistant, Auth/Onboarding. Mobile-first ma desktop migliorato in parallelo. Niente test funzionali con login (utente verifica con il proprio account)."
 
 frontend:
+  - task: "Blocco A — Quick-add FAB globale + Daily Budget Ring + Category Chips"
+    implemented: true
+    working: "NA"
+    file: "src/components/QuickAddFab.tsx, src/components/DailyBudgetRing.tsx, src/components/CategoryChips.tsx, src/hooks/useDailyBudget.ts, src/hooks/useTopCategories.ts, src/hooks/useFrequentExpense.ts, src/components/Navigation.tsx, src/pages/HomePage.tsx, src/pages/ExpensesPage.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implementato Blocco A 'daily-use core' (punti 1+2+4 dello spec utente). NUOVI hook: useDailyBudget (formula scelta 1b: dailyBudget=(monthlyBudget-totalSpent)/max(1,daysRemainingInclusive-1), gestisce edge cases divisore=0 e budget non impostato, status good/warning/over/no_budget basato su ratio todaySpent/dailyBudget), useTopCategories (top 3 categorie da query expenses ultimi 30gg, cache 10min), useFrequentExpense (categoria piu' frequente ultime 4 settimane + media importo). NUOVI componenti: CategoryChips (chip orizzontali scrollabili con icona+colore tinted per categoria, supporta topCategories per riordinamento, haptic light al cambio), DailyBudgetRing (SVG circle 76r/12 stroke con due archi, colore dinamico verde/ambra/rosso, centro con dailyBudget grande, micro-row sotto con speso oggi+media giornaliera, CTA 'Imposta budget' quando no_budget), QuickAddFab (FAB globale con BottomSheet 2-tab Spesa|Task: Spesa con amount autoFocus inputMode=decimal, CategoryChips con topCategories, hint 'Spesa frequente' clickabile; Task con title autoFocus, priority=medium e due_date=oggi default; long-press 600ms su FAB pre-compila la spesa frequente; nascosto su /auth /onboarding /terms /privacy /reset-password). Modifiche: Navigation.tsx ospita QuickAddFab globale (eredita scope protetto). HomePage hero summary card sostituita con DailyBudgetRing + riga compatta 2-col (completati / spese settimana, click→/expenses) + streak badge spostato accanto al saluto in header. ExpensesPage rimosso FAB locale (ora globale), Select categoria sostituita con CategoryChips sia in inline-quick-add (con chip rail sopra+amount inputMode=decimal sotto) sia nel BottomSheet, amount sempre con inputMode=decimal. Verificato build (108KB gzip main, accettabile per la quantita' di feature aggiunte) + lint pulito + render auth/onboarding senza errori e FAB correttamente nascosto su pagine pubbliche."
+
   - task: "Foundation: design system iOS-style + componenti condivisi"
     implemented: true
     working: "NA"

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { hapticImpact } from '@/utils/haptics';
+import { QuickAddFab } from '@/components/QuickAddFab';
 
 export function Navigation() {
   const { t } = useTranslation();
@@ -98,6 +99,9 @@ export function Navigation() {
           })}
         </div>
       </nav>
+
+      {/* Global Quick-Add FAB (visible on all protected pages) */}
+      <QuickAddFab />
     </>
   );
 }

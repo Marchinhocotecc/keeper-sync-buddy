@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TaskCard } from '@/components/TaskCard';
 import { AddTaskForm } from '@/components/AddTaskForm';
@@ -25,6 +25,7 @@ import { PageTransition } from '@/components/PageTransition';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { formatCurrency } from '@/utils/currency';
 import { useQueryClient } from '@tanstack/react-query';
+import { DailyBudgetRing } from '@/components/DailyBudgetRing';
 
 function getTimeGreetingKey(): string {
   const h = new Date().getHours();
@@ -37,6 +38,7 @@ export default function HomePage() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { userId, userName, isLoading, error } = useHomeData();
   const { tasks, addTask, toggleTask, deleteTask } = useTasks(userId);
   const { addEvent, updateEvent, deleteEvent } = useCalendarEvents(userId);
@@ -210,53 +212,67 @@ export default function HomePage() {
       <main className="min-h-screen bg-background pb-20 sm:pb-0">
         <PullToRefresh onRefresh={handleRefresh}>
           <div className="page-container">
-            {/* Header */}
+            {/* Header with greeting + streak badge */}
             <div className="page-header animate-fade-in">
-              <h1 className="page-title">{t(getTimeGreetingKey(), { name: userName })}</h1>
-              <p className="page-subtitle">
-                {new Date().toLocaleDateString(dateLocale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h1 className="page-title truncate">{t(getTimeGreetingKey(), { name: userName })}</h1>
+                  <p className="page-subtitle">
+                    {new Date().toLocaleDateString(dateLocale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                </div>
+                {streak >= 1 && (
+                  <div className="shrink-0 mt-1 flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[12px] font-semibold animate-pop-in">
+                    <Flame className="h-3.5 w-3.5" />
+                    <span className="tabular-nums">{streak}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Hero summary */}
-            <div className="animate-fade-in mb-5">
-              <Card className="bg-card border-border">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-4 text-sm">
-                    <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
-                      <span className="flex items-center gap-1.5 text-foreground">
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                        <span className="font-semibold">{completedToday}</span>
-                        <span className="text-muted-foreground">{t('home.completedTasks')}</span>
-                      </span>
-                      <span className="flex items-center gap-1.5 text-foreground">
-                        <Flag className="h-4 w-4 text-primary" />
-                        <span className="font-semibold">{todayTasks.length}</span>
-                        <span className="text-muted-foreground">{t('home.highPriority')}</span>
-                      </span>
-                      <span className="flex items-center gap-1.5 text-foreground">
-                        <span className="font-semibold">{formatCurrency(weekExpenses, i18n.language, 0)}</span>
-                        <span className="text-muted-foreground">{t('home.weekExpenses')}</span>
-                      </span>
-                    </div>
-                    {streak > 1 && (
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold animate-fade-in">
-                        <Flame className="h-3.5 w-3.5" />
-                        {streak} {t('home.streakDays')}
-                      </span>
+            {/* Daily Budget Ring — answers "posso spendere oggi?" in 1 second */}
+            <div className="mb-4">
+              <DailyBudgetRing
+                userId={userId}
+                onSetBudget={() => navigate('/expenses')}
+                onRingTap={() => navigate('/expenses')}
+              />
+            </div>
+
+            {/* Compact stats row (task progress + week expenses) */}
+            <div className="mb-5 grid grid-cols-2 gap-3">
+              <div className="card-ios p-3.5 flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-4.5 w-4.5 text-success" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-semibold">
+                    {t('home.completedTasks')}
+                  </p>
+                  <p className="text-[15px] font-semibold tabular-nums leading-tight">
+                    {completedToday}
+                    {tasks.length > 0 && (
+                      <span className="text-muted-foreground font-normal text-[13px]"> / {tasks.length}</span>
                     )}
-                  </div>
-                  {/* Daily progress */}
-                  {tasks.length > 0 && (
-                    <div className="mt-3 flex items-center gap-3">
-                      <Progress value={progressPercent} className="flex-1 h-2" />
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {completedToday}/{tasks.length} {t('home.completedTasks')}
-                      </span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/expenses"
+                className="card-ios p-3.5 flex items-center gap-2.5 pressable hover:bg-muted/30 transition-colors"
+              >
+                <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Flag className="h-4.5 w-4.5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-semibold">
+                    {t('home.weekExpenses')}
+                  </p>
+                  <p className="text-[15px] font-semibold tabular-nums leading-tight">
+                    {formatCurrency(weekExpenses, i18n.language, 0)}
+                  </p>
+                </div>
+              </Link>
             </div>
 
             {/* Daily Nudge */}
