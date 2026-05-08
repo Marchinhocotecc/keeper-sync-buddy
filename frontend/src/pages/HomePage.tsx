@@ -28,6 +28,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { DailyBudgetRing } from '@/components/DailyBudgetRing';
 import { HomeChatBar } from '@/components/HomeChatBar';
 import { CheckInSheet } from '@/components/CheckInSheet';
+import { SampleExpenseBanner } from '@/components/SampleExpenseBanner';
 import { useTodayCheckin, useRecentCheckinDates } from '@/hooks/useDailyCheckin';
 import { computeStreak } from '@/services/dailyCheckinService';
 
@@ -246,6 +247,9 @@ export default function HomePage() {
 
             {/* Sticky chat bar (Blocco B #6) */}
             <HomeChatBar />
+
+            {/* Sample expense tutorial banner (Blocco C) — shows after onboarding until dismissed or sample deleted */}
+            <SampleExpenseBanner userId={userId} expenses={expenses} />
 
             {/* Daily Budget Ring — answers "posso spendere oggi?" in 1 second */}
             <div className="mb-4">

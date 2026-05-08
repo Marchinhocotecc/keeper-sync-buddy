@@ -30,3 +30,20 @@ export async function hapticSuccess(): Promise<void> {
     // ignore
   }
 }
+
+export async function hapticNotification(
+  type: 'success' | 'warning' | 'error' = 'success'
+): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { Haptics, NotificationType } = await import('@capacitor/haptics');
+    const map = {
+      success: NotificationType.Success,
+      warning: NotificationType.Warning,
+      error: NotificationType.Error,
+    } as const;
+    await Haptics.notification({ type: map[type] });
+  } catch {
+    // ignore
+  }
+}
