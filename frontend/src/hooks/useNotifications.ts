@@ -31,7 +31,11 @@ export function useNotifications(userId?: string) {
     wellbeing: false,
     focusTime: '08:30',
     wellbeingTime: '20:30',
-    taskBeforeMinutes: 60
+    taskBeforeMinutes: 60,
+    eveningCheckin: false,
+    eveningCheckinTime: '21:00',
+    weeklyRecap: false,
+    weeklyRecapTime: '19:00',
   });
 
   // Initialize notification service
@@ -115,13 +119,25 @@ export function useNotifications(userId?: string) {
       case 'taskBeforeMinutes':
         dbUpdate.notify_task_before_minutes = value;
         break;
+      case 'eveningCheckin':
+        dbUpdate.notify_evening_checkin = value;
+        break;
+      case 'eveningCheckinTime':
+        dbUpdate.notify_evening_checkin_time = value;
+        break;
+      case 'weeklyRecap':
+        dbUpdate.notify_weekly_recap = value;
+        break;
+      case 'weeklyRecapTime':
+        dbUpdate.notify_weekly_recap_time = value;
+        break;
     }
 
     try {
       await updateSettings.mutateAsync(dbUpdate);
       
       // Reschedule daily notifications if relevant settings changed
-      if (['enabled', 'dailyFocus', 'wellbeing', 'focusTime', 'wellbeingTime'].includes(key)) {
+      if (['enabled', 'dailyFocus', 'wellbeing', 'focusTime', 'wellbeingTime', 'eveningCheckin', 'eveningCheckinTime', 'weeklyRecap', 'weeklyRecapTime'].includes(key)) {
         await rescheduleDailyNotifications(userId, newPrefs);
       }
     } catch (error) {

@@ -13,6 +13,8 @@ import {
   Calendar, 
   Target, 
   Heart,
+  Moon,
+  BarChart3,
   Clock,
   AlertCircle
 } from 'lucide-react';
@@ -230,6 +232,84 @@ export default function NotificationSettings({ userId }: NotificationSettingsPro
                   <Select 
                     value={preferences.wellbeingTime} 
                     onValueChange={(val) => updatePreference('wellbeingTime', val)}
+                  >
+                    <SelectTrigger className="h-7 w-20 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeOptions.filter(t => t >= '18:00').map(time => (
+                        <SelectItem key={time} value={time} className="text-xs">
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {/* Evening check-in (Blocco B #3) */}
+            <div className="flex items-center justify-between pl-3">
+              <div className="flex items-center gap-2">
+                <Moon className="h-4 w-4 text-indigo-500" />
+                <div>
+                  <p className="text-sm">{t('notifications.eveningCheckin', { defaultValue: 'Check-in serale' })}</p>
+                  <p className="text-xs text-muted-foreground">{t('notifications.eveningCheckinDesc', { defaultValue: '10 secondi per chiudere la giornata' })}</p>
+                </div>
+              </div>
+              <Switch
+                checked={preferences.eveningCheckin}
+                onCheckedChange={(checked) => updatePreference('eveningCheckin', checked)}
+              />
+            </div>
+
+            {preferences.eveningCheckin && (
+              <div className="pl-9">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">{t('notifications.time')}:</span>
+                  <Select 
+                    value={preferences.eveningCheckinTime} 
+                    onValueChange={(val) => updatePreference('eveningCheckinTime', val)}
+                  >
+                    <SelectTrigger className="h-7 w-20 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeOptions.filter(t => t >= '18:00').map(time => (
+                        <SelectItem key={time} value={time} className="text-xs">
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {/* Weekly recap (Blocco B #5) */}
+            <div className="flex items-center justify-between pl-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-teal-500" />
+                <div>
+                  <p className="text-sm">{t('notifications.weeklyRecap', { defaultValue: 'Recap settimanale' })}</p>
+                  <p className="text-xs text-muted-foreground">{t('notifications.weeklyRecapDesc', { defaultValue: 'Domenica sera: come è andata la settimana' })}</p>
+                </div>
+              </div>
+              <Switch
+                checked={preferences.weeklyRecap}
+                onCheckedChange={(checked) => updatePreference('weeklyRecap', checked)}
+              />
+            </div>
+
+            {preferences.weeklyRecap && (
+              <div className="pl-9">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">{t('notifications.time')}:</span>
+                  <Select 
+                    value={preferences.weeklyRecapTime} 
+                    onValueChange={(val) => updatePreference('weeklyRecapTime', val)}
                   >
                     <SelectTrigger className="h-7 w-20 text-xs">
                       <SelectValue />
