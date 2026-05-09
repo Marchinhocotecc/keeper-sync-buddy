@@ -169,6 +169,36 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_checkins: {
+        Row: {
+          created_at: string | null
+          date: string
+          expenses_logged: boolean
+          id: string
+          mood_ok: boolean
+          tasks_done: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          expenses_logged?: boolean
+          id?: string
+          mood_ok?: boolean
+          tasks_done?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          expenses_logged?: boolean
+          id?: string
+          mood_ok?: boolean
+          tasks_done?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number
@@ -355,9 +385,13 @@ export type Database = {
           notifications_enabled: boolean | null
           notify_calendar: boolean | null
           notify_daily_focus: boolean | null
+          notify_evening_checkin: boolean | null
+          notify_evening_checkin_time: string | null
           notify_focus_time: string | null
           notify_task_before_minutes: number | null
           notify_tasks: boolean | null
+          notify_weekly_recap: boolean | null
+          notify_weekly_recap_time: string | null
           notify_wellbeing: boolean | null
           notify_wellbeing_time: string | null
           theme: string | null
@@ -372,9 +406,13 @@ export type Database = {
           notifications_enabled?: boolean | null
           notify_calendar?: boolean | null
           notify_daily_focus?: boolean | null
+          notify_evening_checkin?: boolean | null
+          notify_evening_checkin_time?: string | null
           notify_focus_time?: string | null
           notify_task_before_minutes?: number | null
           notify_tasks?: boolean | null
+          notify_weekly_recap?: boolean | null
+          notify_weekly_recap_time?: string | null
           notify_wellbeing?: boolean | null
           notify_wellbeing_time?: string | null
           theme?: string | null
@@ -389,9 +427,13 @@ export type Database = {
           notifications_enabled?: boolean | null
           notify_calendar?: boolean | null
           notify_daily_focus?: boolean | null
+          notify_evening_checkin?: boolean | null
+          notify_evening_checkin_time?: string | null
           notify_focus_time?: string | null
           notify_task_before_minutes?: number | null
           notify_tasks?: boolean | null
+          notify_weekly_recap?: boolean | null
+          notify_weekly_recap_time?: string | null
           notify_wellbeing?: boolean | null
           notify_wellbeing_time?: string | null
           theme?: string | null
