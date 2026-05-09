@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Send, Loader2, ArrowRight } from 'lucide-react';
+import { Sparkles, Send, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -150,13 +150,25 @@ export function HomeChatBar() {
             {loading ? (
               <motion.div
                 key="loading"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-2 py-4 text-muted-foreground"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2 }}
+                className="py-3"
+                aria-live="polite"
+                aria-label={t('common.loading', { defaultValue: 'Sto pensando…' })}
               >
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-[14px]">{t('common.loading', { defaultValue: 'Sto pensando…' })}</span>
+                {/* Typing-bubble skeleton — 3 dots that pulse like iMessage */}
+                <div className="inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl rounded-bl-md bg-muted/70">
+                  <span className="block h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-typing-dot [animation-delay:-0.32s]" />
+                  <span className="block h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-typing-dot [animation-delay:-0.16s]" />
+                  <span className="block h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-typing-dot" />
+                </div>
+                {/* Skeleton lines for the upcoming reply */}
+                <div className="mt-3 space-y-2">
+                  <div className="h-3 w-4/5 rounded-full bg-muted/60 animate-pulse" />
+                  <div className="h-3 w-3/5 rounded-full bg-muted/60 animate-pulse [animation-delay:120ms]" />
+                </div>
               </motion.div>
             ) : response ? (
               <motion.div

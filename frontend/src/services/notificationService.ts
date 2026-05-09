@@ -59,6 +59,16 @@ export async function initNotificationService(): Promise<boolean> {
       const { LocalNotifications } = await import('@capacitor/local-notifications');
       const perm = await LocalNotifications.checkPermissions();
       notificationPermission = perm.display === 'granted' ? 'granted' : 'default';
+      // Register tap-listener once so deep-links work when user taps a fired notification.
+      try {
+        await LocalNotifications.removeAllListeners();
+        await LocalNotifications.addListener('localNotificationActionPerformed', (event: any) => {
+          const route = event?.notification?.extra?.route as string | undefined;
+          if (route && typeof window !== 'undefined') {
+            try { window.location.assign(route); } catch { /* ignore */ }
+          }
+        });
+      } catch { /* listener registration is best-effort */ }
       loadState();
       return notificationPermission === 'granted';
     } catch (error) {
@@ -163,7 +173,17 @@ export function showNotification(title: string, body: string, options?: {
     });
 
     notification.onclick = () => {
-      // window.focus() removed: no-op in WebView, causes runtime warnings
+      // Navigate in-app when notification has a route in data (deep-link)
+      const route = options?.data?.route as string | undefined;
+      if (route && typeof window !== 'undefined') {
+        try {
+          // Same-origin SPA navigation — uses pushState if router is mounted,
+          // falls back to a full reload.
+          window.location.assign(route);
+        } catch {
+          // ignore
+        }
+      }
       notification.close();
     };
 
@@ -448,6 +468,7 @@ async function scheduleNotification(notification: ScheduledNotification): Promis
           let h = 0;
           for (let i = 0; i < idStr.length; i++) h = (h * 31 + idStr.charCodeAt(i)) | 0;
           const nid = Math.abs(h) % 2147483647;
+          const route = routeForNotificationType(notification.type);
           await LocalNotifications.schedule({
             notifications: [{
               id: nid,
@@ -456,6 +477,7 @@ async function scheduleNotification(notification: ScheduledNotification): Promis
               schedule: { at },
               smallIcon: 'ic_stat_icon_config_sample',
               iconColor: '#0F3D3E',
+              extra: route ? { route, type: notification.type } : undefined,
             }]
           });
         }
@@ -468,6 +490,19 @@ async function scheduleNotification(notification: ScheduledNotification): Promis
   } catch (error) {
     console.error('Error scheduling notification:', error);
     return false;
+  }
+}
+
+/** Map notification type → in-app deep-link route */
+function routeForNotificationType(type: string): string | null {
+  switch (type) {
+    case 'weekly_recap': return '/recap/weekly';
+    case 'evening_checkin': return '/?checkin=open';
+    case 'daily_focus': return '/';
+    case 'wellbeing': return '/';
+    case 'task': return '/';
+    case 'event': return '/calendar';
+    default: return null;
   }
 }
 
@@ -496,9 +531,11 @@ async function checkPendingNotifications(): Promise<void> {
     if (error || !notifications) return;
 
     for (const notif of notifications) {
-      // Show the notification
+      // Show the notification — include deep-link route so click navigates in-app
+      const route = routeForNotificationType(notif.type);
       const shown = showNotification(notif.title, notif.body, {
-        tag: `${notif.type}-${notif.reference_id || 'general'}`
+        tag: `${notif.type}-${notif.reference_id || 'general'}`,
+        data: route ? { route, type: notif.type } : undefined,
       });
 
       if (shown) {

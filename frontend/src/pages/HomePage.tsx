@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TaskCard } from '@/components/TaskCard';
 import { AddTaskForm } from '@/components/AddTaskForm';
@@ -44,6 +44,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userId, userName, isLoading, error } = useHomeData();
   const { tasks, addTask, toggleTask, deleteTask } = useTasks(userId);
   const { addEvent, updateEvent, deleteEvent } = useCalendarEvents(userId);
@@ -69,6 +70,17 @@ export default function HomePage() {
       return () => clearTimeout(t);
     }
   }, [userId, todayCheckin]);
+
+  // Deep-link from notification tap: ?checkin=open opens the sheet immediately
+  useEffect(() => {
+    if (searchParams.get('checkin') === 'open') {
+      setShowCheckin(true);
+      // strip the query param so a refresh doesn't reopen it
+      const next = new URLSearchParams(searchParams);
+      next.delete('checkin');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const todayTasks = tasks.filter((t) => !t.completed && t.priority === 'high');
   const completedToday = tasks.filter((t) => t.completed).length;

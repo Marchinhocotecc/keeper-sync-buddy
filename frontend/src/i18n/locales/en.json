@@ -385,6 +385,21 @@
     "trySaying": "Try saying:",
     "next": "Next",
     "start": "Get Started",
-    "skip": "Skip tutorial"
+    "skip": "Skip tutorial",
+    "lang_title": "Welcome to Ayvro",
+    "lang_desc": "Pick the language and currency you use every day.",
+    "budget_title": "How much do you want to spend per month?",
+    "budget_desc": "We'll use it for your daily budget. You can change it anytime.",
+    "sample_title": "Add your first expense",
+    "sample_desc": "Pick a sample one to explore the app. Delete it whenever you want.",
+    "sample_coffee": "Coffee",
+    "sample_lunch": "Lunch",
+    "sample_shopping": "Groceries",
+    "sample_subscription": "Subscription",
+    "banner_title": "You have a sample expense",
+    "banner_desc": "We added it to show you how the app works. Delete it whenever you want.",
+    "banner_cta": "Go to expenses",
+    "finish": "Start using Ayvro",
+    "error_title": "Setup error"
   }
 }

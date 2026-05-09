@@ -51,6 +51,13 @@ supabase/
   auto-redirects via `ProtectedRoute`. Added `SampleExpenseBanner` on Home with
   tooltip ("hai una spesa di esempio, eliminala quando vuoi"). Smoke-tested all 3
   screens render correctly.
+- 2026-05-09 — **Polish pack**: (a) translations for `onboarding.*` keys added to
+  6 locales (it/en/es/fr/de/pt), all 4 picker languages now show proper copy.
+  (b) Deep-link from notifications: weekly recap → `/recap/weekly`, evening
+  check-in → `/?checkin=open` (auto-opens sheet), event → `/calendar`. Both web
+  (`Notification.onclick`) and native (`localNotificationActionPerformed`
+  listener) supported. (c) Replaced spinner in `HomeChatBar` with iMessage-style
+  typing-dots skeleton (new `typing-dot` keyframe in tailwind).
 
 ## Pending DB action (USER must run)
 File: `frontend/supabase/migrations/20260507000000_blocco_b_retention.sql`

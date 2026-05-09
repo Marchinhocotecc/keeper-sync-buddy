@@ -385,6 +385,21 @@
     "trySaying": "Probier zu sagen:",
     "next": "Weiter",
     "start": "Los geht's",
-    "skip": "Tutorial überspringen"
+    "skip": "Tutorial überspringen",
+    "lang_title": "Willkommen bei Ayvro",
+    "lang_desc": "Wähle die Sprache und Währung, die du täglich nutzt.",
+    "budget_title": "Wie viel willst du pro Monat ausgeben?",
+    "budget_desc": "Wir nutzen das für dein Tagesbudget. Du kannst es jederzeit ändern.",
+    "sample_title": "Füge deine erste Ausgabe hinzu",
+    "sample_desc": "Wähle ein Beispiel — damit erkundest du die App. Lösche es jederzeit.",
+    "sample_coffee": "Kaffee",
+    "sample_lunch": "Mittagessen",
+    "sample_shopping": "Einkauf",
+    "sample_subscription": "Abo",
+    "banner_title": "Du hast eine Beispiel-Ausgabe",
+    "banner_desc": "Wir haben sie hinzugefügt, um dir die App zu zeigen. Lösche sie jederzeit.",
+    "banner_cta": "Zu den Ausgaben",
+    "finish": "Loslegen mit Ayvro",
+    "error_title": "Setup-Fehler"
   }
 }
