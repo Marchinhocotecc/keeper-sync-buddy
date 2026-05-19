@@ -1,0 +1,512 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 
+ * Ayvro Design System
+ * "Decision Engine for Your Money"
+ * 
+ * Primary: #0F3D3E (teal petroleum)
+ * Background: #F8FAF9
+ * Surface: #FFFFFF
+ */
+
+@layer base {
+  :root {
+    /* Ayvro Light Mode */
+    
+    /* Background (#F8FAF9) */
+    --background: 150 20% 97%;
+    --foreground: 0 0% 11%;
+
+    /* Cards & Popovers - white */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 11%;
+
+    /* Primary (#0F3D3E) */
+    --primary: 181 62% 15%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Primary Hover (#145A5B) */
+    --primary-hover: 181 62% 22%;
+
+    /* Secondary */
+    --secondary: 150 10% 93%;
+    --secondary-foreground: 0 0% 20%;
+
+    /* Muted tones */
+    --muted: 150 10% 94%;
+    --muted-foreground: 220 9% 46%;
+
+    /* Accent - light teal tint */
+    --accent: 181 30% 92%;
+    --accent-foreground: 0 0% 11%;
+
+    /* Error (#D64545) */
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders & Inputs */
+    --border: 150 10% 88%;
+    --input: 150 10% 94%;
+    --ring: 181 62% 15%;
+
+    /* Success (#2E7D32) */
+    --success: 123 46% 34%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning (#E6A23C) */
+    --warning: 36 77% 57%;
+    --warning-foreground: 0 0% 11%;
+
+    /* Radius */
+    --radius: 0.75rem;
+    
+    /* Shadows */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
+    
+    /* Button shadows with primary tint */
+    --shadow-button: 0 2px 8px rgba(15, 61, 62, 0.2);
+    --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.05);
+    
+    /* Glow accent */
+    --ayvro-glow: rgba(15, 61, 62, 0.12);
+    
+    /* Smooth transitions */
+    --transition-base: all 0.15s ease;
+    --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Sidebar */
+    --sidebar-background: 150 20% 97%;
+    --sidebar-foreground: 0 0% 20%;
+    --sidebar-primary: 181 62% 15%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 150 10% 93%;
+    --sidebar-accent-foreground: 181 62% 15%;
+    --sidebar-border: 150 10% 88%;
+    --sidebar-ring: 181 62% 15%;
+  }
+
+  .dark {
+    /* Ayvro Dark Mode */
+    
+    /* Dark Background */
+    --background: 180 20% 8%;
+    --foreground: 150 10% 96%;
+
+    /* Cards */
+    --card: 180 18% 12%;
+    --card-foreground: 150 10% 96%;
+
+    --popover: 180 18% 12%;
+    --popover-foreground: 150 10% 96%;
+
+    /* Primary (#0F3D3E) - slightly brighter in dark */
+    --primary: 181 57% 28%;
+    --primary-foreground: 0 0% 100%;
+
+    --primary-hover: 181 55% 35%;
+
+    /* Secondary */
+    --secondary: 180 15% 16%;
+    --secondary-foreground: 150 10% 96%;
+
+    /* Muted */
+    --muted: 180 15% 14%;
+    --muted-foreground: 220 9% 65%;
+
+    /* Accent */
+    --accent: 181 30% 18%;
+    --accent-foreground: 150 10% 96%;
+
+    /* Error */
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders */
+    --border: 180 15% 18%;
+    --input: 180 15% 14%;
+    --ring: 181 57% 28%;
+    
+    /* Success */
+    --success: 123 46% 40%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning */
+    --warning: 36 77% 52%;
+    --warning-foreground: 0 0% 11%;
+    
+    /* Darker shadows */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.7);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.8);
+    
+    --shadow-button: 0 2px 12px rgba(15, 61, 62, 0.3);
+    --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.4);
+    
+    --ayvro-glow: rgba(30, 111, 112, 0.2);
+    
+    --sidebar-background: 180 20% 6%;
+    --sidebar-foreground: 150 10% 90%;
+    --sidebar-primary: 181 57% 28%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 180 15% 12%;
+    --sidebar-accent-foreground: 150 10% 90%;
+    --sidebar-border: 180 15% 14%;
+    --sidebar-ring: 181 57% 28%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01", "ss03";
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    /* Slightly larger base on mobile for readability */
+    font-size: 15px;
+  }
+
+  /* Typography - iOS-inspired, clean and modern */
+  h1 {
+    @apply text-[28px] font-semibold leading-tight tracking-tight;
+    letter-spacing: -0.02em;
+  }
+  
+  h2 {
+    @apply text-[20px] font-semibold leading-snug tracking-tight;
+    letter-spacing: -0.01em;
+  }
+  
+  p, span, label {
+    @apply text-[14px] leading-relaxed;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  /* Glow effect for active elements */
+  .ayvro-glow {
+    box-shadow: 0 0 20px var(--ayvro-glow);
+  }
+  
+  /* Button shadow */
+  .shadow-ayvro {
+    box-shadow: var(--shadow-button);
+  }
+  
+  /* Card shadow */
+  .shadow-ayvro-card {
+    box-shadow: var(--shadow-md);
+  }
+  
+  /* Nav shadow */
+  .shadow-ayvro-nav {
+    box-shadow: var(--shadow-nav);
+  }
+  
+  
+  /* Hover scale effect - subtle */
+  .hover-scale {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .hover-scale:hover {
+    transform: translateY(-1px);
+  }
+  
+  /* Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.25s ease-out forwards;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out forwards;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+}
+
+/* Consistent page container */
+.page-container {
+  @apply container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-screen-xl;
+}
+
+/* Consistent page header */
+.page-header {
+  @apply mb-5 sm:mb-6;
+}
+
+.page-title {
+  @apply text-xl sm:text-[28px] font-semibold text-foreground mb-1 tracking-tight;
+}
+
+.page-subtitle {
+  @apply text-xs sm:text-[14px] text-muted-foreground;
+}
+
+/* Card styles */
+.app-card {
+  @apply bg-card border-border rounded-xl;
+  box-shadow: var(--shadow-sm);
+}
+
+.app-card-header {
+  @apply pb-2;
+}
+
+.app-card-title {
+  @apply text-xs font-medium text-muted-foreground uppercase tracking-wide;
+}
+
+.app-card-value {
+  @apply text-xl sm:text-2xl font-semibold text-foreground;
+}
+
+/* Button - clean, professional */
+.ayvro-button {
+  @apply relative overflow-hidden rounded-lg font-medium;
+  box-shadow: var(--shadow-button);
+  transition: var(--transition-smooth);
+}
+
+.ayvro-button:hover {
+  box-shadow: 0 4px 16px rgba(15, 61, 62, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Active nav/tab glow */
+.ayvro-active {
+  box-shadow: 0 0 12px var(--ayvro-glow);
+}
+
+/* ----- Native safe areas (iOS notch / Android edge-to-edge) ----- */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-area-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Avoid keyboard overlap on native */
+body.keyboard-open {
+  padding-bottom: 0 !important;
+}
+
+/* Disable text selection / callouts on native-looking surfaces */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Touch-only devices: drop hover transforms (felt sticky on mobile) */
+@media (hover: none) and (pointer: coarse) {
+  .hover-scale:hover {
+    transform: none !important;
+  }
+  .ayvro-button:hover {
+    transform: none !important;
+  }
+}
+
+/* Mobile: tighter, full-bleed page container */
+@media (max-width: 640px) {
+  .page-container {
+    @apply px-4 py-4 pb-24;
+  }
+  .page-header {
+    @apply mb-4;
+  }
+}
+
+/* ===========================================================
+ * Mobile-First / iOS-style additions
+ * =========================================================== */
+
+/* Large iOS-style title (used on top of pages) */
+.large-title {
+  @apply text-[32px] font-bold leading-[1.1] tracking-tight text-foreground;
+  letter-spacing: -0.025em;
+}
+@media (min-width: 640px) {
+  .large-title {
+    @apply text-[34px];
+  }
+}
+
+.compact-title {
+  @apply text-[17px] font-semibold tracking-tight text-foreground;
+  letter-spacing: -0.01em;
+}
+
+/* Glass / blur surfaces (iOS materials) */
+.bg-glass {
+  background: hsl(var(--card) / 0.72);
+  -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  backdrop-filter: saturate(1.6) blur(16px);
+}
+.bg-glass-strong {
+  background: hsl(var(--card) / 0.85);
+  -webkit-backdrop-filter: saturate(1.8) blur(22px);
+  backdrop-filter: saturate(1.8) blur(22px);
+}
+
+/* Soft cards (more generous radius on mobile, gentle shadow) */
+.card-ios {
+  @apply bg-card border border-border/60 rounded-2xl;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+.card-ios-flat {
+  @apply bg-card rounded-2xl;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* Native-feeling pressable */
+.pressable {
+  @apply transition-transform duration-100 ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+.pressable:active {
+  transform: scale(0.97);
+}
+
+/* List row separator (iOS-style hairline) */
+.row-divider > * + * {
+  border-top: 1px solid hsl(var(--border) / 0.6);
+}
+
+/* Floating Action Button positioning */
+.fab-container {
+  @apply fixed right-4 z-40 sm:right-6;
+  /* Sit above bottom tab bar on mobile (60px tab + 16px gap + safe area) */
+  bottom: calc(76px + env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+  .fab-container {
+    bottom: 24px;
+  }
+}
+
+/* Bottom-sheet inner spacing helper */
+.sheet-body {
+  @apply px-5 pb-6 pt-2;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+/* iOS-style segmented control */
+.segmented {
+  @apply inline-flex items-center rounded-full bg-muted p-1 gap-0.5;
+}
+.segmented-item {
+  @apply rounded-full px-4 py-1.5 text-[13px] font-medium text-muted-foreground transition-all;
+}
+.segmented-item[data-active="true"] {
+  @apply bg-card text-foreground shadow-sm;
+}
+
+/* Floating label input */
+.float-field {
+  @apply relative;
+}
+.float-field input {
+  @apply h-14 w-full rounded-2xl bg-muted/60 border border-transparent px-4 pt-5 pb-1.5 text-[16px] text-foreground transition-all;
+  -webkit-appearance: none;
+}
+.float-field input:focus {
+  @apply outline-none border-primary bg-card;
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.08);
+}
+.float-field label {
+  @apply absolute left-4 top-1/2 -translate-y-1/2 text-[14px] text-muted-foreground pointer-events-none transition-all;
+}
+.float-field input:focus + label,
+.float-field input:not(:placeholder-shown) + label {
+  @apply top-2.5 translate-y-0 text-[11px] font-medium text-primary;
+}
+
+/* iMessage-style chat bubbles */
+.bubble-user {
+  background: linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(var(--primary-hover)) 100%);
+  @apply text-primary-foreground rounded-3xl rounded-br-md px-4 py-2.5 shadow-sm;
+}
+.bubble-ai {
+  @apply bg-muted text-foreground rounded-3xl rounded-bl-md px-4 py-2.5 border border-border/60;
+}
+
+/* Horizontal scroll snap (chips / suggestions) */
+.scroll-snap-x {
+  @apply flex overflow-x-auto scrollbar-hide gap-2 -mx-4 px-4;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 1rem;
+}
+.scroll-snap-x > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* Animations */
+@keyframes spring-in {
+  0%   { opacity: 0; transform: translateY(20px) scale(0.96); }
+  60%  { opacity: 1; transform: translateY(-2px) scale(1.01); }
+  100% { transform: translateY(0) scale(1); }
+}
+.animate-spring-in {
+  animation: spring-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.animate-pop-in {
+  animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Tab bar height variable (for content padding offsets) */
+:root {
+  --tab-bar-h: 60px;
+}
+
+/* Hide pull-to-refresh native overlay on iOS WebKit */
+html {
+  overscroll-behavior-y: none;
+}
+
+/* Better tap behavior on native */
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
