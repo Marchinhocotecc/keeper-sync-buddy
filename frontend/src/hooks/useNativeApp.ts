@@ -24,6 +24,26 @@ export function useNativeApp() {
     let cleanup: Array<() => void> = [];
 
     (async () => {
+      // Splash screen — hide FIRST, before any other native setup.
+      // If status bar / keyboard / network setup fails, the splash must still go
+      // away. With launchAutoHide=true (2s) the OS will hide it anyway as a
+      // safety net, but we try to hide it immediately for a faster UX.
+      try {
+        const { SplashScreen } = await import('@capacitor/splash-screen');
+        // Wait one frame so first paint is on screen before we drop the splash
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+        await SplashScreen.hide({ fadeOutDuration: 250 });
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.log('[useNativeApp] Splash screen hidden');
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.warn('[useNativeApp] SplashScreen.hide failed:', err);
+        }
+      }
+
       try {
         // Status bar
         const { StatusBar, Style } = await import('@capacitor/status-bar');
@@ -33,14 +53,6 @@ export function useNativeApp() {
         } catch {
           // iOS doesn't support setBackgroundColor
         }
-      } catch {}
-
-      try {
-        // Splash screen — hide as soon as React has mounted (no fixed delay)
-        const { SplashScreen } = await import('@capacitor/splash-screen');
-        // Wait one frame so first paint is on screen before we drop the splash
-        await new Promise((r) => requestAnimationFrame(() => r(null)));
-        await SplashScreen.hide({ fadeOutDuration: 250 });
       } catch {}
 
       try {

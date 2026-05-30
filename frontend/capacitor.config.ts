@@ -13,9 +13,11 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // Manually hidden after first render in useNativeApp — no fixed delay
-      launchShowDuration: 0,
-      launchAutoHide: false,
+      // Safety net: native side auto-hides after 2s even if JS never calls hide().
+      // JS still calls SplashScreen.hide() in useNativeApp on first paint for a
+      // faster experience when the bundle is ready quickly.
+      launchShowDuration: 2000,
+      launchAutoHide: true,
       backgroundColor: '#0F3D3E',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
