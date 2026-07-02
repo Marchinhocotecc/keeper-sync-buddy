@@ -16,8 +16,11 @@ export async function hapticImpact(style: Style = 'light'): Promise<void> {
       heavy: ImpactStyle.Heavy,
     };
     await Haptics.impact({ style: map[style] });
-  } catch {
-    // silently ignore
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn('[haptics] hapticImpact failed:', err);
+    }
   }
 }
 
@@ -26,8 +29,11 @@ export async function hapticSuccess(): Promise<void> {
   try {
     const { Haptics, NotificationType } = await import('@capacitor/haptics');
     await Haptics.notification({ type: NotificationType.Success });
-  } catch {
-    // ignore
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn('[haptics] hapticSuccess failed:', err);
+    }
   }
 }
 
@@ -43,7 +49,10 @@ export async function hapticNotification(
       error: NotificationType.Error,
     } as const;
     await Haptics.notification({ type: map[type] });
-  } catch {
-    // ignore
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn('[haptics] hapticNotification failed:', err);
+    }
   }
 }

@@ -175,7 +175,9 @@
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
     "undo": "Rückgängig",
-    "expenseAdded": "Ausgabe hinzugefügt! ✨"
+    "expenseAdded": "Ausgabe hinzugefügt! ✨",
+    "deleteConfirmTitle": "Ausgabe löschen",
+    "deleteConfirmDesc": "Möchtest du diese Ausgabe wirklich löschen?"
   },
   "assistant": {
     "title": "Ayvro Assistent",

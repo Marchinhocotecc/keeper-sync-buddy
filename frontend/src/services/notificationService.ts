@@ -65,10 +65,20 @@ export async function initNotificationService(): Promise<boolean> {
         await LocalNotifications.addListener('localNotificationActionPerformed', (event: any) => {
           const route = event?.notification?.extra?.route as string | undefined;
           if (route && typeof window !== 'undefined') {
-            try { window.location.assign(route); } catch { /* ignore */ }
+            try { window.location.assign(route); } catch (navErr) {
+              if (import.meta.env.DEV) {
+                // eslint-disable-next-line no-console
+                console.warn('[notifications] deep-link navigation failed:', navErr);
+              }
+            }
           }
         });
-      } catch { /* listener registration is best-effort */ }
+      } catch (listenerErr) {
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.warn('[notifications] listener registration failed (best-effort):', listenerErr);
+        }
+      }
       loadState();
       return notificationPermission === 'granted';
     } catch (error) {

@@ -175,7 +175,9 @@
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
     "undo": "Annuler",
-    "expenseAdded": "Dépense ajoutée ! ✨"
+    "expenseAdded": "Dépense ajoutée ! ✨",
+    "deleteConfirmTitle": "Supprimer la dépense",
+    "deleteConfirmDesc": "Es-tu sûr(e) de vouloir supprimer cette dépense ?"
   },
   "assistant": {
     "title": "Assistant Ayvro",

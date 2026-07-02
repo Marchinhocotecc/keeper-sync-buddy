@@ -18,7 +18,11 @@ const capacitorStorageAdapter = {
       const { Preferences } = await import('@capacitor/preferences');
       const { value } = await Preferences.get({ key });
       return value;
-    } catch {
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn('[capacitorStorage] getItem failed:', err);
+      }
       return null;
     }
   },
@@ -26,16 +30,22 @@ const capacitorStorageAdapter = {
     try {
       const { Preferences } = await import('@capacitor/preferences');
       await Preferences.set({ key, value });
-    } catch {
-      // silently fail
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn('[capacitorStorage] setItem failed:', err);
+      }
     }
   },
   removeItem: async (key: string): Promise<void> => {
     try {
       const { Preferences } = await import('@capacitor/preferences');
       await Preferences.remove({ key });
-    } catch {
-      // silently fail
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn('[capacitorStorage] removeItem failed:', err);
+      }
     }
   },
 };
