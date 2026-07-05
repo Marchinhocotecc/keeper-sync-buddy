@@ -175,7 +175,13 @@
     "budgetNoteLabel": "Note (optional)",
     "positiveValueError": "Enter a positive value",
     "undo": "Rückgängig",
-    "expenseAdded": "Ausgabe hinzugefügt! ✨"
+    "expenseAdded": "Ausgabe hinzugefügt! ✨",
+    "deleteConfirmTitle": "Ausgabe löschen",
+    "deleteConfirmDesc": "Möchtest du diese Ausgabe wirklich löschen?",
+    "descriptionLabel": "Beschreibung",
+    "descriptionPlaceholder": "z. B. Abendessen mit Luca",
+    "descriptionRequired": "Beschreibung ist erforderlich",
+    "expenseFallback": "Ausgabe"
   },
   "assistant": {
     "title": "Ayvro Assistent",

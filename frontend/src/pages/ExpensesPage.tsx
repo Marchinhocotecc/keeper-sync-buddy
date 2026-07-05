@@ -74,6 +74,7 @@ interface SwipeRowProps {
 }
 
 function ExpenseRow({ expense, onDelete, dateLocale, noDescription, lang }: SwipeRowProps) {
+  const { t } = useTranslation();
   const handleDragEnd = (_: any, info: PanInfo) => {
     if (info.offset.x < -90 || info.velocity.x < -500) {
       hapticImpact('medium');
@@ -111,6 +112,20 @@ function ExpenseRow({ expense, onDelete, dateLocale, noDescription, lang }: Swip
         <div className="text-[15px] font-semibold text-foreground tabular-nums shrink-0">
           {formatCurrency(parseFloat(String(expense.amount)), lang)}
         </div>
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            hapticImpact('light');
+            onDelete();
+          }}
+          aria-label={t('expenses.deleteConfirmTitle', { defaultValue: 'Elimina spesa' })}
+          data-testid={`delete-expense-btn-${expense.id}`}
+          className="shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors pressable"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       </motion.div>
     </div>
   );
@@ -179,10 +194,19 @@ export default function ExpensesPage() {
       toast({ title: t('common.error'), description: t('expenses.categoryError'), variant: 'destructive' });
       return;
     }
+    const trimmedDescription = formData.description.trim();
+    if (!trimmedDescription) {
+      toast({
+        title: t('common.error'),
+        description: t('expenses.descriptionRequired', { defaultValue: 'La descrizione è obbligatoria' }),
+        variant: 'destructive',
+      });
+      return;
+    }
     const localDate = new Date(formData.date + 'T00:00:00');
     const utcDate = localDate.toISOString().split('T')[0];
     const result = await addExpense.mutateAsync({
-      amount, category: formData.category, description: formData.description, date: utcDate,
+      amount, category: formData.category, description: trimmedDescription, date: utcDate,
     });
     setFormData({ amount: '', category: 'food', description: '', date: new Date().toISOString().split('T')[0] });
     setShowAddSheet(false);
@@ -607,15 +631,18 @@ export default function ExpensesPage() {
         />
 
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-          <AlertDialogContent className="rounded-2xl">
+          <AlertDialogContent className="rounded-2xl" data-testid="delete-expense-dialog">
             <AlertDialogHeader>
-              <AlertDialogTitle>{t('common.confirm')}</AlertDialogTitle>
-              <AlertDialogDescription>{t('common.deleteConfirmGeneric')}</AlertDialogDescription>
+              <AlertDialogTitle>{t('expenses.deleteConfirmTitle', { defaultValue: 'Elimina spesa' })}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t('expenses.deleteConfirmDesc', { defaultValue: 'Sei sicuro di voler eliminare questa spesa?' })}
+              </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="rounded-xl">{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogCancel className="rounded-xl" data-testid="delete-expense-cancel">{t('common.cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
+                data-testid="delete-expense-confirm"
                 onClick={() => {
                   if (deleteTarget) {
                     deleteExpense.mutate(deleteTarget);
