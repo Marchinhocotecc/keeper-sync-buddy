@@ -177,7 +177,11 @@
     "undo": "Annulla",
     "expenseAdded": "Spesa aggiunta! ✨",
     "deleteConfirmTitle": "Elimina spesa",
-    "deleteConfirmDesc": "Sei sicuro di voler eliminare questa spesa?"
+    "deleteConfirmDesc": "Sei sicuro di voler eliminare questa spesa?",
+    "descriptionLabel": "Descrizione",
+    "descriptionPlaceholder": "Es. Cena con Luca",
+    "descriptionRequired": "La descrizione è obbligatoria",
+    "expenseFallback": "Spesa"
   },
   "assistant": {
     "title": "Assistente Ayvro",

@@ -194,10 +194,19 @@ export default function ExpensesPage() {
       toast({ title: t('common.error'), description: t('expenses.categoryError'), variant: 'destructive' });
       return;
     }
+    const trimmedDescription = formData.description.trim();
+    if (!trimmedDescription) {
+      toast({
+        title: t('common.error'),
+        description: t('expenses.descriptionRequired', { defaultValue: 'La descrizione è obbligatoria' }),
+        variant: 'destructive',
+      });
+      return;
+    }
     const localDate = new Date(formData.date + 'T00:00:00');
     const utcDate = localDate.toISOString().split('T')[0];
     const result = await addExpense.mutateAsync({
-      amount, category: formData.category, description: formData.description, date: utcDate,
+      amount, category: formData.category, description: trimmedDescription, date: utcDate,
     });
     setFormData({ amount: '', category: 'food', description: '', date: new Date().toISOString().split('T')[0] });
     setShowAddSheet(false);

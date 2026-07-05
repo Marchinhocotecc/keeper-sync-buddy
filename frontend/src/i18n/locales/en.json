@@ -177,7 +177,11 @@
     "undo": "Undo",
     "expenseAdded": "Expense added! ✨",
     "deleteConfirmTitle": "Delete expense",
-    "deleteConfirmDesc": "Are you sure you want to delete this expense?"
+    "deleteConfirmDesc": "Are you sure you want to delete this expense?",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "e.g. Dinner with Luca",
+    "descriptionRequired": "Description is required",
+    "expenseFallback": "Expense"
   },
   "assistant": {
     "title": "Ayvro Assistant",

@@ -177,7 +177,11 @@
     "undo": "Deshacer",
     "expenseAdded": "Gasto añadido! ✨",
     "deleteConfirmTitle": "Eliminar gasto",
-    "deleteConfirmDesc": "¿Seguro que quieres eliminar este gasto?"
+    "deleteConfirmDesc": "¿Seguro que quieres eliminar este gasto?",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "p. ej. Cena con Luca",
+    "descriptionRequired": "La descripción es obligatoria",
+    "expenseFallback": "Gasto"
   },
   "assistant": {
     "title": "Asistente Ayvro",
