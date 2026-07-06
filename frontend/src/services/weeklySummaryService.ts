@@ -5,7 +5,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { format, subDays, startOfWeek, endOfWeek } from "date-fns";
+import { format, subDays, startOfWeek } from "date-fns";
 
 export interface WeeklySummaryData {
   totalSpent: number;
@@ -21,8 +21,11 @@ export interface WeeklySummaryData {
 export async function generateWeeklySummary(userId: string): Promise<WeeklySummaryData | null> {
   try {
     const now = new Date();
+    // Current week: Monday → TODAY (inclusive). We do NOT include future days
+    // because they can't have expenses yet and would leak inconsistent totals
+    // when the user has data-entry glitches.
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    const weekEnd = now;
     const prevWeekStart = subDays(weekStart, 7);
     const prevWeekEnd = subDays(weekStart, 1);
 
@@ -31,7 +34,9 @@ export async function generateWeeklySummary(userId: string): Promise<WeeklySumma
     const prevStartStr = format(prevWeekStart, "yyyy-MM-dd");
     const prevEndStr = format(prevWeekEnd, "yyyy-MM-dd");
 
-    // Fetch current + previous week expenses in parallel
+    // Fetch current + previous week expenses in parallel. Both queries filter
+    // strictly by date to keep the totals in sync with what the user actually
+    // spent this week vs last week.
     const [currentRes, prevRes] = await Promise.all([
       supabase
         .from("expenses")

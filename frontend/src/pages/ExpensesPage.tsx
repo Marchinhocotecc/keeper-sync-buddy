@@ -491,7 +491,7 @@ export default function ExpensesPage() {
                             expense={expense}
                             onDelete={() => setDeleteTarget(expense.id)}
                             dateLocale={dateLocale}
-                            noDescription={t('expenses.noDescription')}
+                            noDescription={t('expenses.expenseFallback', { defaultValue: 'Spesa' })}
                             lang={lang}
                           />
                         </motion.div>
@@ -591,11 +591,16 @@ export default function ExpensesPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description" className="text-[13px] font-medium">{t('expenses.notes')}</Label>
+              <Label htmlFor="description" className="text-[13px] font-medium">
+                {t('expenses.descriptionLabel', { defaultValue: 'Descrizione' })} <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="description"
+                data-testid="expense-description-input"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder={t('expenses.descriptionPlaceholder', { defaultValue: 'Es. Cena con Luca' })}
+                required
                 maxLength={200}
                 className="h-12 text-[15px] rounded-xl"
               />
