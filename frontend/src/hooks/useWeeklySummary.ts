@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { startOfWeek, format } from "date-fns";
 import {
   generateWeeklySummary,
-  getExistingWeeklySummary,
   type WeeklySummaryData,
 } from "@/services/weeklySummaryService";
 
@@ -14,20 +12,16 @@ export function useWeeklySummary(userId: string | undefined) {
     if (!userId) return;
     setIsLoading(true);
     try {
-      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
-      
-      // Check if already generated this week
-      const existing = await getExistingWeeklySummary(userId, weekStart);
-      if (existing) {
-        setSummary(existing);
-        return;
-      }
-
-      // Generate new
+      // Always recompute fresh — the query is one Supabase call filtered by
+      // date, so it's cheap. Caching in `weekly_summaries` was causing stale
+      // totals when the user added a new expense mid-week.
       const result = await generateWeeklySummary(userId);
       setSummary(result);
     } catch (err) {
-      console.error("[useWeeklySummary] Error:", err);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error("[useWeeklySummary] Error:", err);
+      }
     } finally {
       setIsLoading(false);
     }

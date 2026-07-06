@@ -234,15 +234,42 @@ export default function AssistantPanel() {
       ]);
       if (financialContext && activeStrategy) (financialContext as any).activeStrategy = activeStrategy;
 
-      const { data, error } = await supabase.functions.invoke('ai-free-chat', {
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log('[AssistantPanel] Invoking ai-free-chat with:', { userMessage: textToSend, locale: i18n.language, hasContext: !!financialContext });
+      }
+
+      // First attempt: with financial context (rich answer)
+      let { data, error } = await supabase.functions.invoke('ai-free-chat', {
         body: { userMessage: textToSend, userId, locale: i18n.language, financialContext },
       });
 
-      if (error) {
-        if (import.meta.env.DEV) console.error('[AssistantPanel] Edge function error:', error);
+      // Retry without financial context if the first call errored or returned
+      // an empty payload — a bloated/malformed context is the most common cause
+      // of silent AI failures for free-text messages while __UI_ACTION__ buttons
+      // (which skip the AI) keep working.
+      const hasContent = !error && data && (data.reply || data.structured);
+      if (!hasContent) {
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.warn('[AssistantPanel] Empty/failed response, retrying without financialContext. First response:', { data, error });
+        }
+        const retry = await supabase.functions.invoke('ai-free-chat', {
+          body: { userMessage: textToSend, userId, locale: i18n.language },
+        });
+        data = retry.data;
+        error = retry.error;
+      }
+
+      if (error || !data || (!data.reply && !data.structured)) {
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.error('[AssistantPanel] AI call failed after retry:', { error, data });
+        }
+        const errorDetail = error?.message ? ` (${error.message})` : '';
         const fallbackMessage: Message = {
           role: 'assistant',
-          content: t('assistant.connection_issue'),
+          content: t('assistant.connection_issue') + (import.meta.env.DEV ? errorDetail : ''),
           timestamp: new Date(),
           suggestions: [t('assistant.retry'), t('assistant.suggestion_tasks'), t('assistant.suggestion_events')],
         };
@@ -258,7 +285,7 @@ export default function AssistantPanel() {
       const structured = data.structured as StructuredResponse | undefined;
       const assistantMessage: Message = {
         role: 'assistant',
-        content: structured ? structured.summary : (data.reply || t('assistant.how_can_i_help')),
+        content: structured ? structured.summary : data.reply,
         timestamp: new Date(),
         suggestions: data.suggestions,
         structured,
