@@ -36,6 +36,7 @@ export function QuickAddFab() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('expense');
   const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
   const [category, setCategory] = useState<string>('food');
   const [taskTitle, setTaskTitle] = useState('');
 
@@ -58,6 +59,7 @@ export function QuickAddFab() {
   const openSheet = (preset?: { amount?: string; category?: string; tab?: Tab }) => {
     setTab(preset?.tab || 'expense');
     setAmount(preset?.amount ?? '');
+    setDescription('');
     setCategory(preset?.category ?? initialCategory);
     setTaskTitle('');
     setOpen(true);
@@ -109,12 +111,13 @@ export function QuickAddFab() {
       const result = await addExpense.mutateAsync({
         amount: numAmount,
         category,
-        description: '',
+        description: description.trim(),
         date: today,
       });
       const expenseId = (result as any)?.id;
       setOpen(false);
       setAmount('');
+      setDescription('');
       sonnerToast(t('expenses.expenseAdded', { defaultValue: 'Spesa aggiunta' }), {
         description: `${formatCurrency(numAmount, lang, 2)} — ${t(`expenses.${category}`, { defaultValue: category })}`,
         action: expenseId ? {
@@ -253,6 +256,17 @@ export function QuickAddFab() {
                   className="flex-1 border-0 bg-transparent text-[34px] font-bold p-0 h-auto focus-visible:ring-0 placeholder:text-muted-foreground/30 tabular-nums"
                 />
               </div>
+
+              {/* Description — optional in this quick form */}
+              <Input
+                type="text"
+                data-testid="quickadd-description-input"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t('quickAdd.descriptionPlaceholder', { defaultValue: 'Descrizione (es. Caffè, Supermercato...)' })}
+                maxLength={200}
+                className="h-11 text-[15px] rounded-xl"
+              />
 
               {/* Category chips */}
               <CategoryChips

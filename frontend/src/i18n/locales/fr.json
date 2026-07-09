@@ -407,5 +407,8 @@
     "banner_cta": "Voir les dépenses",
     "finish": "Commencer avec Ayvro",
     "error_title": "Erreur de configuration"
+  },
+  "quickAdd": {
+    "descriptionPlaceholder": "Description (ex. Café, Courses...)"
   }
 }

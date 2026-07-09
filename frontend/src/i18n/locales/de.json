@@ -407,5 +407,8 @@
     "banner_cta": "Zu den Ausgaben",
     "finish": "Loslegen mit Ayvro",
     "error_title": "Setup-Fehler"
+  },
+  "quickAdd": {
+    "descriptionPlaceholder": "Beschreibung (z. B. Kaffee, Supermarkt...)"
   }
 }

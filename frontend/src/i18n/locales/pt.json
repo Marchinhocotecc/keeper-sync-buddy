@@ -407,5 +407,8 @@
     "banner_cta": "Ir para despesas",
     "finish": "Começar a usar o Ayvro",
     "error_title": "Erro na configuração"
+  },
+  "quickAdd": {
+    "descriptionPlaceholder": "Descrição (ex. Café, Supermercado...)"
   }
 }
