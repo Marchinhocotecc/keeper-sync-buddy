@@ -130,9 +130,9 @@ function buildDeterministicFallback(input: AdvisorInput): FinancialAdvice {
 }
 
 export async function getFinancialAdvice(input: AdvisorInput): Promise<FinancialAdvice> {
-  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+  const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) {
-    console.error("[FinancialAdvisor] No OPENROUTER_API_KEY");
+    console.error("[FinancialAdvisor] No GROQ_API_KEY");
     return buildDeterministicFallback(input);
   }
 
@@ -180,14 +180,14 @@ ${input.projection ? `- Scenario: ${input.projection.scenarioIfContinue}` : ""}
 ${input.projection ? `- Aggiustamento: ${input.projection.scenarioIfAdjust}` : ""}`;
 
   try {
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3-0324:free",
+        model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

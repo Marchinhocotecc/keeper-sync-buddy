@@ -13,8 +13,8 @@ export interface WeeklySummaryLLMResult {
 }
 
 const FALLBACK_MODELS = [
-  "openai/gpt-oss-120b:free",
-  "deepseek/deepseek-r1-0528:free",
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
 ];
 
 const WEEKLY_PROMPT = `You are a weekly financial analyst.
@@ -48,7 +48,7 @@ export async function generateWeeklySummary(data: {
   riskLevel: string;
   userLang?: string;
 }): Promise<WeeklySummaryLLMResult> {
-  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+  const apiKey = Deno.env.get("GROQ_API_KEY");
 
   const deterministic = buildDeterministicWeekly(data);
 
@@ -56,7 +56,7 @@ export async function generateWeeklySummary(data: {
     return deterministic;
   }
 
-  const envModel = Deno.env.get("OPENROUTER_MODEL");
+  const envModel = Deno.env.get("GROQ_MODEL");
   const modelsToTry = envModel && envModel.includes("/")
     ? [envModel, ...FALLBACK_MODELS.filter(m => m !== envModel)]
     : [...FALLBACK_MODELS];
@@ -74,13 +74,11 @@ export async function generateWeeklySummary(data: {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://ayvro.app",
-          "X-Title": "Ayvro-WeeklySummary"
         },
         body: JSON.stringify({
           model,
