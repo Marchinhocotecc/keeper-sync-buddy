@@ -282,10 +282,7 @@ Rispondi SOLO in JSON valido:
 
 Non aggiungere testo fuori dal JSON.`;
 
-const FALLBACK_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
+import { callGroq } from "./groqClient.ts";
 
 export async function runDecisionEngine(
   userMessage: string,
@@ -293,18 +290,7 @@ export async function runDecisionEngine(
   risk: any,
   userLang: string = 'it'
 ): Promise<DecisionResult> {
-  const apiKey = Deno.env.get("GROQ_API_KEY");
   const decisionType = detectDecisionType(userMessage);
-
-  if (!apiKey || !apiKey.startsWith("sk-or-")) {
-    // console.log("[DECISION-ENGINE] No API key, using deterministic");
-    return buildDeterministicDecision(userMessage, signals, risk);
-  }
-
-  const envModel = Deno.env.get("GROQ_MODEL");
-  const modelsToTry = envModel && envModel.includes("/")
-    ? [envModel, ...FALLBACK_MODELS.filter(m => m !== envModel)]
-    : [...FALLBACK_MODELS];
 
   const financialData = `Domanda utente: "${userMessage}"
 Tipo domanda: ${decisionType}
@@ -323,77 +309,41 @@ Segnali pre-calcolati:
 
 Rispondi in ${userLang}.`;
 
-  for (const model of modelsToTry) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    let content = await callGroq({
+      systemPrompt: DECISION_PROMPT,
+      userPrompt: financialData,
+      maxTokens: 500,
+      temperature: 0.1,
+      timeoutMs: 20000,
+    });
+    // Strip code fences if present
+    content = content.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
 
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: DECISION_PROMPT },
-            { role: "user", content: financialData }
-          ],
-          max_tokens: 500,
-          temperature: 0.1
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        console.error(`[DECISION-ENGINE] API error ${response.status} on ${model}`);
-        continue;
-      }
-
-      const data = await response.json();
-      let content = (data.choices?.[0]?.message?.content || "").trim();
-      content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-      content = content.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
-
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error(`[DECISION-ENGINE] No JSON from ${model}`);
-        continue;
-      }
-
-      const parsed = JSON.parse(jsonMatch[0]);
-      const validated = validateDecision(parsed);
-
-      if (validated) {
-        // Post-validation: ensure at least 1 real action
-        if (validated.actions.length === 0 || validated.actions.every(a => a.type === 'none')) {
-          // console.log("[DECISION-ENGINE] LLM returned no real actions, adding fallback micro-action");
-          validated.actions = [{
-            type: 'review_budget',
-            title: 'Rivedi obiettivi',
-            description: 'Verifica se il tuo budget attuale riflette le tue priorità reali.'
-          }];
-        }
-        // console.log(`[DECISION-ENGINE] Success (model=${model}, type=${validated.decision_type})`);
-        return validated;
-      }
-
-      console.error(`[DECISION-ENGINE] Validation failed on ${model}`);
-      continue;
-
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        console.error(`[DECISION-ENGINE] Timeout on ${model}`);
-      } else {
-        console.error(`[DECISION-ENGINE] Error on ${model}:`, error instanceof Error ? error.message : "Unknown");
-      }
-      continue;
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error("[DECISION-ENGINE] No JSON in Groq response");
+      return buildDeterministicDecision(userMessage, signals, risk);
     }
-  }
 
-  // console.log("[DECISION-ENGINE] All models failed, using deterministic");
-  return buildDeterministicDecision(userMessage, signals, risk);
+    const parsed = JSON.parse(jsonMatch[0]);
+    const validated = validateDecision(parsed);
+    if (!validated) {
+      console.error("[DECISION-ENGINE] Validation failed");
+      return buildDeterministicDecision(userMessage, signals, risk);
+    }
+
+    // Post-validation: ensure at least 1 real action
+    if (validated.actions.length === 0 || validated.actions.every(a => a.type === 'none')) {
+      validated.actions = [{
+        type: 'review_budget',
+        title: 'Rivedi obiettivi',
+        description: 'Verifica se il tuo budget attuale riflette le tue priorità reali.'
+      }];
+    }
+    return validated;
+  } catch (err) {
+    console.error("[DECISION-ENGINE] Groq call failed:", err instanceof Error ? err.message : err);
+    return buildDeterministicDecision(userMessage, signals, risk);
+  }
 }

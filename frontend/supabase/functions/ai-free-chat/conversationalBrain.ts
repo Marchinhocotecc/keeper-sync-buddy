@@ -10,11 +10,7 @@
  */
 
 import { DecisionResult } from "./decisionEngine.ts";
-
-const FALLBACK_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
+import { callGroq } from "./groqClient.ts";
 
 // ============================================================================
 // CONVERSATION MEMORY TYPE
@@ -78,19 +74,8 @@ export async function conversationalReply(
   context?: { todos?: any[]; events?: any[]; financialSummary?: string },
   memory?: ConversationMemory
 ): Promise<string> {
-  const apiKey = Deno.env.get("GROQ_API_KEY");
-
-  if (!apiKey || !apiKey.startsWith("sk-or-")) {
-    return getContextualFallback(userLang, memory, context);
-  }
-
-  const envModel = Deno.env.get("GROQ_MODEL");
-  const modelsToTry = envModel && envModel.includes("/")
-    ? [envModel, ...FALLBACK_MODELS.filter(m => m !== envModel)]
-    : [...FALLBACK_MODELS];
-
   let contextBlock = '';
-  
+
   // Add conversation memory for coherent follow-ups
   if (memory?.lastUserMessage && memory?.lastAssistantResponse) {
     contextBlock += `\nConversazione precedente:`;
@@ -118,58 +103,18 @@ export async function conversationalReply(
 
   const userPrompt = `${contextBlock ? `Contesto:${contextBlock}\n\n` : ''}Utente (lingua: ${userLang}): ${userMessage}`;
 
-  for (const model of modelsToTry) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: BRAIN_PROMPT },
-            { role: "user", content: userPrompt }
-          ],
-          max_tokens: 300,
-          temperature: 0.5
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        console.error(`[BRAIN] API error ${response.status} on ${model}`);
-        continue;
-      }
-
-      const data = await response.json();
-      let content = (data.choices?.[0]?.message?.content || "").trim();
-      content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-
-      if (content) {
-        // console.log(`[BRAIN] Success (model=${model})`);
-        return content;
-      }
-
-      continue;
-
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        console.error(`[BRAIN] Timeout on ${model}`);
-      } else {
-        console.error(`[BRAIN] Error on ${model}:`, error instanceof Error ? error.message : "Unknown");
-      }
-      continue;
-    }
+  try {
+    return await callGroq({
+      systemPrompt: BRAIN_PROMPT,
+      userPrompt,
+      maxTokens: 300,
+      temperature: 0.5,
+      timeoutMs: 20000,
+    });
+  } catch (err) {
+    console.error("[BRAIN] Groq call failed:", err instanceof Error ? err.message : err);
+    return getContextualFallback(userLang, memory, context);
   }
-
-  return getContextualFallback(userLang, memory, context);
 }
 
 // ============================================================================
@@ -275,66 +220,23 @@ export async function translateDecision(
   decision: DecisionResult,
   userLang: string = 'it'
 ): Promise<string> {
-  const apiKey = Deno.env.get("GROQ_API_KEY");
-
-  // If no API key, do deterministic translation
-  if (!apiKey || !apiKey.startsWith("sk-or-")) {
-    return deterministicTranslation(decision);
-  }
-
-  const envModel = Deno.env.get("GROQ_MODEL");
-  const modelsToTry = envModel && envModel.includes("/")
-    ? [envModel, ...FALLBACK_MODELS.filter(m => m !== envModel)]
-    : [...FALLBACK_MODELS];
-
   const userPrompt = `Lingua: ${userLang}
 
 Decision JSON:
 ${JSON.stringify(decision, null, 2)}`;
 
-  for (const model of modelsToTry) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: TRANSLATOR_PROMPT },
-            { role: "user", content: userPrompt }
-          ],
-          max_tokens: 200,
-          temperature: 0.3
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) continue;
-
-      const data = await response.json();
-      let content = (data.choices?.[0]?.message?.content || "").trim();
-      content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-
-      if (content) {
-        // console.log(`[TRANSLATOR] Success (model=${model})`);
-        return content;
-      }
-      continue;
-
-    } catch {
-      continue;
-    }
+  try {
+    return await callGroq({
+      systemPrompt: TRANSLATOR_PROMPT,
+      userPrompt,
+      maxTokens: 200,
+      temperature: 0.3,
+      timeoutMs: 15000,
+    });
+  } catch (err) {
+    console.error("[TRANSLATOR] Groq call failed:", err instanceof Error ? err.message : err);
+    return deterministicTranslation(decision);
   }
-
-  return deterministicTranslation(decision);
 }
 
 function deterministicTranslation(decision: DecisionResult): string {

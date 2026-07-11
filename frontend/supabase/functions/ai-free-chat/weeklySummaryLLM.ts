@@ -12,10 +12,7 @@ export interface WeeklySummaryLLMResult {
   strategic_action: string;
 }
 
-const FALLBACK_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
+const FALLBACK_MODELS = ["llama-3.3-70b-versatile"];
 
 const WEEKLY_PROMPT = `You are a weekly financial analyst.
 
@@ -52,7 +49,7 @@ export async function generateWeeklySummary(data: {
 
   const deterministic = buildDeterministicWeekly(data);
 
-  if (!apiKey || !apiKey.startsWith("sk-or-")) {
+  if (!apiKey) {
     return deterministic;
   }
 

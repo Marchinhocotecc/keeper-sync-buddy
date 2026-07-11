@@ -1,11 +1,10 @@
 /**
  * MODULE 1 — INTENT CLASSIFIER
  * Ultra-light LLM call: receives message, returns ONLY a label.
- * max_tokens: 20, temperature: 0
- * 
- * v3: LLM is the PRIMARY source of truth.
- * Deterministic patterns are ONLY used as fallback when LLM fails.
- * Follow-up detection expanded with broader patterns.
+ *
+ * Simplified: uses Groq (llama-3.3-70b-versatile) with a single try/catch.
+ * On any LLM failure, falls back to the deterministic classifier (which is
+ * always safe and never throws).
  */
 
 import {
@@ -13,6 +12,7 @@ import {
   FINANCIAL_DECISION_PATTERN, FINANCIAL_QUERY_PATTERN,
   PLANNING_PATTERN, GENERAL_CHAT_PATTERN
 } from "./terminology.ts";
+import { callGroq } from "./groqClient.ts";
 
 export type IntentLabel =
   | 'FINANCIAL_DECISION'
@@ -47,11 +47,6 @@ CRITICAL RULES:
 - Short follow-ups without clear topic → GENERAL_CHAT
 
 Reply with ONLY the label. No text. No explanation. No punctuation.`;
-
-const FALLBACK_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
 
 // ============================================================================
 // FOLLOW-UP DETECTION (expanded for multi-language)
@@ -153,84 +148,28 @@ function classifyDeterministic(message: string): IntentLabel {
 export async function classifyIntent(message: string): Promise<IntentLabel> {
   // Fast path: follow-ups are ALWAYS GENERAL_CHAT, skip LLM
   if (isFollowUp(message)) {
-    // console.log("[INTENT-CLASSIFIER] Follow-up detected, forcing GENERAL_CHAT");
     return 'GENERAL_CHAT';
   }
 
-  const apiKey = Deno.env.get("GROQ_API_KEY");
-
-  if (!apiKey || !apiKey.startsWith("sk-or-")) {
-    // console.log("[INTENT-CLASSIFIER] No API key, using deterministic fallback");
+  try {
+    const raw = await callGroq({
+      systemPrompt: CLASSIFIER_PROMPT,
+      userPrompt: message,
+      maxTokens: 20,
+      temperature: 0,
+      timeoutMs: 10000,
+    });
+    const cleaned = raw.toUpperCase().replace(/[^A-Z_]/g, "");
+    if (VALID_LABELS.includes(cleaned as IntentLabel)) {
+      return cleaned as IntentLabel;
+    }
+    // Partial match (model may have wrapped label with extra words)
+    const found = VALID_LABELS.find(l => cleaned.includes(l));
+    if (found) return found;
+    console.warn(`[INTENT-CLASSIFIER] Invalid label from Groq: "${cleaned}"`);
+    return classifyDeterministic(message);
+  } catch (err) {
+    console.error("[INTENT-CLASSIFIER] Groq call failed:", err instanceof Error ? err.message : err);
     return classifyDeterministic(message);
   }
-
-  const envModel = Deno.env.get("GROQ_MODEL");
-  const modelsToTry = envModel && envModel.includes("/")
-    ? [envModel, ...FALLBACK_MODELS.filter(m => m !== envModel)]
-    : [...FALLBACK_MODELS];
-
-  for (const model of modelsToTry) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: CLASSIFIER_PROMPT },
-            { role: "user", content: message }
-          ],
-          max_tokens: 20,
-          temperature: 0
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        console.error(`[INTENT-CLASSIFIER] API error ${response.status} on model ${model}`);
-        continue;
-      }
-
-      const data = await response.json();
-      let content = (data.choices?.[0]?.message?.content || "").trim();
-      
-      // Clean think tags and whitespace
-      content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-      content = content.toUpperCase().replace(/[^A-Z_]/g, "");
-
-      if (VALID_LABELS.includes(content as IntentLabel)) {
-        // console.log(`[INTENT-CLASSIFIER] Result: ${content} (model=${model})`);
-        return content as IntentLabel;
-      }
-
-      // Try partial match
-      const found = VALID_LABELS.find(l => content.includes(l));
-      if (found) {
-        // console.log(`[INTENT-CLASSIFIER] Partial match: ${found} (model=${model})`);
-        return found;
-      }
-
-      console.warn(`[INTENT-CLASSIFIER] Invalid label "${content}" from ${model}`);
-      continue;
-
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        console.error(`[INTENT-CLASSIFIER] Timeout on ${model}`);
-      } else {
-        console.error(`[INTENT-CLASSIFIER] Error on ${model}:`, error instanceof Error ? error.message : "Unknown");
-      }
-      continue;
-    }
-  }
-
-  // console.log("[INTENT-CLASSIFIER] All models failed, using deterministic");
-  return classifyDeterministic(message);
 }

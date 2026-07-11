@@ -34,10 +34,7 @@ export interface AnalyzeResult {
 // MODEL FALLBACK CHAIN
 // ============================================================================
 
-const FALLBACK_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
+const FALLBACK_MODELS = ["llama-3.3-70b-versatile"];
 
 // ============================================================================
 // HARDENED SYSTEM PROMPT
@@ -127,7 +124,7 @@ export async function analyzeMessage(userMessage: string, userLang?: string): Pr
     uncertainties: ["Analysis failed - API error"]
   };
   
-  if (!apiKey || !apiKey.startsWith("sk-or-")) {
+  if (!apiKey) {
     console.error("[ANALYZE-CORE] Missing or invalid GROQ_API_KEY");
     return fallbackResult;
   }

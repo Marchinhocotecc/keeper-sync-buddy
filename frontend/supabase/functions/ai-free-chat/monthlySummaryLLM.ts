@@ -12,10 +12,7 @@ export interface MonthlySummaryLLMResult {
   strategic_action: string;
 }
 
-const FALLBACK_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
+const FALLBACK_MODELS = ["llama-3.3-70b-versatile"];
 
 const MONTHLY_PROMPT = `You are a monthly financial analyst.
 
@@ -49,7 +46,7 @@ export async function generateMonthlySummary(data: {
   const apiKey = Deno.env.get("GROQ_API_KEY");
   const deterministic = buildDeterministicMonthly(data);
 
-  if (!apiKey || !apiKey.startsWith("sk-or-")) {
+  if (!apiKey) {
     return deterministic;
   }
 
