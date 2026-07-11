@@ -129,13 +129,9 @@ function buildDeterministicFallback(input: AdvisorInput): FinancialAdvice {
   };
 }
 
-export async function getFinancialAdvice(input: AdvisorInput): Promise<FinancialAdvice> {
-  const apiKey = Deno.env.get("GROQ_API_KEY");
-  if (!apiKey) {
-    console.error("[FinancialAdvisor] No GROQ_API_KEY");
-    return buildDeterministicFallback(input);
-  }
+import { callGroq } from "./groqClient.ts";
 
+export async function getFinancialAdvice(input: AdvisorInput): Promise<FinancialAdvice> {
   const toneMap: Record<string, string> = {
     cautious: "incoraggiante e rassicurante",
     balanced: "professionale e chiaro",
@@ -180,49 +176,29 @@ ${input.projection ? `- Scenario: ${input.projection.scenarioIfContinue}` : ""}
 ${input.projection ? `- Aggiustamento: ${input.projection.scenarioIfAdjust}` : ""}`;
 
   try {
-    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: 800,
-        temperature: 0.3,
-      }),
+    const content = await callGroq({
+      systemPrompt,
+      userPrompt,
+      maxTokens: 800,
+      temperature: 0.3,
+      timeoutMs: 25000,
     });
 
-    if (!resp.ok) {
-      console.error("[FinancialAdvisor] API error:", resp.status);
-      return buildDeterministicFallback(input);
-    }
-
-    const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content || "";
-
-    // Extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error("[FinancialAdvisor] No JSON in response");
+      console.error("[FinancialAdvisor] No JSON in Groq response");
       return buildDeterministicFallback(input);
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
     const validated = validateAdvice(parsed);
-
     if (!validated) {
       console.error("[FinancialAdvisor] Validation failed");
       return buildDeterministicFallback(input);
     }
-
     return validated;
   } catch (err) {
-    console.error("[FinancialAdvisor] Error:", err);
+    console.error("[FinancialAdvisor] Groq call failed:", err instanceof Error ? err.message : err);
     return buildDeterministicFallback(input);
   }
 }
