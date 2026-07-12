@@ -1,12 +1,19 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { SHOULD_DISABLE_ANIMATIONS } from '@/utils/platform';
 
 /**
  * Native-feeling page transition.
- * - Mobile/touch: subtle horizontal slide (iOS push)
- * - Reduced motion: simple fade
+ * - Web / iOS: subtle horizontal slide (iOS push feel)
+ * - Native Android: pass-through (no motion component at all)
+ *
+ * On Android the GL compositor OOMs with even small transforms multiplied
+ * across pages + FAB + bottom sheets, so we skip motion entirely.
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
+  if (SHOULD_DISABLE_ANIMATIONS) {
+    return <>{children}</>;
+  }
   return (
     <motion.div
       initial={{ opacity: 0, x: 12 }}
